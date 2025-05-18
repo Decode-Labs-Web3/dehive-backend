@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { MessagePattern } from '@nestjs/microservices';
+import { MessagePattern, Payload } from '@nestjs/microservices';
+import { User } from './schemas/user.schema';
 
 @Controller()
 export class AuthController {
@@ -14,5 +15,10 @@ export class AuthController {
   @MessagePattern('auth')
   getAuth() {
     return this.authService.getHello();
+  }
+
+  @MessagePattern('createUser')
+  createUser(@Payload() user: User) {
+    return this.authService.createUser(user);
   }
 }
