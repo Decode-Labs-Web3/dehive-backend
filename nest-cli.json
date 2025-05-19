@@ -27,6 +27,15 @@
       "compilerOptions": {
         "tsConfigPath": "apps/dehive-api-gateway/tsconfig.app.json"
       }
+    },
+    "user-dehive": {
+      "type": "application",
+      "root": "apps/user-dehive",
+      "entryFile": "main",
+      "sourceRoot": "apps/user-dehive/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/user-dehive/tsconfig.app.json"
+      }
     }
   }
 }
