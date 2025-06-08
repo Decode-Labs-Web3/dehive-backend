@@ -1,12 +1,12 @@
-import { Controller, Get } from '@nestjs/common';
-import { UserDehiveService } from './user-dehive.service';
+import { Controller, Get, Param } from '@nestjs/common';
+import { UserDehiveService } from '../src/user-dehive.service';
 
-@Controller()
+@Controller('user-dehive')
 export class UserDehiveController {
-  constructor(private readonly userDehiveService: UserDehiveService) {}
+  constructor(private readonly service: UserDehiveService) {}
 
-  @Get()
-  getHello(): string {
-    return this.userDehiveService.getHello();
+  @Get(':id')
+  async getEnriched(@Param('id') id: string) {
+    return this.service.getEnrichedUser(id);
   }
 }

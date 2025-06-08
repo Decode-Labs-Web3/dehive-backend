@@ -1,15 +1,24 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "apps/dehive-api-gateway/src",
+  "sourceRoot": "apps/api-gateway/src",
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true,
-    "tsConfigPath": "apps/dehive-api-gateway/tsconfig.app.json"
+    "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
   },
   "monorepo": true,
-  "root": "apps/dehive-api-gateway",
+  "root": "apps/api-gateway",
   "projects": {
+    "api-gateway": {
+      "type": "application",
+      "root": "apps/api-gateway",
+      "entryFile": "main",
+      "sourceRoot": "apps/api-gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
+      }
+    },
     "auth": {
       "type": "application",
       "root": "apps/auth",
@@ -19,16 +28,34 @@
         "tsConfigPath": "apps/auth/tsconfig.app.json"
       }
     },
-    "dehive-api-gateway": {
+    "email-worker": {
       "type": "application",
-      "root": "apps/dehive-api-gateway",
+      "root": "apps/email-worker",
       "entryFile": "main",
-      "sourceRoot": "apps/dehive-api-gateway/src",
+      "sourceRoot": "apps/email-worker/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/dehive-api-gateway/tsconfig.app.json"
+        "tsConfigPath": "apps/email-worker/tsconfig.app.json"
       }
     },
-    "user-dehive": {
+    "user": {
+      "type": "application",
+      "root": "apps/user",
+      "entryFile": "main",
+      "sourceRoot": "apps/user/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/user/tsconfig.app.json"
+      }
+    },
+    "user-dehive-server": {
+      "type": "application",
+      "root": "apps/user-dehive-server",
+      "entryFile": "main",
+      "sourceRoot": "apps/user-dehive-server/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/user-dehive-server/tsconfig.app.json"
+      }
+    },
+     "user-dehive": {
       "type": "application",
       "root": "apps/user-dehive",
       "entryFile": "main",
