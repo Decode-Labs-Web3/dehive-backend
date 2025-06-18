@@ -1,10 +1,6 @@
 import { IsString, IsNotEmpty } from 'class-validator';
 
-export class GenerateInviteDto {
-    @IsNotEmpty()
-    @IsString()
-    server_id: string;
-
+export class UseInviteDto {
     @IsNotEmpty()
     @IsString()
     user_dehive_id: string;

@@ -1,12 +1,26 @@
-import { IsMongoId, IsIn } from 'class-validator';
+import { IsString, IsNotEmpty, IsIn, IsOptional, IsDate } from 'class-validator';
 
 export class KickBanDto {
-  @IsMongoId()
+  @IsNotEmpty()
+  @IsString()
   server_id: string;
 
-  @IsMongoId()
+  @IsNotEmpty()
+  @IsString()
   target_user_id: string;
+
+  @IsNotEmpty()
+  @IsString()
+  moderator_id: string;
 
   @IsIn(['kick', 'ban'])
   action: 'kick' | 'ban';
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsDate()
+  expires_at?: Date;
 }

@@ -1,19 +1,32 @@
+// apps/user-dehive-server/redis/notification.cache.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
-import type { Redis } from 'ioredis';
+import Redis from 'ioredis';
+import { Types } from 'mongoose';
 
 @Injectable()
 export class NotificationCache {
-  constructor(@InjectRedis() private readonly redis: Redis) {}
+    constructor(@InjectRedis() private readonly redis: Redis) {}
 
-  async setNotificationPreference(user_dehive_id: string, server_id: string, muted: boolean) {
-    const key = `notif:${user_dehive_id}:${server_id}`;
-    await this.redis.set(key, muted ? '1' : '0');
-  }
+    private getKey(userId: Types.ObjectId | string, serverId: Types.ObjectId | string): string {
+        return `notification:${userId}:${serverId}`;
+    }
 
-  async getNotificationPreference(user_dehive_id: string, server_id: string): Promise<boolean> {
-    const key = `notif:${user_dehive_id}:${server_id}`;
-    const val = await this.redis.get(key);
-    return val === '1';
-  }
+    async setNotificationPreference(
+        userId: Types.ObjectId | string, 
+        serverId: Types.ObjectId | string, 
+        isMuted: boolean
+    ): Promise<void> {
+        const key = this.getKey(userId.toString(), serverId.toString());
+        await this.redis.set(key, isMuted ? '1' : '0');
+    }
+
+    async getNotificationPreference(
+        userId: Types.ObjectId | string, 
+        serverId: Types.ObjectId | string
+    ): Promise<boolean> {
+        const key = this.getKey(userId.toString(), serverId.toString());
+        const value = await this.redis.get(key);
+        return value === '1';
+    }
 }
