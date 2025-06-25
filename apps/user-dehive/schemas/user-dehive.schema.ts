@@ -29,9 +29,6 @@ export class UserDehive extends Document {
   @Prop({ type: Number, default: 0 })
   server_count: number;
 
-  @Prop({ type: [String] })
-  server_id: ObjectId[];
-
   @Prop({ type: Date })
   last_login: Date;
 }
