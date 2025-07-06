@@ -5,9 +5,11 @@ import { UserDehiveService } from './user-dehive.service';
 export class UserDehiveController {
   constructor(private readonly userDehiveService: UserDehiveService) {}
 
-  @Get()
-  getHello(): string {
-    return this.userDehiveService.getHello();
+  @Get('health')
+  async getUserDehiveHealth() {
+    return {
+      status: 'ok user-dehive/health'
+    };
   }
 
   @Post('register')

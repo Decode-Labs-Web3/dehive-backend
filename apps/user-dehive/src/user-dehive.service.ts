@@ -11,10 +11,6 @@ export class UserDehiveService {
     private readonly jwtService: JwtService,
   ) {}
 
-  getHello(): string {
-    return 'Hello World!';
-  }
-
   async register(decode_auth_token: string) {
     const response = await this.checkDecodeAuthToken(decode_auth_token);
     if (!response || response.statusCode !== 200) {
