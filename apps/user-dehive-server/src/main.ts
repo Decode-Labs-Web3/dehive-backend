@@ -1,36 +1,30 @@
-// apps/user-dehive-server/src/main.ts
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { UserDehiveServerModule } from './user-dehive-server.module';
 import { TransformInterceptor } from './transform.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(UserDehiveServerModule);
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transformOptions: { 
-        enableImplicitConversion: true,
-        exposeDefaultValues: true
-      }
-    })
-  );
-
-  app.useGlobalInterceptors(new TransformInterceptor());
+  const configService = app.get(ConfigService);
 
   app.enableCors({
-    origin: ['http://localhost:3000'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: true, 
     credentials: true,
   });
 
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true, 
+    transform: true, 
+  }));
+  
+  app.useGlobalInterceptors(new TransformInterceptor());
+
   app.setGlobalPrefix('api');
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
-  console.log(`UserDehiveServer service is running on: http://localhost:${port}/api`);
+
+  const port = configService.get<number>('USER_DEHIVE_SERVER_PORT') || 4001;
+  await app.listen(port, 'localhost');
+  
+  console.log(`[Dehive] User-Dehive-Server service is running on: ${await app.getUrl()}`);
 }
 bootstrap();

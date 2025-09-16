@@ -1,11 +1,10 @@
-import { IsString, IsNotEmpty } from 'class-validator';
-
+import { IsMongoId, IsNotEmpty } from 'class-validator';
 export class GenerateInviteDto {
-    @IsNotEmpty()
-    @IsString()
-    server_id: string;
-
-    @IsNotEmpty()
-    @IsString()
-    user_dehive_id: string;
+  @IsNotEmpty() 
+  @IsMongoId() 
+  server_id: string;
+  
+  @IsNotEmpty() 
+  @IsMongoId() 
+  user_dehive_id: string;
 }

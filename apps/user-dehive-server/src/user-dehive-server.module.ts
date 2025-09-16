@@ -1,75 +1,60 @@
 import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ClientsModule } from '@nestjs/microservices';
-import { RedisModule } from '@nestjs-modules/ioredis';
-import { UserDehiveServer, UserDehiveServerSchema } from '../entities/user-dehive-server.entity';
+import { MongooseModule } from '@nestjs/mongoose';
+import { UserDehiveServerController } from './user-dehive-server.controller';
+import { UserDehiveServerService } from './user-dehive-server.service';
+import { UserDehive, UserDehiveSchema } from '../schemas/user-dehive.schema';
 import { Server, ServerSchema } from '../schemas/server.schema';
-import { ServerBan, ServerBanSchema } from '../schemas/server-ban.schema';
 import { InviteLink, InviteLinkSchema } from '../schemas/invite-link.schema';
 import { ServerAuditLog, ServerAuditLogSchema } from '../schemas/server-audit-log.schema';
-import { UserDehiveServerService } from './user-dehive-server.service';
-import { UserDehiveServerController } from './user-dehive-server.controller';
-import { EventProducerService } from '../kafka/event-producer.service';
-import { InviteLinkCache } from '../redis/invite-link.cache';
-import { NotificationCache } from '../redis/notification.cache';
-import { IsServerOwnerGuard, IsMemberGuard, IsModeratorGuard } from '../strategies/guards';
-import { kafkaConfig } from '../kafka/kafka.config';
-import { UserDehive, UserDehiveSchema } from '../../user-dehive/schemas/user-dehive.schema';
+import { ServerBan, ServerBanSchema } from '../schemas/server-ban.schema';
+import { UserDehiveServer, UserDehiveServerSchema } from '../schemas/user-dehive-server.schema';
+import { User, UserSchema } from '../../user/schemas/user.schema';
+import { FakeAuthGuard } from '../guards/fake-auth.guard';
+
+const MONGOOSE_MODELS = MongooseModule.forFeature([
+  { name: 'UserDehive', schema: UserDehiveSchema },
+  { name: 'UserDehiveServer', schema: UserDehiveServerSchema },
+  { name: 'Server', schema: ServerSchema },
+  { name: 'User', schema: UserSchema },
+  { name: 'ServerBan', schema: ServerBanSchema },
+  { name: 'InviteLink', schema: InviteLinkSchema },
+]);
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      envFilePath: './apps/user-dehive-server/.env',
       isGlobal: true,
+      envFilePath: '.env',
     }),
-    RedisModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        type: 'single',
-        url: undefined,
-        host: configService.get('REDIS_HOST') || 'localhost',
-        port: parseInt(configService.get('REDIS_PORT') || '6379'),
-        password: configService.get('REDIS_PASSWORD') || undefined,
-        db: 0,
-        keyPrefix: 'user-dehive-server:'
-      }),
-      inject: [ConfigService],
-    }),
+    MONGOOSE_MODELS,
+
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI'),
-        retryAttempts: 3,
-        retryDelay: 1000,
-      }),
       inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        uri: configService.get<string>('MONGODB_URI'),
+      }),
     }),
+
     MongooseModule.forFeature([
-      { name: UserDehiveServer.name, schema: UserDehiveServerSchema },
+      { name: UserDehive.name, schema: UserDehiveSchema },
       { name: Server.name, schema: ServerSchema },
-      { name: ServerBan.name, schema: ServerBanSchema },
-      { name: ServerAuditLog.name, schema: ServerAuditLogSchema },
       { name: InviteLink.name, schema: InviteLinkSchema },
-      { name: UserDehive.name, schema: UserDehiveSchema }
+      { name: ServerAuditLog.name, schema: ServerAuditLogSchema },
+      { name: ServerBan.name, schema: ServerBanSchema },
+      { name: UserDehiveServer.name, schema: UserDehiveServerSchema }, 
+      { name: User.name, schema: UserSchema }, 
     ]),
-    ClientsModule.register([
-      {
-        name: 'KAFKA_SERVICE',
-        ...kafkaConfig
-      }
-    ])
   ],
   controllers: [UserDehiveServerController],
   providers: [
     UserDehiveServerService,
-    EventProducerService,
-    InviteLinkCache,
-    NotificationCache,
-    IsServerOwnerGuard,
-    IsMemberGuard,
-    IsModeratorGuard,
+    FakeAuthGuard,
+  ], 
+  exports: [
+    UserDehiveServerService,
+    MONGOOSE_MODELS,
   ],
-  exports: [UserDehiveServerService],
 })
 export class UserDehiveServerModule {}

@@ -55,13 +55,13 @@
         "tsConfigPath": "apps/user-dehive-server/tsconfig.app.json"
       }
     },
-     "user-dehive": {
+     "server": {
       "type": "application",
-      "root": "apps/user-dehive",
+      "root": "apps/server",
       "entryFile": "main",
-      "sourceRoot": "apps/user-dehive/src",
+      "sourceRoot": "apps/server/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/user-dehive/tsconfig.app.json"
+        "tsConfigPath": "apps/server/tsconfig.app.json"
       }
     }
   }

@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
-export class InviteLink extends Document {
+export class InviteLink { 
   @Prop({ required: true, unique: true })
   code: string;
 
@@ -17,12 +17,7 @@ export class InviteLink extends Document {
 
   @Prop({ default: false })
   isUsed: boolean;
-
-  @Prop({ default: Date.now })
-  createdAt: Date;
-
-  @Prop({ default: Date.now })
-  updatedAt: Date;
 }
 
+export type InviteLinkDocument = InviteLink & Document
 export const InviteLinkSchema = SchemaFactory.createForClass(InviteLink);

@@ -1,7 +1,6 @@
-import { IsString, IsNotEmpty } from 'class-validator';
-
+import { IsMongoId, IsNotEmpty } from 'class-validator';
 export class UseInviteDto {
-    @IsNotEmpty()
-    @IsString()
-    user_dehive_id: string;
+  @IsNotEmpty()
+  @IsMongoId()
+  user_dehive_id: string;
 }

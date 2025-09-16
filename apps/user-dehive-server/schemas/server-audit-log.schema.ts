@@ -13,28 +13,27 @@ export enum AuditLogAction {
   SERVER_UPDATE = 'server_update'
 }
 
-@Schema({ timestamps: true })
-export class ServerAuditLog extends Document {
+@Schema({ timestamps: true }) 
+export class ServerAuditLog {
   @Prop({ type: Types.ObjectId, ref: 'Server', required: true })
   server_id: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'UserDehive', required: true })
-  actor_id: Types.ObjectId;
+  actor_id: Types.ObjectId; 
 
   @Prop({ type: Types.ObjectId, ref: 'UserDehive', required: false })
-  target_id?: Types.ObjectId;
+  target_id?: Types.ObjectId; 
 
-  @Prop({ type: String, enum: AuditLogAction, required: true })
+  @Prop({ type: String, enum: Object.values(AuditLogAction), required: true })
   action: AuditLogAction;
 
   @Prop({ type: Object, required: false })
-  changes?: Record<string, any>;
+  changes?: Record<string, any>; 
 
-  @Prop({ required: false })
+  @Prop({ type: String, required: false })
   reason?: string;
-
-  @Prop({ default: Date.now })
-  created_at: Date;
 }
 
+
+export type ServerAuditLogDocument = ServerAuditLog & Document
 export const ServerAuditLogSchema = SchemaFactory.createForClass(ServerAuditLog);

@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
-export class Server { 
+export class Server {
   @Prop({ required: true })
   name: string;
 
@@ -18,9 +18,10 @@ export class Server {
   @Prop({ default: false })
   is_private: boolean;
 
-  @Prop({ default: [] })
+  @Prop({ type: [String], default: [] })
   tags: string[];
 }
 
 export type ServerDocument = Server & Document;
+
 export const ServerSchema = SchemaFactory.createForClass(Server);

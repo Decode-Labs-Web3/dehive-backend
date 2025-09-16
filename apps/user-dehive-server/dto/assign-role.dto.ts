@@ -1,16 +1,7 @@
 import { IsEnum, IsMongoId, IsNotEmpty } from 'class-validator';
-import { ServerRole } from '../entities/user-dehive-server.entity';
-
+import { ServerRole } from '../schemas/user-dehive-server.schema';
 export class AssignRoleDto {
-    @IsMongoId()
-    @IsNotEmpty()
-    server_id: string;
-
-    @IsMongoId()
-    @IsNotEmpty()
-    target_user_id: string;
-
-    @IsEnum(ServerRole)
-    @IsNotEmpty()
-    role: ServerRole;
+  @IsNotEmpty() @IsMongoId() server_id: string;
+  @IsNotEmpty() @IsMongoId() target_user_id: string; 
+  @IsNotEmpty() @IsEnum(ServerRole) role: ServerRole;
 }

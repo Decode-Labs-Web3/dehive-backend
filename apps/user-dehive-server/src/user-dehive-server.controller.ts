@@ -1,152 +1,102 @@
-import { 
-    Controller, 
-    Post, 
-    Body, 
-    UseGuards, 
-    Param, 
-    Patch, 
-    Delete, 
-    Get, 
-    ValidationPipe, 
-    Request, 
-    NotFoundException,
-    InternalServerErrorException 
-} from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, Patch, Delete, Req, UseGuards } from '@nestjs/common';
 import { UserDehiveServerService } from './user-dehive-server.service';
-import { Types } from 'mongoose';
-import { JoinServerDto } from '../dto/join-server.dto';
-import { LeaveServerDto } from '../dto/leave-server.dto';
-import { KickBanDto } from '../dto/kick-ban.dto';
-import { GenerateInviteDto } from '../dto/generate-invite.dto';
-import { UpdateNotificationDto } from '../dto/update-notification.dto';
-import { IsServerOwnerGuard, IsMemberGuard, IsModeratorGuard } from '../strategies/guards';
-import { UseInviteDto } from '../dto/use-invite.dto';
-import { UnbanDto } from '../dto/unban.dto';
 import { AssignRoleDto } from '../dto/assign-role.dto';
-import { ServerRole } from '../entities/user-dehive-server.entity';
+import { GenerateInviteDto } from '../dto/generate-invite.dto';
+import { JoinServerDto } from '../dto/join-server.dto';
+import { KickBanDto } from '../dto/kick-ban.dto';
+import { LeaveServerDto } from '../dto/leave-server.dto';
+import { UnbanDto } from '../dto/unban.dto';
+import { UpdateNotificationDto } from '../dto/update-notification.dto';
+import { UseInviteDto } from '../dto/use-invite.dto';
+import { FakeAuthGuard } from '../guards/fake-auth.guard';
 
-@Controller('server')
+interface AuthenticatedRequest extends Request {
+    user: { id: string; }; 
+}
+
+@Controller('memberships')
 export class UserDehiveServerController {
     constructor(private readonly service: UserDehiveServerService) {}
-
     @Post('join')
-    async join(@Body(ValidationPipe) dto: JoinServerDto) {
-        try {
-            return await this.service.joinServer(dto);
-        } catch (error) {
-            console.error('Join server error:', error);
-            throw error;
-        }
+    joinServer(@Body() dto: JoinServerDto) {
+        return this.service.joinServer(dto);
     }
 
-    @Delete('member/:userDehiveId')
-    @UseGuards(IsMemberGuard)
-    async leave(
+
+    @Delete('server/:serverId/user/:userDehiveId')
+    @UseGuards(FakeAuthGuard) 
+    leaveServer(
+        @Param('serverId') serverId: string,
         @Param('userDehiveId') userDehiveId: string,
-        @Body('server_id') serverId: string
+        @Req() req: AuthenticatedRequest
     ) {
-        const dto: LeaveServerDto = {
-            server_id: new Types.ObjectId(serverId),
-            user_dehive_id: new Types.ObjectId(userDehiveId)
-        };
+        const dto: LeaveServerDto = { server_id: serverId, user_dehive_id: userDehiveId };
         return this.service.leaveServer(dto);
     }
 
-    @Post('generate-invite')
-    @UseGuards(IsMemberGuard)
-    async generateInvite(@Body(ValidationPipe) dto: GenerateInviteDto) {
-        try {
-            return await this.service.generateInvite(dto);
-        } catch (error) {
-            console.error('Generate invite error:', error);
-            throw error;
-        }
+    @Get('server/:serverId/members')
+    getMembersInServer(@Param('serverId') serverId: string) {
+        return this.service.getMembersInServer(serverId);
     }
 
-    @Post('use-invite/:code')
-    async useInvite(
-        @Param('code') code: string,
-        @Body(ValidationPipe) dto: UseInviteDto
-    ) {
-        try {
-            return await this.service.useInviteLink(code, dto.user_dehive_id);
-        } catch (error) {
-            console.error('Use invite error:', error);
-            throw error;
-        }
+    @Post('invite/generate')
+    @UseGuards(FakeAuthGuard) 
+    generateInvite(@Body() dto: GenerateInviteDto, @Req() req: AuthenticatedRequest) {
+        const actorBaseId = req.user.id;
+        return this.service.generateInvite(dto, actorBaseId);
     }
 
-    @Post('kick-ban')
-    @UseGuards(IsModeratorGuard)
-    async kickOrBan(@Body(ValidationPipe) dto: KickBanDto) {
-        try {
-            return await this.service.kickOrBan(dto);
-        } catch (error) {
-            console.error('Kick/ban error:', error);
-            throw error;
-        }
+    @Post('invite/use/:code')
+    @UseGuards(FakeAuthGuard) 
+    useInvite(@Param('code') code: string, @Req() req: AuthenticatedRequest) {
+        const actorBaseId = req.user.id;
+        return this.service.useInvite(code, actorBaseId);
     }
 
-    @Patch('notification')
-    @UseGuards(IsMemberGuard)
-    async updateNotification(@Body(ValidationPipe) dto: UpdateNotificationDto) {
-        try {
-            return await this.service.updateNotification(dto);
-        } catch (error) {
-            console.error('Update notification error:', error);
-            throw error;
-        }
+    @Post('kick')
+    @UseGuards(FakeAuthGuard) 
+    kickMember(@Body() dto: KickBanDto, @Req() req: AuthenticatedRequest) {
+        const actorBaseId = req.user.id;
+        return this.service.kickOrBan(dto, 'kick', actorBaseId);
     }
 
+    @Post('ban')
+    @UseGuards(FakeAuthGuard) 
+    banMember(@Body() dto: KickBanDto, @Req() req: AuthenticatedRequest) {
+        const actorBaseId = req.user.id;
+        return this.service.kickOrBan(dto, 'ban', actorBaseId);
+    }
+    
     @Post('unban')
-    @UseGuards(IsModeratorGuard)
-    async unban(@Body(ValidationPipe) dto: UnbanDto) {
-        try {
-            return await this.service.unban(dto);
-        } catch (error) {
-            console.error('Unban error:', error);
-            throw error;
-        }
+    @UseGuards(FakeAuthGuard) 
+    unbanMember(@Body() dto: UnbanDto, @Req() req: AuthenticatedRequest) {
+        const actorBaseId = req.user.id;
+        return this.service.unbanMember(dto, actorBaseId);
     }
 
     @Patch('role')
-    @UseGuards(IsModeratorGuard)
-    async assignRole(
-        @Body(ValidationPipe) dto: AssignRoleDto,
-        @Request() req
-    ) {
-        try {
-            return await this.service.updateMemberRole(
-                new Types.ObjectId(dto.server_id),
-                new Types.ObjectId(dto.target_user_id),
-                dto.role as ServerRole,
-                new Types.ObjectId(req.user.id)
-            );
-        } catch (error) {
-            console.error('Assign role error:', error);
-            throw error;
-        }
+    @UseGuards(FakeAuthGuard) 
+    assignRole(@Body() dto: AssignRoleDto, @Req() req: AuthenticatedRequest) {
+        const actorBaseId = req.user.id;
+        return this.service.assignRole(dto, actorBaseId);
     }
 
-    @Get('member/:userId')
-    @UseGuards(IsMemberGuard)
-    async getMember(@Param('userId') userId: string) {
-        try {
-            const serverMemberships = await this.service.getMemberServers(new Types.ObjectId(userId));
-            
-            if (!serverMemberships) {
-                throw new NotFoundException('User not found');
-            }
+    @Patch('notification')
+    @UseGuards(FakeAuthGuard)
+    updateNotification(@Body() dto: UpdateNotificationDto, @Req() req: AuthenticatedRequest) {
+        const actorBaseId = req.user.id;
+        return this.service.updateNotification(dto, actorBaseId);
+    }
 
-            return {
-                servers: serverMemberships.servers || []
-            };
-        } catch (error) {
-            console.error('Get member error:', error);
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
-            throw new InternalServerErrorException('Failed to get member information');
-        }
+    @Get('user/:userId/profile')
+    getUserProfile(@Param('userId') userId: string) {
+        return this.service.getUserProfile(userId);
+    }
+
+    @Get('profile/enriched/target/:targetUserId')
+    @UseGuards(FakeAuthGuard) 
+    getEnrichedUserProfile(@Param('targetUserId') targetUserId: string, @Req() req: AuthenticatedRequest){
+        const viewerUserId = req.user.id;
+        return this.service.getEnrichedUserProfile(targetUserId, viewerUserId);
     }
 }

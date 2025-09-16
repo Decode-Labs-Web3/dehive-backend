@@ -1,786 +1,255 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types, ClientSession } from 'mongoose';
-import { Status } from '../../user-dehive/constants/enum';
-import { UserDehive } from '../../user-dehive/schemas/user-dehive.schema';
-import { Server } from '../schemas/server.schema';
-import { ServerBan } from '../schemas/server-ban.schema';
-import { InviteLink } from '../schemas/invite-link.schema';
-import { ServerAuditLog } from '../schemas/server-audit-log.schema';
-import { UserDehiveServer, ServerRole } from '../entities/user-dehive-server.entity';
-import { EventProducerService } from '../kafka/event-producer.service';
-import { InviteLinkCache } from '../redis/invite-link.cache';
-import { NotificationCache } from '../redis/notification.cache';
-import { AuditLogAction } from '../constants/audit-log.enum';
-import { JoinServerDto } from '../dto/join-server.dto';
+import { Model, Types } from 'mongoose';
+import { UserDehive, UserDehiveDocument } from '../schemas/user-dehive.schema';
+import { UserDehiveServer, UserDehiveServerDocument, ServerRole } from '../schemas/user-dehive-server.schema';
+import { Server, ServerDocument } from '../schemas/server.schema';
+import { ServerBan, ServerBanDocument } from '../schemas/server-ban.schema';
+import { InviteLink, InviteLinkDocument } from '../schemas/invite-link.schema';
+import { User, UserDocument } from '../../user/schemas/user.schema';
+import { AssignRoleDto } from '../dto/assign-role.dto'; 
+import { JoinServerDto } from '../dto/join-server.dto'; 
 import { LeaveServerDto } from '../dto/leave-server.dto';
 import { GenerateInviteDto } from '../dto/generate-invite.dto';
+import { UseInviteDto } from '../dto/use-invite.dto';
 import { KickBanDto } from '../dto/kick-ban.dto';
 import { UnbanDto } from '../dto/unban.dto';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';
 
+
 @Injectable()
 export class UserDehiveServerService {
     constructor(
-        @InjectModel(UserDehiveServer.name) 
-        private userDehiveServerModel: Model<UserDehiveServer>,
-        @InjectModel(Server.name)
-        private serverModel: Model<Server>,
-        @InjectModel(ServerBan.name)
-        private serverBanModel: Model<ServerBan>,
-        @InjectModel(InviteLink.name)
-        private inviteLinkModel: Model<InviteLink>,
-        @InjectModel(ServerAuditLog.name)
-        private serverAuditLogModel: Model<ServerAuditLog>,
-        @InjectModel(UserDehive.name)
-        private userDehiveModel: Model<UserDehive>,
-        private readonly eventProducer: EventProducerService,
-        private readonly inviteLinkCache: InviteLinkCache,
-        private readonly notificationCache: NotificationCache,
+        @InjectModel(UserDehive.name) private userDehiveModel: Model<UserDehiveDocument>,
+        @InjectModel(UserDehiveServer.name) private userDehiveServerModel: Model<UserDehiveServerDocument>,
+        @InjectModel(Server.name) private serverModel: Model<ServerDocument>,
+        @InjectModel(ServerBan.name) private serverBanModel: Model<ServerBanDocument>,
+        @InjectModel(InviteLink.name) private inviteLinkModel: Model<InviteLinkDocument>,
+        @InjectModel(User.name) private userModel: Model<UserDocument>
     ) {}
 
-    async joinServer(dto: JoinServerDto) {
+    async joinServer(dto: JoinServerDto): Promise<{ message: string }> {
+        const serverId = new Types.ObjectId(dto.server_id);
+        const userDehiveId = new Types.ObjectId(dto.user_dehive_id);
+        const [server, dehiveProfile, isAlreadyMember, isBanned] = await Promise.all([
+            this.serverModel.findById(serverId).lean(),
+            this.userDehiveModel.findById(userDehiveId).lean(),
+            this.userDehiveServerModel.exists({ user_dehive_id: userDehiveId, server_id: serverId }),
+            this.serverBanModel.exists({ user_dehive_id: userDehiveId, server_id: serverId })
+        ]);
+        if (!server) throw new NotFoundException(`Server not found.`);
+        if (!dehiveProfile) throw new NotFoundException(`Dehive profile not found.`);
+        if (isAlreadyMember) throw new BadRequestException('User is already a member.');
+        if (isBanned) throw new ForbiddenException('You are banned from this server.');
+        const session = await this.serverModel.db.startSession();
+        session.startTransaction();
         try {
-            const serverId = new Types.ObjectId(dto.server_id);
-            const userId = new Types.ObjectId(dto.user_dehive_id);
-
-            // Check if server exists
-            const server = await this.serverModel.findById(serverId);
-            if (!server) {
-                throw new NotFoundException('Server not found');
-            }
-
-            // Check if already a member
-            const existingMember = await this.userDehiveModel.findOne({
-                user_id: userId,
-                'servers.server_id': serverId
-            });
-
-            if (existingMember) {
-                throw new BadRequestException('User is already a member of this server');
-            }
-
-            // Check if user is banned
-            const ban = await this.serverBanModel.findOne({
-                server_id: serverId,
-                user_dehive_id: userId
-            });
-
-            if (ban) {
-                throw new ForbiddenException('You are banned from this server');
-            }
-
-            // Start transaction
-            const session = await this.userDehiveModel.db.startSession();
-            await session.withTransaction(async () => {
-                // Update userDehive collection
-                const userDehive = await this.userDehiveModel.findOneAndUpdate(
-                    { user_id: userId },
-                    {
-                        $push: {
-                            servers: {
-                                server_id: serverId,
-                                role: 'member'
-                            }
-                        },
-                        $inc: { server_count: 1 },
-                        $set: { 
-                            status: Status.Online,
-                            last_login: new Date()
-                        }
-                    },
-                    { 
-                        session,
-                        upsert: true,
-                        new: true
-                    }
-                );
-
-                // Create membership record in userDehiveServer collection
-                const membership = new this.userDehiveServerModel({
-                    user_dehive_id: userId,
-                    server_id: serverId,
-                    role: ServerRole.MEMBER,
-                    joined_at: new Date()
-                });
-                await membership.save({ session });
-
-                // Update server member count
-                await this.serverModel.findByIdAndUpdate(
-                    serverId,
-                    { $inc: { member_count: 1 } },
-                    { session }
-                );
-
-                // Create audit log
-                await this.createAuditLog(
-                    serverId,
-                    userId,
-                    AuditLogAction.MEMBER_JOIN,
-                    undefined,
-                    undefined,
-                    undefined,
-                    session
-                );
-            });
-
-            // Emit server joined event
-            await this.eventProducer.emit('server.joined', {
-                user_dehive_id: dto.user_dehive_id,
-                server_id: dto.server_id,
-            });
-
-            return { message: 'Successfully joined server' };
+            const newMembership = new this.userDehiveServerModel({ user_id: dehiveProfile.user_id, user_dehive_id: userDehiveId, server_id: serverId });
+            await newMembership.save({ session });
+            await this.userDehiveModel.findByIdAndUpdate(userDehiveId, { $inc: { server_count: 1 } }, { session });
+            await this.serverModel.findByIdAndUpdate(serverId, { $inc: { member_count: 1 } }, { session });
+            await session.commitTransaction();
+            return { message: 'Successfully joined server.' };
         } catch (error) {
-            console.error('Service joinServer error:', error);
-            if (error instanceof BadRequestException || 
-                error instanceof NotFoundException || 
-                error instanceof ForbiddenException) {
-                throw error;
-            }
-            throw new BadRequestException('Failed to join server');
+            await session.abortTransaction();
+            throw new BadRequestException('Failed to join server.');
+        } finally {
+            session.endSession();
         }
     }
 
-    async leaveServer(dto: LeaveServerDto) {
+    async leaveServer(dto: LeaveServerDto): Promise<{ message: string }> {
+        const serverId = new Types.ObjectId(dto.server_id);
+        const userDehiveId = new Types.ObjectId(dto.user_dehive_id);
+        const membership = await this.userDehiveServerModel.findOne({ user_dehive_id: userDehiveId, server_id: serverId });
+        if (!membership) throw new BadRequestException('User is not a member of this server.');
+        if (membership.role === ServerRole.OWNER) throw new ForbiddenException('Server owner cannot leave. Transfer ownership first.');
+        const session = await this.userDehiveServerModel.db.startSession();
+        session.startTransaction();
         try {
-            const serverId = new Types.ObjectId(dto.server_id);
-            const userId = new Types.ObjectId(dto.user_dehive_id);
-
-            // Check if server exists and get server info
-            const server = await this.serverModel.findById(serverId);
-            if (!server) {
-                throw new NotFoundException('Server not found');
-            }
-
-            // Check if user is a member
-            const userDehive = await this.userDehiveModel.findOne({
-                user_id: userId,
-                'servers.server_id': serverId
-            });
-
-            if (!userDehive) {
-                throw new BadRequestException('User is not a member of this server');
-            }
-
-            // Get user's server info
-            const userServerInfo = userDehive.servers.find(
-                s => s.server_id.toString() === serverId.toString()
-            );
-
-            // Check if user is owner before checking server owner
-            if (userServerInfo && userServerInfo.role === 'owner') {
-                throw new BadRequestException('Server owner cannot leave the server');
-            }
-
-            // Start transaction
-            const session = await this.userDehiveModel.db.startSession();
-            try {
-                await session.withTransaction(async () => {
-                    // Remove server from UserDehive collection
-                    const updatedUser = await this.userDehiveModel.findOneAndUpdate(
-                        { user_id: userId },
-                        {
-                            $pull: { servers: { server_id: serverId } },
-                            $inc: { server_count: -1 }
-                        },
-                        { 
-                            session,
-                            new: true
-                        }
-                    );
-
-                    // Remove from UserDehiveServer collection
-                    await this.userDehiveServerModel.deleteOne({
-                        user_dehive_id: userId,
-                        server_id: serverId
-                    }).session(session);
-
-                    // Update server member count
-                    await this.serverModel.findByIdAndUpdate(
-                        serverId,
-                        { $inc: { member_count: -1 } },
-                        { session }
-                    );
-
-                    // If user has no servers left, set status to offline
-                    if (updatedUser && updatedUser.server_count === 0) {
-                        await this.userDehiveModel.findOneAndUpdate(
-                            { user_id: userId },
-                            { $set: { status: Status.Offline } },
-                            { session }
-                        );
-                    }
-
-                    // Create audit log
-                    await this.createAuditLog(
-                        serverId,
-                        userId,
-                        AuditLogAction.MEMBER_LEAVE,
-                        undefined,
-                        undefined,
-                        undefined,
-                        session
-                    );
-                });
-
-                // Emit server left event
-                await this.eventProducer.emit('server.left', {
-                    user_dehive_id: dto.user_dehive_id,
-                    server_id: dto.server_id,
-                });
-
-                return { message: 'Successfully left server' };
-            } catch (error) {
-                await session.abortTransaction();
-                throw error;
-            } finally {
-                await session.endSession();
-            }
+            await this.userDehiveServerModel.deleteOne({ _id: membership._id }).session(session);
+            await this.userDehiveModel.findByIdAndUpdate(userDehiveId, { $inc: { server_count: -1 } }, { session });
+            await this.serverModel.findByIdAndUpdate(serverId, { $inc: { member_count: -1 } }, { session });
+            await session.commitTransaction();
+            return { message: 'Successfully left server.' };
         } catch (error) {
-            console.error('Service leaveServer error:', error);
-            if (error instanceof BadRequestException || 
-                error instanceof NotFoundException) {
-                throw error;
-            }
-            if (error.name === 'BSONError' || error.name === 'BSONTypeError') {
-                throw new BadRequestException('Invalid MongoDB ID format');
-            }
-            throw new BadRequestException('Failed to leave server');
+            await session.abortTransaction();
+            throw new BadRequestException('Failed to leave server.');
+        } finally {
+            session.endSession();
         }
     }
 
-    async generateInvite(dto: GenerateInviteDto) {
-        try {
-            const code = Math.random().toString(36).substring(2, 10);
-            const expiredAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000); // 15 days
+    async generateInvite(dto: GenerateInviteDto, actorBaseId: string): Promise<InviteLinkDocument> {
+        const serverId = new Types.ObjectId(dto.server_id);
+        
+        const actorDehiveProfile = await this.userDehiveModel.findOne({ user_id: new Types.ObjectId(actorBaseId) }).select('_id').lean();
+        if (!actorDehiveProfile) throw new NotFoundException(`Dehive profile not found for actor.`);
+        const actorDehiveId = actorDehiveProfile._id;
 
-            const serverId = new Types.ObjectId(dto.server_id);
-            const userId = new Types.ObjectId(dto.user_dehive_id);
-
-            // Check if server exists
-            const server = await this.serverModel.findById(serverId);
-            if (!server) {
-                throw new NotFoundException('Server not found');
-            }
-
-            // Check if user is a member of the server
-            const member = await this.userDehiveServerModel.findOne({
-                server_id: serverId,
-                user_dehive_id: userId
-            });
-
-            if (!member) {
-                throw new ForbiddenException('User is not a member of this server');
-            }
-
-            const invite = new this.inviteLinkModel({
-                code,
-                server_id: serverId,
-                creator_id: userId,
-                expiredAt
-            });
-            
-            await invite.save();
-
-            await this.inviteLinkCache.setInviteLink(serverId.toString(), code, expiredAt);
-
-            // Create audit log for invite creation
-            await this.createAuditLog(
-                serverId,
-                userId,
-                AuditLogAction.INVITE_CREATE,
-                undefined,
-                { code, expires_at: expiredAt }
-            );
-            
-            return { 
-                inviteLink: code, 
-                expiredAt,
-                server_id: dto.server_id
-            };
-        } catch (error) {
-            console.error('Service generateInvite error:', error);
-            if (error instanceof NotFoundException || 
-                error instanceof ForbiddenException) {
-                throw error;
-            }
-            if (error.name === 'BSONError' || error.name === 'BSONTypeError') {
-                throw new BadRequestException('Invalid MongoDB ID format');
-            }
-            throw new BadRequestException('Failed to generate invite link');
-        }
-    }
-
-    async useInviteLink(code: string, user_dehive_id: string) {
-        try {
-            const server_id = await this.inviteLinkCache.getServerIdByInviteLink(code);
-            
-            if (!server_id) {
-                throw new NotFoundException('Invite link expired or invalid');
-            }
-
-            // Check if user is banned before using invite
-            const serverId = new Types.ObjectId(server_id);
-            const userId = new Types.ObjectId(user_dehive_id);
-
-            const ban = await this.serverBanModel.findOne({
-                server_id: serverId,
-                user_dehive_id: userId
-            });
-
-            if (ban) {
-                throw new ForbiddenException('You are banned from this server');
-            }
-
-            return this.joinServer({ 
-                user_dehive_id: userId, 
-                server_id: serverId
-            });
-        } catch (error) {
-            console.error('Service useInviteLink error:', error);
-            if (error instanceof NotFoundException || 
-                error instanceof BadRequestException ||
-                error instanceof ForbiddenException) {
-                throw error;
-            }
-            throw new BadRequestException('Failed to use invite link');
-        }
-    }
-
-    async kickOrBan(dto: KickBanDto) {
-        try {
-            const session = await this.userDehiveModel.db.startSession();
-
-            return await session.withTransaction(async () => {
-                const serverId = new Types.ObjectId(dto.server_id);
-                const targetUserId = new Types.ObjectId(dto.target_user_id);
-                const moderatorId = new Types.ObjectId(dto.moderator_id);
-
-                // Check if target member exists
-                const targetMember = await this.userDehiveModel.findOne({
-                    user_id: targetUserId,
-                    'servers.server_id': serverId
-                }).session(session);
-
-                if (!targetMember) {
-                    throw new NotFoundException('Target user not found in server');
-                }
-
-                // Check moderator's permissions
-                const moderator = await this.userDehiveModel.findOne({
-                    user_id: moderatorId,
-                    'servers.server_id': serverId
-                }).session(session);
-
-                if (!moderator) {
-                    throw new ForbiddenException('Moderator not found in server');
-                }
-
-                const moderatorServerInfo = moderator.servers.find(
-                    s => s.server_id.toString() === serverId.toString()
-                );
-
-                const targetServerInfo = targetMember.servers.find(
-                    s => s.server_id.toString() === serverId.toString()
-                );
-
-                if (!moderatorServerInfo || !targetServerInfo) {
-                    throw new BadRequestException('Server membership not found');
-                }
-
-                // Check permissions
-                if (moderatorServerInfo.role !== 'owner' && moderatorServerInfo.role !== 'moderator') {
-                    throw new ForbiddenException('Only owners and moderators can kick/ban members');
-                }
-
-                // Cannot kick/ban owners or moderators unless you're the owner
-                if ((targetServerInfo.role === 'owner' || targetServerInfo.role === 'moderator') 
-                    && moderatorServerInfo.role !== 'owner') {
-                    throw new ForbiddenException('Cannot kick/ban owners or moderators');
-                }
-
-                // Remove from UserDehive collection
-                await this.userDehiveModel.findOneAndUpdate(
-                    { user_id: targetUserId },
-                    {
-                        $pull: { servers: { server_id: serverId } },
-                        $inc: { server_count: -1 }
-                    },
-                    { session }
-                );
-
-                // Remove from UserDehiveServer collection
-                await this.userDehiveServerModel.deleteOne({
-                    user_dehive_id: targetUserId,
-                    server_id: serverId
-                }).session(session);
-
-                // Update server member count
-                await this.serverModel.findByIdAndUpdate(
-                    serverId,
-                    { $inc: { member_count: -1 } },
-                    { session }
-                );
-
-                // If banning, create ban record
-                if (dto.action === 'ban') {
-                    const ban = new this.serverBanModel({
-                        server_id: serverId,
-                        user_dehive_id: targetUserId,
-                        banned_by: moderatorId,
-                        reason: dto.reason
-                    });
-                    await ban.save({ session });
-                }
-
-                // Create audit log
-                await this.createAuditLog(
-                    serverId,
-                    moderatorId,
-                    dto.action === 'ban' ? AuditLogAction.MEMBER_BAN : AuditLogAction.MEMBER_KICK,
-                    targetUserId,
-                    { reason: dto.reason },
-                    dto.reason,
-                    session
-                );
-
-                // Emit appropriate event
-                await this.eventProducer.emit(
-                    dto.action === 'ban' ? 'server.member.banned' : 'server.member.kicked',
-                    {
-                        server_id: serverId.toString(),
-                        user_dehive_id: targetUserId.toString(),
-                        moderator_id: moderatorId.toString(),
-                        reason: dto.reason
-                    }
-                );
-
-                return { 
-                    message: `Successfully ${dto.action === 'ban' ? 'banned' : 'kicked'} user from server`
-                };
-            });
-        } catch (error) {
-            console.error('Service kickOrBan error:', error);
-            if (error instanceof NotFoundException || 
-                error instanceof BadRequestException ||
-                error instanceof ForbiddenException) {
-                throw error;
-            }
-            throw new BadRequestException('Failed to kick/ban user');
-        }
-    }
-
-    async updateNotification(dto: UpdateNotificationDto) {
-        try {
-            const existingMember = await this.userDehiveServerModel.findOne({
-                user_dehive_id: dto.user_dehive_id,
-                server_id: dto.server_id,
-            });
-
-            if (!existingMember) {
-                throw new NotFoundException('User is not a member of this server');
-            }
-
-            await this.notificationCache.setNotificationPreference(
-                dto.user_dehive_id.toString(), 
-                dto.server_id.toString(), 
-                dto.is_muted
-            );
-
-            // Update in database
-            await this.userDehiveServerModel.updateOne(
-                { 
-                    user_dehive_id: dto.user_dehive_id,
-                    server_id: dto.server_id 
-                },
-                { is_muted: dto.is_muted }
-            );
-
-            await this.eventProducer.emit('server.notification.updated', {
-                user_dehive_id: dto.user_dehive_id.toString(),
-                server_id: dto.server_id.toString(),
-                is_muted: dto.is_muted
-            });
-
-            return { 
-                message: 'Notification preferences updated successfully',
-                is_muted: dto.is_muted
-            };
-        } catch (error) {
-            console.error('Service updateNotification error:', error);
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
-            throw new BadRequestException('Failed to update notification preferences');
-        }
-    }
-
-    async unban(dto: UnbanDto) {
-        try {
-            const session = await this.serverBanModel.db.startSession();
-
-            return await session.withTransaction(async () => {
-                const serverId = new Types.ObjectId(dto.server_id);
-                const targetUserId = new Types.ObjectId(dto.target_user_id);
-                const moderatorId = new Types.ObjectId(dto.moderator_id);
-
-                // Check moderator's permissions
-                const moderator = await this.userDehiveModel.findOne({
-                    user_id: moderatorId,
-                    'servers.server_id': serverId
-                }).session(session);
-
-                if (!moderator) {
-                    throw new ForbiddenException('Moderator not found in server');
-                }
-
-                const moderatorServerInfo = moderator.servers.find(
-                    s => s.server_id.toString() === serverId.toString()
-                );
-
-                if (!moderatorServerInfo || 
-                    (moderatorServerInfo.role !== 'owner' && moderatorServerInfo.role !== 'moderator')) {
-                    throw new ForbiddenException('Only owners and moderators can unban members');
-                }
-
-                // Check if user is actually banned
-                const ban = await this.serverBanModel.findOne({
-                    server_id: serverId,
-                    user_dehive_id: targetUserId
-                }).session(session);
-
-                if (!ban) {
-                    throw new BadRequestException('User is not banned from this server');
-                }
-
-                // Remove ban record
-                await this.serverBanModel.deleteOne({
-                    server_id: serverId,
-                    user_dehive_id: targetUserId
-                }).session(session);
-
-                // Create audit log
-                await this.createAuditLog(
-                    serverId,
-                    moderatorId,
-                    AuditLogAction.MEMBER_UNBAN,
-                    targetUserId,
-                    { reason: dto.reason },
-                    dto.reason,
-                    session
-                );
-
-                // Emit unban event
-                await this.eventProducer.emit('server.member.unbanned', {
-                    server_id: serverId.toString(),
-                    user_dehive_id: targetUserId.toString(),
-                    moderator_id: moderatorId.toString(),
-                    reason: dto.reason
-                });
-
-                return { message: 'Successfully unbanned user from server' };
-            });
-        } catch (error) {
-            console.error('Service unban error:', error);
-            if (error instanceof NotFoundException || 
-                error instanceof BadRequestException ||
-                error instanceof ForbiddenException) {
-                throw error;
-            }
-            throw new BadRequestException('Failed to unban user');
-        }
-    }
-
-    async updateMemberRole(
-        serverId: Types.ObjectId,
-        targetUserId: Types.ObjectId,
-        newRole: ServerRole,
-        updatedBy: Types.ObjectId,
-        session?: ClientSession
-    ) {
-        // Check if user exists in server
-        const memberRecord = await this.userDehiveModel.findOne({
-            user_id: targetUserId,
-            'servers.server_id': serverId
-        }).session(session || null);
-
-        if (!memberRecord) {
-            throw new NotFoundException('Target user not found in server');
-        }
-
-        // Get updater's role
-        const updaterRecord = await this.userDehiveModel.findOne({
-            user_id: updatedBy,
-            'servers.server_id': serverId
-        }).session(session || null);
-
-        if (!updaterRecord) {
-            throw new NotFoundException('Moderator not found in server');
-        }
-
-        const updaterServerInfo = updaterRecord.servers.find(
-            s => s.server_id.toString() === serverId.toString()
-        );
-
-        const memberServerInfo = memberRecord.servers.find(
-            s => s.server_id.toString() === serverId.toString()
-        );
-
-        if (!updaterServerInfo || !memberServerInfo) {
-            throw new BadRequestException('Server membership not found');
-        }
-
-        // Only OWNER can assign MODERATOR role
-        // OWNER role can only be transferred by the current OWNER
-        if (
-            (newRole === ServerRole.MODERATOR && updaterServerInfo.role !== 'owner') ||
-            (newRole === ServerRole.OWNER && 
-             (updaterServerInfo.role !== 'owner' || memberServerInfo.role === 'owner'))
-        ) {
-            throw new ForbiddenException('Insufficient permissions to update role');
-        }
-
-        // Update target user's role
-        const updatedMember = await this.userDehiveModel.findOneAndUpdate(
-            {
-                user_id: targetUserId,
-                'servers.server_id': serverId
-            },
-            {
-                $set: {
-                    'servers.$.role': newRole
-                }
-            },
-            { new: true, session }
-        );
-
-        if (!updatedMember) {
-            throw new NotFoundException('Failed to update member role');
-        }
-
-        // Create audit log
-        await this.serverAuditLogModel.create([{
-            server_id: serverId,
-            action: AuditLogAction.ROLE_UPDATE,
-            target_user_id: targetUserId,
-            performed_by: updatedBy,
-            details: {
-                old_role: memberServerInfo.role,
-                new_role: newRole
-            }
-        }], { session });
-
-        return updatedMember;
+        const isMember = await this.userDehiveServerModel.exists({ server_id: serverId, user_dehive_id: actorDehiveId });
+        if (!isMember) throw new ForbiddenException('Only server members can generate invites.');
+        const { customAlphabet } = await import('nanoid');
+        const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890', 10);
+        const code = nanoid();
+        const expiredAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const newInvite = new this.inviteLinkModel({ code, server_id: serverId, creator_id: actorDehiveId, expiredAt });
+        return newInvite.save();
     }
     
-    async validateMemberRole(
-        serverId: Types.ObjectId,
-        userId: Types.ObjectId,
-        requiredRole: ServerRole
-    ): Promise<boolean> {
-        const memberRecord = await this.userDehiveModel.findOne({
-            user_id: userId,
-            'servers.server_id': serverId
+    async useInvite(code: string, actorBaseId: string): Promise<{ message: string }> {
+        const invite = await this.inviteLinkModel.findOne({ code });
+        if (!invite || invite.expiredAt < new Date()) throw new NotFoundException('Invite link is invalid or has expired.');
+        
+        const actorDehiveProfile = await this.userDehiveModel.findOne({ user_id: new Types.ObjectId(actorBaseId) }).select('_id').lean();
+        if (!actorDehiveProfile) throw new NotFoundException(`Dehive profile not found for user.`);
+
+        return this.joinServer({
+            server_id: invite.server_id.toString(),
+            user_dehive_id: actorDehiveProfile._id.toString(),
         });
-
-        if (!memberRecord) {
-            return false;
-        }
-
-        const serverInfo = memberRecord.servers.find(
-            s => s.server_id.toString() === serverId.toString()
-        );
-
-        if (!serverInfo) {
-            return false;
-        }
-
-        // OWNER has all permissions
-        if (serverInfo.role === 'owner') {
-            return true;
-        }
-
-        // MODERATOR has all permissions except OWNER-specific ones
-        if (serverInfo.role === 'moderator' && requiredRole !== 'owner') {
-            return true;
-        }
-
-        // Direct role match
-        return serverInfo.role === requiredRole;
     }
+    
+    async kickOrBan(dto: KickBanDto, action: 'kick' | 'ban', actorBaseId: string): Promise<{ message: string }> {
+        const serverId = new Types.ObjectId(dto.server_id);
+        const targetDehiveId = new Types.ObjectId(dto.target_user_id);
+        
+        const actorDehiveProfile = await this.userDehiveModel.findOne({ user_id: new Types.ObjectId(actorBaseId) }).select('_id').lean();
+        if (!actorDehiveProfile) throw new NotFoundException(`Dehive profile not found for actor.`);
+        const actorDehiveId = actorDehiveProfile._id;
 
-    private async createAuditLog(
-        serverId: Types.ObjectId,
-        actorId: Types.ObjectId | string,
-        action: AuditLogAction,
-        targetId?: Types.ObjectId | string,
-        changes?: Record<string, any>,
-        reason?: string,
-        session?: ClientSession
-    ): Promise<void> {
-        const auditLog = new this.serverAuditLogModel({
-            server_id: serverId,
-            actor_id: actorId,
-            target_id: targetId,
-            action,
-            changes,
-            reason
-        });
-
-        await auditLog.save({ session });
-    }
-
-    async getMemberServers(userId: Types.ObjectId) {
+        const [targetMembership, actorMembership] = await Promise.all([
+            this.userDehiveServerModel.findOne({ server_id: serverId, user_dehive_id: targetDehiveId }),
+            this.userDehiveServerModel.findOne({ server_id: serverId, user_dehive_id: actorDehiveId })
+        ]);
+        if (!targetMembership) throw new NotFoundException('Target user is not a member of this server.');
+        if (!actorMembership) throw new ForbiddenException('You are not a member of this server.');
+        if (actorDehiveId.toString() === targetDehiveId.toString()) throw new BadRequestException('You cannot perform this action on yourself.');
+        const hasPermission = actorMembership.role === ServerRole.OWNER || actorMembership.role === ServerRole.MODERATOR;
+        if (!hasPermission) throw new ForbiddenException('You do not have permission.');
+        if (targetMembership.role === ServerRole.OWNER) throw new ForbiddenException('Cannot kick or ban the server owner.');
+        if (targetMembership.role === ServerRole.MODERATOR && actorMembership.role !== ServerRole.OWNER) throw new ForbiddenException('Moderators cannot kick or ban other moderators.');
+        
+        const session = await this.userDehiveServerModel.db.startSession();
+        session.startTransaction();
         try {
-            const userDehive = await this.userDehiveModel.findOne({
-                user_id: userId
-            })
-            .select('servers')
-            .populate({
-                path: 'servers.server_id',
-                select: 'name description is_private member_count'
-            })
-            .lean();
-
-            if (!userDehive) {
-                throw new NotFoundException('User not found');
+            await this.userDehiveServerModel.deleteOne({ _id: targetMembership._id }).session(session);
+            await this.userDehiveModel.findByIdAndUpdate(targetDehiveId, { $inc: { server_count: -1 } }, { session });
+            await this.serverModel.findByIdAndUpdate(serverId, { $inc: { member_count: -1 } }, { session });
+            if (action === 'ban') {
+                await this.serverBanModel.create([{ server_id: serverId, user_dehive_id: targetDehiveId, banned_by: actorDehiveId, reason: dto.reason }], { session });
             }
-
-            interface PopulatedServer {
-                server_id: Types.ObjectId & {
-                    name: string;
-                    description: string;
-                    is_private: boolean;
-                    member_count: number;
-                };
-                role: string;
-            }
-
-            const enhancedServers = (userDehive.servers || [])
-                .filter((server): server is PopulatedServer => 
-                    server?.server_id && 
-                    typeof server.server_id === 'object' &&
-                    'name' in server.server_id
-                )
-                .map(server => ({
-                    server_id: server.server_id._id,
-                    name: server.server_id.name,
-                    description: server.server_id.description,
-                    role: server.role,
-                    is_private: server.server_id.is_private,
-                    member_count: server.server_id.member_count
-                }));
-
-            return {
-                servers: enhancedServers
-            };
+            await session.commitTransaction();
+            return { message: `User successfully ${action}ed.` };
         } catch (error) {
-            console.error('Get member servers error:', error);
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
-            throw new InternalServerErrorException('Failed to get member servers');
+            await session.abortTransaction();
+            throw new BadRequestException(`Failed to ${action} user.`);
+        } finally {
+            session.endSession();
         }
+    }
+    
+    async unbanMember(dto: UnbanDto, actorBaseId: string): Promise<{ message: string }> {
+        const serverId = new Types.ObjectId(dto.server_id);
+        const targetDehiveId = new Types.ObjectId(dto.target_user_id);
+        
+        const actorDehiveProfile = await this.userDehiveModel.findOne({ user_id: new Types.ObjectId(actorBaseId) }).select('_id').lean();
+        if (!actorDehiveProfile) throw new NotFoundException(`Dehive profile not found for actor.`);
+        const actorDehiveId = actorDehiveProfile._id;
+        
+        const hasPermission = await this.userDehiveServerModel.exists({ server_id: serverId, user_dehive_id: actorDehiveId, role: { $in: [ServerRole.OWNER, ServerRole.MODERATOR]} });
+        if (!hasPermission) throw new ForbiddenException('You do not have permission to unban members.');
+
+        const result = await this.serverBanModel.deleteOne({ server_id: serverId, user_dehive_id: targetDehiveId });
+        if (result.deletedCount === 0) throw new NotFoundException('Ban record not found for this user.');
+        
+        return { message: 'User successfully unbanned.' };
+    }
+    
+    async assignRole(dto: AssignRoleDto, actorBaseId: string): Promise<UserDehiveServerDocument> {
+        const serverId = new Types.ObjectId(dto.server_id);
+        const targetDehiveId = new Types.ObjectId(dto.target_user_id);
+        
+        const actorDehiveProfile = await this.userDehiveModel.findOne({ user_id: new Types.ObjectId(actorBaseId) }).select('_id').lean();
+        if (!actorDehiveProfile) throw new NotFoundException(`Dehive profile not found for actor.`);
+        const actorDehiveId = actorDehiveProfile._id;
+
+        const [targetMembership, actorMembership] = await Promise.all([
+            this.userDehiveServerModel.findOne({ server_id: serverId, user_dehive_id: targetDehiveId }),
+            this.userDehiveServerModel.findOne({ server_id: serverId, user_dehive_id: actorDehiveId })
+        ]);
+        if (!targetMembership) throw new NotFoundException('Target user is not a member of this server.');
+        if (!actorMembership) throw new ForbiddenException('You are not a member of this server.');
+        if (actorDehiveId.toString() === targetDehiveId.toString()) throw new BadRequestException('You cannot change your own role.');
+        if (actorMembership.role !== ServerRole.OWNER) throw new ForbiddenException('Only the server owner can assign roles.');
+        if (dto.role === ServerRole.OWNER) throw new BadRequestException('Ownership can only be transferred, not assigned.');
+        
+        targetMembership.role = dto.role;
+        return targetMembership.save();
+    }
+    
+    async updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{ message: string }> {
+        const actorDehiveProfile = await this.userDehiveModel.findOne({ user_id: new Types.ObjectId(actorBaseId) }).select('_id').lean();
+        if (!actorDehiveProfile) throw new NotFoundException(`Dehive profile not found for user.`);
+        const actorDehiveId = actorDehiveProfile._id;
+        
+        const result = await this.userDehiveServerModel.updateOne(
+            { server_id: new Types.ObjectId(dto.server_id), user_dehive_id: actorDehiveId },
+            { $set: { is_muted: dto.is_muted } }
+        );
+        if (result.matchedCount === 0) throw new NotFoundException('Membership not found.');
+        return { message: 'Notification settings updated successfully.' };
+    }
+    
+    async getUserProfile(userId: string): Promise<User> {
+        const user = await this.userModel.findById(userId).lean();
+        if (!user) throw new NotFoundException(`User with ID ${userId} not found.`);
+        return user;
+    }
+
+    async getMembersInServer(serverId: string): Promise<any[]> {
+        const members = await this.userDehiveServerModel.find({ server_id: new Types.ObjectId(serverId) })
+            .populate<{ user_id: UserDocument }>({ path: 'user_id', model: 'User', select: 'username display_name' })
+            .lean();
+        return members.map(member => {
+            const baseUser = member.user_id;
+            return {
+                membership_id: member._id.toString(),
+                user_id: (baseUser as any)?._id.toString() || null,
+                user_dehive_id: member.user_dehive_id.toString(),
+                username: (baseUser as any)?.username || 'Unknown User',
+                display_name: (baseUser as any)?.display_name || 'Unknown User',
+                role: member.role,
+                is_muted: member.is_muted,
+                joined_at: member.joined_at,
+            };
+        });
+    }
+
+    async getEnrichedUserProfile(targetUserId: string, viewerUserId: string) {
+        const [targetDehiveProfile, viewerDehiveProfile] = await Promise.all([
+            this.userDehiveModel.findOne({ user_id: new Types.ObjectId(targetUserId) }).lean(),
+            this.userDehiveModel.findOne({ user_id: new Types.ObjectId(viewerUserId) }).lean()
+        ]);
+        if (!targetDehiveProfile) throw new NotFoundException(`Dehive profile not found for target user ID: ${targetUserId}`);
+        if (!viewerDehiveProfile) throw new NotFoundException(`Dehive profile not found for viewer user ID: ${viewerUserId}`);
+        const baseUser = await this.userModel.findById(targetDehiveProfile.user_id).lean();
+        if (!baseUser) throw new NotFoundException(`Base user not found.`);
+        const [targetServers, viewerServers] = await Promise.all([
+            this.userDehiveServerModel.find({ user_dehive_id: targetDehiveProfile._id }).select('server_id').populate('server_id', 'name').lean(),
+            this.userDehiveServerModel.find({ user_dehive_id: viewerDehiveProfile._id }).select('server_id').lean()
+        ]);
+        const viewerServerIds = new Set(viewerServers.map(s => s.server_id.toString()));
+        const mutualServers = targetServers.filter(s => 
+            s.server_id && viewerServerIds.has((s.server_id as any)._id.toString())
+        );
+        return {
+            _id: baseUser._id.toString(),
+            username: baseUser.username,
+            bio: targetDehiveProfile.bio,
+            status: targetDehiveProfile.status,
+            mutual_servers_count: mutualServers.length,
+            mutual_servers: mutualServers.map(s => s.server_id),
+        };
     }
 }

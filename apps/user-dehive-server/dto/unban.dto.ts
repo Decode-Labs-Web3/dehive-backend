@@ -1,19 +1,5 @@
-import { IsString, IsNotEmpty, IsMongoId } from 'class-validator';
-
+import { IsString, IsNotEmpty, IsMongoId, IsOptional } from 'class-validator';
 export class UnbanDto {
-  @IsNotEmpty()
-  @IsString()
-  @IsMongoId()
-  server_id: string;
-
-  @IsNotEmpty()
-  @IsString()
-  target_user_id: string;
-
-  @IsNotEmpty()
-  @IsString()
-  moderator_id: string;
-
-  @IsString()
-  reason?: string;
+  @IsNotEmpty() @IsMongoId() server_id: string;
+  @IsNotEmpty() @IsMongoId() target_user_id: string;
 }

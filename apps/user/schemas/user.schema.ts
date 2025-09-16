@@ -1,49 +1,41 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, ObjectId } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
-@Schema()
-export class User extends Document {
-  @Prop({ required: true })
+@Schema({ timestamps: true }) 
+export class User {
+  @Prop({ required: true, unique: true, trim: true })
   username: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, unique: true, trim: true, lowercase: true })
   email: string;
 
   @Prop({ required: false })
   display_name: string;
 
-  @Prop({ required: false })
-  bio: string;
-
-  @Prop({ required: true })
+  @Prop({ required: true, select: false })
   password_hashed: string;
 
-  @Prop({ required: false })
-  biography: string;
+  @Prop({ required: false, maxlength: 500 })
+  bio: string;
 
-  @Prop({ required: false })
-  primary_wallet: ObjectId;
+  @Prop({ type: Types.ObjectId, required: false })
+  primary_wallet: Types.ObjectId;
 
-  @Prop({ required: false })
-  wallets: ObjectId[];
+  @Prop({ type: [{ type: Types.ObjectId }], default: [] })
+  wallets: Types.ObjectId[];
 
-  @Prop({ required: false })
+  @Prop({ default: false })
   email_verified: boolean;
 
-  @Prop({ required: false, default: 'user' })
+  @Prop({ default: 'user' })
   role: string;
 
-  @Prop({ required: false })
-  mfa_id: ObjectId;
+  @Prop({ type: Types.ObjectId, required: false })
+  mfa_id: Types.ObjectId;
 
   @Prop({ required: false })
   last_login: Date;
 
-  @Prop({ required: true })
-  created_at: Date;
-
-  @Prop({ required: true })
-  updated_at: Date;
 }
-
+export type UserDocument = User & Document;
 export const UserSchema = SchemaFactory.createForClass(User);
