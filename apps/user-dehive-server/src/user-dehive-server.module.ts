@@ -6,9 +6,15 @@ import { UserDehiveServerService } from './user-dehive-server.service';
 import { UserDehive, UserDehiveSchema } from '../schemas/user-dehive.schema';
 import { Server, ServerSchema } from '../schemas/server.schema';
 import { InviteLink, InviteLinkSchema } from '../schemas/invite-link.schema';
-import { ServerAuditLog, ServerAuditLogSchema } from '../schemas/server-audit-log.schema';
+import {
+  ServerAuditLog,
+  ServerAuditLogSchema,
+} from '../schemas/server-audit-log.schema';
 import { ServerBan, ServerBanSchema } from '../schemas/server-ban.schema';
-import { UserDehiveServer, UserDehiveServerSchema } from '../schemas/user-dehive-server.schema';
+import {
+  UserDehiveServer,
+  UserDehiveServerSchema,
+} from '../schemas/user-dehive-server.schema';
 import { User, UserSchema } from '../../user/schemas/user.schema';
 import { FakeAuthGuard } from '../guards/fake-auth.guard';
 
@@ -43,18 +49,12 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
       { name: InviteLink.name, schema: InviteLinkSchema },
       { name: ServerAuditLog.name, schema: ServerAuditLogSchema },
       { name: ServerBan.name, schema: ServerBanSchema },
-      { name: UserDehiveServer.name, schema: UserDehiveServerSchema }, 
-      { name: User.name, schema: UserSchema }, 
+      { name: UserDehiveServer.name, schema: UserDehiveServerSchema },
+      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [UserDehiveServerController],
-  providers: [
-    UserDehiveServerService,
-    FakeAuthGuard,
-  ], 
-  exports: [
-    UserDehiveServerService,
-    MONGOOSE_MODELS,
-  ],
+  providers: [UserDehiveServerService, FakeAuthGuard],
+  exports: [UserDehiveServerService, MONGOOSE_MODELS],
 })
 export class UserDehiveServerModule {}

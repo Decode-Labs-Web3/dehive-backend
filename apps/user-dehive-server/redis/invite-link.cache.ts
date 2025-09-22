@@ -8,7 +8,12 @@ export class InviteLinkCache {
 
   async setInviteLink(server_id: string, code: string, expiredAt: Date) {
     const key = `invite:${code}`;
-    await this.redis.set(key, server_id, 'EX', Math.floor((expiredAt.getTime() - Date.now()) / 1000));
+    await this.redis.set(
+      key,
+      server_id,
+      'EX',
+      Math.floor((expiredAt.getTime() - Date.now()) / 1000),
+    );
   }
 
   async getServerIdByInviteLink(code: string): Promise<string | null> {

@@ -4,7 +4,6 @@ import { ChannelType } from '../dto/create-channel.dto';
 
 @Schema({ timestamps: true })
 export class Channel {
-
   @Prop({ required: true, trim: true, maxlength: 100 })
   name: string;
 

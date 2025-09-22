@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { Status } from '../constants/enum';
 
 @Schema({ collection: 'userdehives', timestamps: true })
 export class UserDehive {
@@ -15,7 +16,11 @@ export class UserDehive {
   @Prop({ type: Number, default: 0 })
   server_count: number;
 
-  @Prop({ type: String, enum: ['online', 'offline', 'idle'], default: 'offline' })
+  @Prop({
+    type: String,
+    enum: Status,
+    default: 'offline',
+  })
   status: string;
 
   @Prop({ type: Date })

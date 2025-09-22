@@ -5,11 +5,14 @@ import { ClientKafka } from '@nestjs/microservices';
 export class EventProducerService implements OnModuleInit {
   private readonly logger = new Logger(EventProducerService.name);
 
-  constructor(@Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka) {}
+  constructor(
+    @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
+  ) {}
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async emit(topic: string, payload: any) {
     try {
-      await this.kafkaClient.emit(topic, payload);
+      this.kafkaClient.emit(topic, payload);
       this.logger.log(`Event emitted successfully to topic: ${topic}`);
     } catch (error) {
       this.logger.error(`Failed to emit event to topic ${topic}:`, error);

@@ -1,15 +1,18 @@
 import { IsMongoId, IsNotEmpty, IsBoolean } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateNotificationDto {
-    @IsNotEmpty()
-    @IsMongoId()
-    user_dehive_id: string;
+  @ApiProperty({
+    description:
+      'The ID of the server where notification settings are being changed.',
+    example: '68c5adb6ec465897d540c58',
+  })
+  @IsNotEmpty()
+  @IsMongoId()
+  server_id: string;
 
-    @IsNotEmpty()
-    @IsMongoId()
-    server_id: string;
-
-    @IsNotEmpty()
-    @IsBoolean()
-    is_muted: boolean;
+  @ApiProperty({ description: 'The new mute status.', example: true })
+  @IsNotEmpty()
+  @IsBoolean()
+  is_muted: boolean;
 }

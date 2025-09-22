@@ -3,7 +3,6 @@ import { Document, Types } from 'mongoose';
 
 @Schema({ collection: 'channelmessages', timestamps: true })
 export class ChannelMessage {
-
   @Prop({ required: true, trim: true, maxlength: 2000 })
   message: string;
 
@@ -25,4 +24,5 @@ export class ChannelMessage {
 
 export type ChannelMessageDocument = ChannelMessage & Document;
 
-export const ChannelMessageSchema = SchemaFactory.createForClass(ChannelMessage);
+export const ChannelMessageSchema =
+  SchemaFactory.createForClass(ChannelMessage);

@@ -1,8 +1,4 @@
-export enum ServerRole {
-  OWNER = 'owner',
-  MODERATOR = 'moderator',
-  MEMBER = 'member',
-}
+import { ServerRole } from '../constants/enum';
 
 export class UserDehiveServer {
   _id: string;

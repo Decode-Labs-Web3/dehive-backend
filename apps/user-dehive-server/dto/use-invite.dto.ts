@@ -1,6 +1,9 @@
-import { IsMongoId, IsNotEmpty } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 export class UseInviteDto {
-  @IsNotEmpty()
-  @IsMongoId()
-  user_dehive_id: string;
+  @ApiProperty({
+    description:
+      'This endpoint does not require a request body. The user is identified by the authentication token.',
+    example: {},
+  })
+  _empty?: any;
 }

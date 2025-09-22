@@ -1,11 +1,20 @@
 import { IsMongoId, IsNotEmpty } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class JoinServerDto {
+  @ApiProperty({
+    description: 'The Dehive Profile ID of the user joining.',
+    example: '68c14a75264e42f26828c52d',
+  })
   @IsNotEmpty()
-  @IsMongoId({ message: 'user_dehive_id must be a valid MongoDB ObjectId' })
-  user_dehive_id: string; 
+  @IsMongoId()
+  user_dehive_id: string;
 
+  @ApiProperty({
+    description: 'The ID of the server to join.',
+    example: '68c5adb6ec465897d540c58',
+  })
   @IsNotEmpty()
-  @IsMongoId({ message: 'server_id must be a valid MongoDB ObjectId' })
-  server_id: string; 
+  @IsMongoId()
+  server_id: string;
 }

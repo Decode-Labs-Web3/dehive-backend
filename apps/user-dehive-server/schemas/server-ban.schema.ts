@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
-export class ServerBan { 
+export class ServerBan {
   @Prop({ type: Types.ObjectId, ref: 'Server', required: true })
   server_id: Types.ObjectId;
 
@@ -19,6 +19,6 @@ export class ServerBan {
   expires_at: Date;
 }
 
-export type ServerBanDocument = ServerBan & Document
+export type ServerBanDocument = ServerBan & Document;
 export const ServerBanSchema = SchemaFactory.createForClass(ServerBan);
 ServerBanSchema.index({ server_id: 1, user_dehive_id: 1 }, { unique: true });

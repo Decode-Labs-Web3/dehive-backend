@@ -9,14 +9,14 @@ export const kafkaConfig: KafkaOptions = {
       brokers: process.env.KAFKA_BROKERS?.split(',') || ['localhost:9092'],
       retry: {
         initialRetryTime: 100,
-        retries: 3
-      }
+        retries: 3,
+      },
     },
     consumer: {
       groupId: process.env.KAFKA_GROUP_ID || 'user-dehive-server-consumer',
     },
     producer: {
-      createPartitioner: Partitioners.LegacyPartitioner
-    }
+      createPartitioner: Partitioners.LegacyPartitioner,
+    },
   },
 };

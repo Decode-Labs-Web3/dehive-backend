@@ -6,9 +6,18 @@ import { ServerService } from './server.service';
 import { Server, ServerSchema } from '../schemas/server.schema';
 import { Category, CategorySchema } from '../schemas/category.schema';
 import { Channel, ChannelSchema } from '../schemas/channel.schema';
-import { UserDehive, UserDehiveSchema } from '../../user-dehive-server/schemas/user-dehive.schema';
-import { UserDehiveServer, UserDehiveServerSchema } from '../../user-dehive-server/schemas/user-dehive-server.schema';
-import { ChannelMessage, ChannelMessageSchema } from '../schemas/channel-message.schema';
+import {
+  UserDehive,
+  UserDehiveSchema,
+} from '../../user-dehive-server/schemas/user-dehive.schema';
+import {
+  UserDehiveServer,
+  UserDehiveServerSchema,
+} from '../../user-dehive-server/schemas/user-dehive-server.schema';
+import {
+  ChannelMessage,
+  ChannelMessageSchema,
+} from '../schemas/channel-message.schema';
 import { UserDehiveServerModule } from '../../user-dehive-server/src/user-dehive-server.module';
 
 @Module({
@@ -24,7 +33,7 @@ import { UserDehiveServerModule } from '../../user-dehive-server/src/user-dehive
         uri: configService.get<string>('MONGODB_URI'),
       }),
     }),
-  
+
     UserDehiveServerModule,
 
     MongooseModule.forFeature([
