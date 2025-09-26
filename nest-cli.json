@@ -28,6 +28,30 @@
         "tsConfigPath": "apps/auth/tsconfig.app.json"
       }
     },
+    "channel-messaging": {
+      "type": "application",
+      "root": "apps/channel-messaging",
+      "entryFile": "main",
+      "sourceRoot": "apps/channel-messaging/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/channel-messaging/tsconfig.app.json",
+        "plugins": [
+          "@nestjs/swagger"
+        ]
+      }
+    },
+    "direct-messaging": {
+      "type": "application",
+      "root": "apps/direct-messaging",
+      "entryFile": "main",
+      "sourceRoot": "apps/direct-messaging/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/direct-messaging/tsconfig.app.json",
+        "plugins": [
+          "@nestjs/swagger"
+        ]
+      }
+    },
     "email-worker": {
       "type": "application",
       "root": "apps/email-worker",
@@ -35,6 +59,24 @@
       "sourceRoot": "apps/email-worker/src",
       "compilerOptions": {
         "tsConfigPath": "apps/email-worker/tsconfig.app.json"
+      }
+    },
+    "server": {
+      "type": "application",
+      "root": "apps/server",
+      "entryFile": "main",
+      "sourceRoot": "apps/server/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/server/tsconfig.app.json"
+      }
+    },
+    "shared": {
+      "type": "library",
+      "root": "libs/shared",
+      "entryFile": "index",
+      "sourceRoot": "libs/shared/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/shared/tsconfig.lib.json"
       }
     },
     "user": {
@@ -53,15 +95,6 @@
       "sourceRoot": "apps/user-dehive-server/src",
       "compilerOptions": {
         "tsConfigPath": "apps/user-dehive-server/tsconfig.app.json"
-      }
-    },
-     "server": {
-      "type": "application",
-      "root": "apps/server",
-      "entryFile": "main",
-      "sourceRoot": "apps/server/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/server/tsconfig.app.json"
       }
     }
   }

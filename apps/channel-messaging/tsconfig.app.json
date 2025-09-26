@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "outDir": "../../dist/apps/channel-messaging",
+    "emitDecoratorMetadata": true 
+  },
+  "include": [
+    "src/**/*",
+    "dto/**/*",
+    "schemas/**/*",
+    "gateway/**/*",
+    "enum/**/*"
+  ],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
+}
