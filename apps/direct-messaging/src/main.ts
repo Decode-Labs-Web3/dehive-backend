@@ -5,6 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { DirectMessagingModule } from './direct-messaging.module';
 import * as express from 'express';
 import * as path from 'path';
+import { WsAdapter } from '@nestjs/platform-ws';
 
 async function bootstrap() {
   const app = await NestFactory.create(DirectMessagingModule);
@@ -14,6 +15,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   const config = new DocumentBuilder()
     .setTitle('Dehive - Direct Messaging Service')

@@ -1,4 +1,4 @@
-export declare enum AttachmentType {
+export enum AttachmentType {
   IMAGE = 'image',
   VIDEO = 'video',
   AUDIO = 'audio',

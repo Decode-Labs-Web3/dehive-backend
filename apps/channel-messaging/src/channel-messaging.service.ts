@@ -21,7 +21,7 @@ import { CreateMessageDto } from '../dto/create-message.dto';
 import { AttachmentDto } from '../dto/attachment.dto';
 import { GetMessagesDto } from '../dto/get-messages.dto';
 import { Upload, UploadDocument } from '../schemas/upload.schema';
-import { UploadInitDto, UploadResponseDto } from '../dto/upload.dto';
+import { UploadInitDto, UploadResponseDto } from '../dto/channel-upload.dto';
 import { AttachmentType } from '../enum/enum';
 import sharp from 'sharp';
 import * as childProcess from 'child_process';
@@ -434,7 +434,10 @@ export class MessagingService {
       throw new BadRequestException('You can only delete your own message');
     }
     (msg as unknown as { isDeleted?: boolean }).isDeleted = true;
-    msg.content = '';
+    // Keep a placeholder string to satisfy schema required+trim validation
+    msg.content = '[deleted]';
+    // Optionally clear attachments on delete
+    (msg as unknown as { attachments?: unknown[] }).attachments = [];
     await msg.save();
     return msg;
   }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsMongoId, IsOptional, IsUrl, Min } from 'class-validator';
 import { AttachmentType } from '../enum/enum';

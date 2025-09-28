@@ -14,7 +14,7 @@ import { Server as WSServer, WebSocket } from 'ws';
 import { Model, Types } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { DirectMessagingService } from '../src/direct-messaging.service';
-import { SendDirectMessageDto } from '../dto/create-direct-message.dto';
+import { SendDirectMessageDto } from '../dto/send-direct-message.dto';
 import {
   UserDehive,
   UserDehiveDocument,
@@ -28,7 +28,6 @@ type SocketMeta = { userDehiveId?: string };
 
 @WebSocketGateway({
   cors: { origin: '*' },
-  path: '/dm-ws',
 })
 export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -133,6 +132,82 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       console.error('[DM-WS] Error handling message:', error);
       this.send(client, 'error', {
         message: 'Failed to send message',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  @SubscribeMessage('editMessage')
+  async handleEditMessage(
+    @MessageBody() data: { messageId: string; content: string },
+    @ConnectedSocket() client: WebSocket,
+  ) {
+    const meta = this.meta.get(client);
+    const selfId = meta?.userDehiveId;
+    if (!selfId)
+      return this.send(client, 'error', { message: 'Please identify first' });
+    try {
+      const updated = await this.service.editMessage(
+        selfId,
+        data?.messageId,
+        data?.content ?? '',
+      );
+
+      const conv = await this.conversationModel
+        .findById(updated.conversationId)
+        .lean();
+      if (!conv) return;
+      const recipientId =
+        String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
+      const payload = {
+        _id: updated._id,
+        messageId: updated._id,
+        conversationId: updated.conversationId,
+        content: updated.content,
+        isEdited: true,
+        editedAt: (updated as unknown as { editedAt?: Date }).editedAt,
+      };
+      const recipientSocket = this.userSockets.get(recipientId);
+      if (recipientSocket) this.send(recipientSocket, 'messageEdited', payload);
+      this.send(client, 'messageEdited', payload);
+    } catch (error) {
+      this.send(client, 'error', {
+        message: 'Failed to edit message',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  @SubscribeMessage('deleteMessage')
+  async handleDeleteMessage(
+    @MessageBody() data: { messageId: string },
+    @ConnectedSocket() client: WebSocket,
+  ) {
+    const meta = this.meta.get(client);
+    const selfId = meta?.userDehiveId;
+    if (!selfId)
+      return this.send(client, 'error', { message: 'Please identify first' });
+    try {
+      const updated = await this.service.deleteMessage(selfId, data?.messageId);
+      const conv = await this.conversationModel
+        .findById(updated.conversationId)
+        .lean();
+      if (!conv) return;
+      const recipientId =
+        String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
+      const payload = {
+        _id: updated._id,
+        messageId: updated._id,
+        conversationId: updated.conversationId,
+        isDeleted: true,
+      };
+      const recipientSocket = this.userSockets.get(recipientId);
+      if (recipientSocket)
+        this.send(recipientSocket, 'messageDeleted', payload);
+      this.send(client, 'messageDeleted', payload);
+    } catch (error) {
+      this.send(client, 'error', {
+        message: 'Failed to delete message',
         details: error instanceof Error ? error.message : String(error),
       });
     }
