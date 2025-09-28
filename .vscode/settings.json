@@ -1,0 +1,18 @@
+{
+    "files.exclude": {
+        "**/.git": false,
+        "**/.svn": false,
+        "**/.hg": false,
+        "**/CVS": false,
+        "**/.DS_Store": false,
+        "**/node_modules": false,
+        "**/.env": false
+    },
+    "explorer.excludeGitIgnore": false,
+    "files.watcherExclude": {
+        "**/.git/objects/**": false,
+        "**/.git/subtree-cache/**": false,
+        "**/node_modules/**": false,
+        "**/.env": false
+    }
+}
