@@ -113,13 +113,27 @@ export class UserService {
         };
       }
       const user = {
-        ...user_dehive_data,
-        user_id: user_decode_data._id,
+        _id: user_dehive_data._id,
+        dehive_role: user_dehive_data.dehive_role,
+        role_subscription: user_dehive_data.role_subscription,
+        status: user_dehive_data.status,
+        server_count: user_dehive_data.server_count,
         username: user_decode_data.username,
         display_name: user_decode_data.display_name,
         bio: user_decode_data.bio,
         avatar_ipfs_hash: user_decode_data.avatar_ipfs_hash,
         last_login: user_decode_data.last_login,
+        primary_wallet: user_decode_data.primary_wallet,
+        following_number: user_decode_data.following_number,
+        followers_number: user_decode_data.followers_number,
+        is_following: user_decode_data.is_following,
+        is_follower: user_decode_data.is_follower,
+        is_blocked: user_decode_data.is_blocked,
+        is_blocked_by: user_decode_data.is_blocked_by,
+        mutual_followers_number: user_decode_data.mutual_followers_number,
+        mutual_followers_list: user_decode_data.mutual_followers_list,
+        is_active: user_decode_data.is_active,
+        last_account_deactivation: user_decode_data.last_account_deactivation,
       };
       return {
         success: true,

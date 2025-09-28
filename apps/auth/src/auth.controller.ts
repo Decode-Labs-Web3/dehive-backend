@@ -32,7 +32,7 @@ export class AuthController {
   }
 
   @UseGuards(DecodeAuthGuard)
-  @Get('/:user_id/profile')
+  @Get('profile/:user_id')
   async getUserProfile(
     @Param() param: { user_id: string },
     @Headers()
@@ -49,7 +49,7 @@ export class AuthController {
   }
 
   @UseGuards(DecodeAuthGuard)
-  @Get('me/profile')
+  @Get('profile/me')
   async getMyProfile(
     @Headers()
     headers: {
@@ -57,13 +57,8 @@ export class AuthController {
       'x-fingerprint-hashed': string;
     },
   ) {
-    console.log('auth controller get my profile headers', headers);
     const session_id = headers['x-session-id'];
     const fingerprint_hashed = headers['x-fingerprint-hashed'];
-    console.log('auth controller get my profile input', {
-      session_id: session_id,
-      fingerprint_hashed: fingerprint_hashed,
-    });
     return await this.userService.getMyProfile({
       session_id: session_id,
       fingerprint_hashed: fingerprint_hashed,
