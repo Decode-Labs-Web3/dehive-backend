@@ -6,13 +6,10 @@ import { Document, ObjectId } from 'mongoose';
   timestamps: true,
 })
 export class UserDehive extends Document {
-  @Prop({ type: String, required: true, unique: true, index: true })
-  user_id: ObjectId; // User Id from decode
-
-  @Prop({ 
+  @Prop({
     type: String,
     enum: ['ADMIN', 'MODERATOR', 'USER'],
-    default: 'USER'
+    default: 'USER',
   })
   dehive_role: string;
 
@@ -22,7 +19,7 @@ export class UserDehive extends Document {
   @Prop({
     type: String,
     enum: ['ACTIVE', 'INACTIVE', 'BANNED'],
-    default: 'ACTIVE'
+    default: 'ACTIVE',
   })
   status: string;
 
