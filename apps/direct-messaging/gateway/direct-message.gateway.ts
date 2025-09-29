@@ -100,6 +100,32 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
+      if (typeof (data as { content?: unknown }).content !== 'string') {
+        return this.send(client, 'error', {
+          message: 'Content must be a string (0-2000 chars).',
+        });
+      }
+      if (String(data.content ?? '').length > 2000) {
+        return this.send(client, 'error', {
+          message: 'Content must not exceed 2000 characters.',
+        });
+      }
+      if (!Array.isArray(data.uploadIds)) {
+        return this.send(client, 'error', {
+          message: 'uploadIds is required and must be an array',
+        });
+      }
+      if (data.uploadIds.length > 0) {
+        const allValid = data.uploadIds.every((id: unknown) => {
+          return typeof id === 'string' && Types.ObjectId.isValid(id);
+        });
+        if (!allValid) {
+          return this.send(client, 'error', {
+            message: 'One or more uploadIds are invalid',
+          });
+        }
+      }
+
       const savedMessage = await this.service.sendMessage(selfId, data);
       const conv = await this.conversationModel
         .findById(data.conversationId)

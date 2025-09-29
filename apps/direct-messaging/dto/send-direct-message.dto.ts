@@ -1,12 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsArray,
-  IsMongoId,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  Length,
-} from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsArray, IsMongoId, IsString, Length } from 'class-validator';
 
 export class SendDirectMessageDto {
   @ApiProperty({
@@ -17,23 +10,24 @@ export class SendDirectMessageDto {
   conversationId: string;
 
   @ApiProperty({
-    description: 'The text content of the message',
-    minLength: 1,
+    description:
+      'The text content of the message (empty string if only sending files)',
     maxLength: 2000,
     example: 'Hello there!',
+    default: '',
   })
   @IsString()
-  @IsNotEmpty()
-  @Length(1, 2000)
+  @Length(0, 2000)
   content: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     type: [String],
-    description: 'An optional list of upload IDs to attach to the message',
+    description:
+      'List of upload IDs to attach to the message (empty array if no files)',
     example: ['68db1234abcd5678efgh9013'],
+    default: [],
   })
-  @IsOptional()
   @IsArray()
   @IsMongoId({ each: true, message: 'Each uploadId must be a valid MongoId' })
-  uploadIds?: string[];
+  uploadIds: string[];
 }

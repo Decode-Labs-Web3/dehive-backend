@@ -438,8 +438,8 @@ export class DirectMessagingService {
       throw new BadRequestException('Invalid self id');
     if (!Types.ObjectId.isValid(messageId))
       throw new BadRequestException('Invalid message id');
-    if (typeof content !== 'string' || !content.trim())
-      throw new BadRequestException('Content is required');
+    if (typeof content !== 'string')
+      throw new BadRequestException('Content must be a string');
 
     const message = await this.messageModel.findById(messageId);
     if (!message) throw new NotFoundException('Message not found');
@@ -448,7 +448,7 @@ export class DirectMessagingService {
     if (message.isDeleted)
       throw new BadRequestException('Cannot edit a deleted message');
 
-    message.content = content.trim();
+    message.content = content;
     message.isEdited = true;
     message.editedAt = new Date();
     await message.save();

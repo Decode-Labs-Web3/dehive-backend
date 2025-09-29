@@ -25,11 +25,44 @@ import { MessagingService } from './channel-messaging.service';
 import { GetMessagesDto } from '../dto/get-messages.dto';
 import { UploadInitDto, UploadResponseDto } from '../dto/channel-upload.dto';
 import { ListUploadsDto } from '../dto/list-channel-upload.dto';
+import { CreateMessageDto } from '../dto/create-message.dto';
 
 @ApiTags('Channel Messages')
 @Controller('messages')
 export class MessagingController {
   constructor(private readonly messagingService: MessagingService) {}
+
+  @Post('send')
+  @ApiOperation({ summary: 'Send a message to a channel conversation' })
+  @ApiHeader({
+    name: 'x-user-id',
+    description: 'The UserDehive ID of the sender',
+    required: true,
+  })
+  @ApiBody({ type: CreateMessageDto })
+  @ApiResponse({ status: 201, description: 'Message sent successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid input or missing fields.' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'User is not allowed to post in this channel (future implementation).',
+  })
+  @ApiResponse({ status: 404, description: 'Conversation not found.' })
+  async sendMessage(
+    @Headers('x-user-id') userId: string,
+    @Body() createMessageDto: CreateMessageDto,
+  ) {
+    const savedMessage = await this.messagingService.createMessage(
+      createMessageDto,
+      userId,
+    );
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'Message sent successfully',
+      data: savedMessage,
+    };
+  }
 
   @Get('conversation/:conversationId')
   @ApiOperation({ summary: 'Get paginated messages for a conversation' })
@@ -103,16 +136,12 @@ export class MessagingController {
       );
     }
     const result = await this.messagingService.handleUpload(file, body, userId);
-    const merged = Object.assign(
-      {},
-      result as unknown as Record<string, unknown>,
-      {
-        success: true,
-        statusCode: 201,
-        message: 'File uploaded successfully',
-      },
-    );
-    return merged;
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'File uploaded successfully',
+      data: result,
+    };
   }
 
   @Get('files/list')

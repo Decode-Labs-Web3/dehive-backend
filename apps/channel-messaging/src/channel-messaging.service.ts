@@ -406,8 +406,8 @@ export class MessagingService {
     if (!Types.ObjectId.isValid(editorUserDehiveId)) {
       throw new BadRequestException('Invalid user id');
     }
-    if (typeof newContent !== 'string' || newContent.trim().length === 0) {
-      throw new BadRequestException('Content must be non-empty');
+    if (typeof newContent !== 'string') {
+      throw new BadRequestException('Content must be a string');
     }
     const msg = await this.channelMessageModel.findById(messageId);
     if (!msg) throw new NotFoundException('Message not found');
@@ -434,9 +434,7 @@ export class MessagingService {
       throw new BadRequestException('You can only delete your own message');
     }
     (msg as unknown as { isDeleted?: boolean }).isDeleted = true;
-    // Keep a placeholder string to satisfy schema required+trim validation
     msg.content = '[deleted]';
-    // Optionally clear attachments on delete
     (msg as unknown as { attachments?: unknown[] }).attachments = [];
     await msg.save();
     return msg;

@@ -28,11 +28,40 @@ import {
 import { ListDirectMessagesDto } from '../dto/list-direct-messages.dto';
 import { Express } from 'express';
 import { ListDirectUploadsDto } from '../dto/list-direct-upload.dto';
+import { SendDirectMessageDto } from '../dto/send-direct-message.dto';
 
 @ApiTags('Direct Messages')
 @Controller('dm')
 export class DirectMessagingController {
   constructor(private readonly service: DirectMessagingService) {}
+
+  @Post('send')
+  @ApiOperation({ summary: 'Send a message to a direct conversation' })
+  @ApiHeader({
+    name: 'x-user-id',
+    description: 'The UserDehive ID of the sender',
+    required: true,
+  })
+  @ApiBody({ type: SendDirectMessageDto })
+  @ApiResponse({ status: 201, description: 'Message sent successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid input or missing fields.' })
+  @ApiResponse({
+    status: 403,
+    description: 'User is not a participant of this conversation.',
+  })
+  @ApiResponse({ status: 404, description: 'Conversation not found.' })
+  async sendMessage(
+    @Headers('x-user-id') selfId: string,
+    @Body() body: SendDirectMessageDto,
+  ) {
+    const newMessage = await this.service.sendMessage(selfId, body);
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'Message sent successfully',
+      data: newMessage,
+    };
+  }
 
   @Post('conversation')
   @ApiOperation({ summary: 'Create or get a 1:1 conversation' })

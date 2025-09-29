@@ -279,20 +279,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           message: 'Invalid conversationId.',
         });
       }
-      if (
-        typeof (data as { content?: unknown }).content !== 'string' ||
-        String(data.content ?? '').trim().length === 0
-      ) {
+      if (typeof (data as { content?: unknown }).content !== 'string') {
         return this.send(client, 'error', {
-          message: 'Content must be a non-empty string (1-2000 chars).',
+          message: 'Content must be a string (0-2000 chars).',
         });
       }
-      if (data.uploadIds !== undefined) {
-        if (!Array.isArray(data.uploadIds)) {
-          return this.send(client, 'error', {
-            message: 'uploadIds must be an array of MongoIds',
-          });
-        }
+      if (String(data.content ?? '').length > 2000) {
+        return this.send(client, 'error', {
+          message: 'Content must not exceed 2000 characters.',
+        });
+      }
+      if (!Array.isArray(data.uploadIds)) {
+        return this.send(client, 'error', {
+          message: 'uploadIds is required and must be an array',
+        });
+      }
+      if (data.uploadIds.length > 0) {
         const allValid = data.uploadIds.every((id: unknown) => {
           return typeof id === 'string' && Types.ObjectId.isValid(id);
         });

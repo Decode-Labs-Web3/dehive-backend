@@ -19,23 +19,25 @@ export class CreateMessageDto {
   conversationId: string;
 
   @ApiProperty({
-    description: 'The text content of the message.',
+    description:
+      'The text content of the message (empty string if only sending files)',
     example: 'Hello everyone! How is the project going?',
-    minLength: 1,
     maxLength: 2000,
+    default: '',
   })
   @IsString()
-  @IsNotEmpty()
-  @Length(1, 2000)
+  @Length(0, 2000)
   content: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     type: [String],
-    description: 'List of upload IDs to attach',
+    description: 'List of upload IDs to attach (empty array if no files)',
+    example: ['68db1234abcd5678efgh9013'],
+    default: [],
   })
-  @IsOptional()
   @IsArray()
-  uploadIds?: string[];
+  @IsMongoId({ each: true, message: 'Each uploadId must be a valid MongoId' })
+  uploadIds: string[];
 
   @ApiPropertyOptional({
     type: [AttachmentDto],
