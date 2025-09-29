@@ -45,8 +45,8 @@ export default registerAs('jwt', () => ({
   servicesToken: {
     expiresIn: '5s', // 5 seconds
     algorithm: 'HS256',
-    issuer: 'decode-user-service',
-    audience: 'decode-user-service',
-    authIssuer: 'decode-auth-service',
+    issuer: 'dehive-auth-service',
+    audience: 'dehive-auth-service',
+    servicesIssuer: 'dehive-services',
   },
 }));

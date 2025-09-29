@@ -10,6 +10,7 @@ import {
 import { SessionService } from './services/session.service';
 import { RegisterService } from './services/register.service';
 import { DecodeAuthGuard, Public } from './common/guards/decode-auth.guard';
+import { AuthServiceGuard } from './common/guards/service.guard';
 import { UserService } from './services/user.service';
 
 @Controller('auth')
@@ -29,6 +30,12 @@ export class AuthController {
   @Post('create-dehive-account')
   async createDehiveAccount(@Body() body: { user_id: string }) {
     return await this.registerService.register(body.user_id);
+  }
+
+  @UseGuards(AuthServiceGuard)
+  @Post('session/check')
+  async checkSession(@Body() body: { session_id: string }) {
+    return await this.sessionService.checkValidSession(body.session_id);
   }
 
   @UseGuards(DecodeAuthGuard)

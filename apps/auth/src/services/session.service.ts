@@ -12,6 +12,7 @@ import { RedisInfrastructure } from '../infrastructure/redis.infrastructure';
 // Services
 import { UserService } from './user.service';
 import { RegisterService } from './register.service';
+import { SessionCacheDoc } from '../interfaces/session-doc.interface';
 
 @Injectable()
 export class SessionService {
@@ -61,6 +62,25 @@ export class SessionService {
         session_id: session_id,
         expires_at: create_decode_session_response.data?.expires_at,
       },
+    };
+  }
+
+  // Check if the session is valid
+  async checkValidSession(session_id: string): Promise<Response> {
+    const session_data: SessionCacheDoc = (await this.redis.get(
+      `session:${session_id}`,
+    )) as SessionCacheDoc;
+    if (!session_data) {
+      return {
+        success: false,
+        message: 'Session not found',
+        statusCode: HttpStatus.NOT_FOUND,
+      };
+    }
+    return {
+      success: true,
+      message: 'Session found',
+      statusCode: HttpStatus.OK,
     };
   }
 
