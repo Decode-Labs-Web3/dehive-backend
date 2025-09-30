@@ -13,7 +13,8 @@ import { firstValueFrom } from 'rxjs';
 import { Request } from 'express';
 
 // Interfaces
-import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface';
+import { Response } from '../../interfaces/response.interface';
+import { SessionCacheDoc } from '../../interfaces/session-doc.interface';
 
 // Decorators for public routes
 export const PUBLIC_KEY = 'public';
@@ -52,9 +53,9 @@ export class AuthGuard implements CanActivate {
       const response = await firstValueFrom(
         this.httpService.get<{
           success: boolean;
-          data?: AuthenticatedUser;
+          data: SessionCacheDoc;
           message?: string;
-        }>(`${this.authServiceUrl}/auth/validate-session`, {
+        }>(`${this.authServiceUrl}/auth/session/check`, {
           headers: {
             'x-session-id': sessionId,
             'Content-Type': 'application/json',
@@ -71,12 +72,10 @@ export class AuthGuard implements CanActivate {
       }
 
       // Attach user to request for use in controllers
-      request['user'] = response.data.data;
-
-      // Log successful authentication
-      this.logger.log(
-        `User ${response.data.data.userId} (${response.data.data.role}) accessed ${request.method} ${request.url}`,
-      );
+      const session_check_response = response.data as Response<SessionCacheDoc>;
+      if (session_check_response.data) {
+        request['user'] = session_check_response.data.user;
+      }
 
       return true;
     } catch (error) {
