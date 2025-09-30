@@ -69,12 +69,17 @@ export class DecodeApiClient extends BaseHttpClient {
         'X-Fingerprint-Hashed': fingerprint_hashed,
       },
     };
-    return this.get<UserDecodeDoc>(`/users/profile/me`, config);
+    const get_me_response = await this.get<UserDecodeDoc>(
+      `/users/profile/me`,
+      config,
+    );
+    console.log('getMyProfile get_me_response', get_me_response.data);
+    return get_me_response;
   }
 
   private async getAccessToken(session_id: string): Promise<string> {
     const session_key = `session:${session_id}`;
-    const session_data: SessionCacheDoc = (await this.redisInfrastructure.get(
+    const session_data = (await this.redisInfrastructure.get(
       session_key,
     )) as SessionCacheDoc;
     return session_data.access_token;

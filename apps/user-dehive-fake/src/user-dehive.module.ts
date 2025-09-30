@@ -6,7 +6,8 @@ import { UserDehiveSchema } from '../schemas/user-dehive.schema';
 import { MongooseModule } from '@nestjs/mongoose';
 import { JwtModule } from '@nestjs/jwt';
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }),
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
@@ -14,7 +15,9 @@ import { JwtModule } from '@nestjs/jwt';
       }),
       inject: [ConfigService],
     }),
-    MongooseModule.forFeature([{ name: 'UserDehive', schema: UserDehiveSchema }]),
+    MongooseModule.forFeature([
+      { name: 'UserDehive', schema: UserDehiveSchema },
+    ]),
     JwtModule.register({
       global: true,
       secret: process.env.JWT_SECRET,

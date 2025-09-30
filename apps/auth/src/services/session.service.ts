@@ -81,6 +81,7 @@ export class SessionService {
       success: true,
       message: 'Session found',
       statusCode: HttpStatus.OK,
+      data: session_data,
     };
   }
 
@@ -88,9 +89,11 @@ export class SessionService {
     const session_id = uuidv4();
     const session_key = `session:${session_id}`;
     const session_value = {
-      access_token: session_data.access_token,
       session_token: session_data.session_token,
+      access_token: session_data.access_token,
+      expires_at: session_data.expires_at,
     };
+
     const expires_countdown = Math.floor(
       (new Date(session_data.expires_at).getTime() - Date.now()) / 1000,
     );

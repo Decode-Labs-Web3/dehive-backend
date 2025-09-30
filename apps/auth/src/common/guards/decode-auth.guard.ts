@@ -72,7 +72,6 @@ export class DecodeAuthGuard implements CanActivate {
 
     // Extract session_id from request headers
     const sessionId = this.extractSessionIdFromHeader(request);
-    console.log('decode auth guard sessionId', sessionId);
     if (!sessionId) {
       throw new UnauthorizedException({
         message: 'Session ID is required',
@@ -130,73 +129,84 @@ export class DecodeAuthGuard implements CanActivate {
       return cached.user;
     }
 
-    try {
-      // Get session data from Redis
-      const sessionData = await this.getSessionFromRedis(sessionId);
-      if (!sessionData) {
-        throw new UnauthorizedException({
-          message: 'Session not found or expired',
-          error: 'SESSION_NOT_FOUND',
-        });
-      }
-
-      // Validate access token with Decode API
-      const user = await this.validateAccessToken(sessionData.access_token);
-
-      // Cache the result
-      this.cache.set(sessionId, {
-        user,
-        expiresAt: Date.now() + this.cacheTtl,
+    // Get session data from Redis
+    const sessionData = await this.getSessionFromRedis(sessionId);
+    if (!sessionData) {
+      throw new UnauthorizedException({
+        message: 'Session not found or expired',
+        error: 'SESSION_NOT_FOUND',
       });
+    }
 
-      return user;
-    } catch (error) {
-      // If it's a token expiration error, try to refresh the session once
-      if (
-        (error instanceof UnauthorizedException &&
-          error.message.includes('expired')) ||
-        (error instanceof Error && error.message.includes('TOKEN_EXPIRED'))
-      ) {
-        this.logger.log(
-          `Access token expired for session ${sessionId}, attempting refresh`,
-        );
+    // If we have cached user data, validate the access token first
+    if (sessionData.user) {
+      try {
+        // Validate access token with Decode API
+        await this.validateAccessToken(sessionData.access_token);
 
-        try {
-          // Attempt to refresh the session
-          await this.refreshSession(sessionId);
+        // Cache the result
+        this.cache.set(sessionId, {
+          user: sessionData.user,
+          expiresAt: Date.now() + this.cacheTtl,
+        });
 
-          // Retry validation with new token
-          const sessionData = await this.getSessionFromRedis(sessionId);
-          if (!sessionData) {
+        return sessionData.user;
+      } catch (error) {
+        // If token validation fails, try to refresh
+        if (
+          (error instanceof UnauthorizedException &&
+            error.message.includes('expired')) ||
+          (error instanceof Error && error.message.includes('TOKEN_EXPIRED'))
+        ) {
+          this.logger.log(
+            `Access token expired for session ${sessionId}, attempting refresh`,
+          );
+
+          try {
+            // Attempt to refresh the session
+            await this.refreshSession(sessionId);
+
+            // Get updated session data
+            const updatedSessionData =
+              await this.getSessionFromRedis(sessionId);
+            if (!updatedSessionData || !updatedSessionData.user) {
+              throw new UnauthorizedException({
+                message: 'Session refresh failed',
+                error: 'REFRESH_FAILED',
+              });
+            }
+
+            // Cache the result
+            this.cache.set(sessionId, {
+              user: updatedSessionData.user,
+              expiresAt: Date.now() + this.cacheTtl,
+            });
+
+            return updatedSessionData.user;
+          } catch (refreshError) {
+            this.logger.error(
+              `Session refresh failed for ${sessionId}: ${refreshError}`,
+            );
             throw new UnauthorizedException({
               message: 'Session refresh failed',
               error: 'REFRESH_FAILED',
             });
           }
-
-          const user = await this.validateAccessToken(sessionData.access_token);
-
-          // Cache the result
-          this.cache.set(sessionId, {
-            user,
-            expiresAt: Date.now() + this.cacheTtl,
-          });
-
-          return user;
-        } catch (refreshError) {
-          this.logger.error(
-            `Session refresh failed for ${sessionId}: ${refreshError}`,
-          );
-          throw new UnauthorizedException({
-            message: 'Session refresh failed',
-            error: 'REFRESH_FAILED',
-          });
         }
+        throw error;
       }
-
-      // Re-throw other errors
-      throw error;
     }
+
+    // Fallback: validate access token and get user data
+    const user = await this.validateAccessToken(sessionData.access_token);
+
+    // Cache the result
+    this.cache.set(sessionId, {
+      user,
+      expiresAt: Date.now() + this.cacheTtl,
+    });
+
+    return user;
   }
 
   private async getSessionFromRedis(
@@ -287,22 +297,43 @@ export class DecodeAuthGuard implements CanActivate {
         throw new Error('Failed to refresh session');
       }
 
-      // Update Redis with new session data
+      // Get fresh user data from Decode API
+      const userResponse = await this.decodeApiClient.getUser(
+        sessionData.user.userId,
+        sessionId,
+        '', // fingerprint_hashed - empty for now
+      );
+
+      if (!userResponse.success || !userResponse.data) {
+        throw new Error('Failed to get updated user data');
+      }
+
+      const userData = userResponse.data;
+      const updatedUser: AuthenticatedUser = {
+        userId: userData._id,
+        email: userData.email,
+        username: userData.username,
+        role: userData.role as 'user' | 'admin' | 'moderator',
+      };
+
+      // Update Redis with new session data and fresh user data
       const newSessionData = refreshResponse.data;
+      const updatedSessionData: SessionCacheDoc = {
+        session_token: newSessionData.session_token,
+        access_token: newSessionData.access_token,
+        user: updatedUser,
+        expires_at: newSessionData.expires_at,
+      };
+
       const expiresCountdown = Math.floor(
         (newSessionData.expires_at.getTime() - Date.now()) / 1000,
       );
 
-      await this.redis.set(
-        sessionKey,
-        {
-          session_token: newSessionData.session_token,
-          access_token: newSessionData.access_token,
-        },
-        expiresCountdown,
-      );
+      await this.redis.set(sessionKey, updatedSessionData, expiresCountdown);
 
-      this.logger.log(`Session ${sessionId} refreshed successfully`);
+      this.logger.log(
+        `Session ${sessionId} refreshed successfully with updated user data`,
+      );
     } catch (error) {
       this.logger.error(`Failed to refresh session ${sessionId}: ${error}`);
       throw error;

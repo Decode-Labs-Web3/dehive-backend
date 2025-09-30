@@ -18,9 +18,11 @@ export abstract class BaseHttpClient {
     config?: AxiosRequestConfig,
   ): Promise<Response<T>> {
     try {
+      console.log('base http client get', `${this.baseURL}${url}`, config);
       const response: AxiosResponse<Response<T>> = await firstValueFrom(
         this.httpService.get<Response<T>>(`${this.baseURL}${url}`, config),
       );
+      console.log('base http client response', response.data);
       return response.data;
     } catch (error) {
       this.handleError(error, 'GET', url);

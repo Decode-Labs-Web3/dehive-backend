@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import { AuthenticatedUser } from './authenticated-user.interface';
 
 export type SessionDoc = {
   _id: string;
@@ -16,4 +17,6 @@ export type SessionDoc = {
 export type SessionCacheDoc = {
   session_token: string;
   access_token: string;
+  user: AuthenticatedUser;
+  expires_at: Date;
 };

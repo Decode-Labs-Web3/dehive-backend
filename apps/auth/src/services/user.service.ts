@@ -6,6 +6,9 @@ import { UserDehive } from '../schemas/user-dehive.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { UserDehiveDoc } from '../interfaces/user-doc.interface';
+import { RedisInfrastructure } from '../infrastructure/redis.infrastructure';
+import { SessionCacheDoc } from '../interfaces/session-doc.interface';
+import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
 
 @Injectable()
 export class UserService {
@@ -13,6 +16,7 @@ export class UserService {
     private readonly decodeApiClient: DecodeApiClient,
     @InjectModel('UserDehive')
     private readonly userDehiveModel: Model<UserDehive>,
+    private readonly redis: RedisInfrastructure,
   ) {}
 
   async getUser(input: {
@@ -88,12 +92,10 @@ export class UserService {
   }): Promise<Response<UserDehiveDoc>> {
     const { session_id, fingerprint_hashed } = input;
     try {
-      console.log('user service get my decode profile input', input);
       const user_decode = await this.getMyDecodeProfile({
         session_id,
         fingerprint_hashed,
       });
-      console.log('user service get my decode profile', user_decode);
       if (!user_decode.success || !user_decode.data) {
         return {
           success: false,
@@ -104,6 +106,10 @@ export class UserService {
       const user_decode_data = user_decode.data;
       const user_dehive_data = await this.userDehiveModel.findById(
         user_decode_data._id,
+      );
+      console.log(
+        'user service get my decode profile user_dehive_data',
+        user_dehive_data,
       );
       if (!user_dehive_data) {
         return {
@@ -135,6 +141,19 @@ export class UserService {
         is_active: user_decode_data.is_active,
         last_account_deactivation: user_decode_data.last_account_deactivation,
       };
+      console.log(
+        'user service get my decode profile user_decode_data',
+        user_decode_data,
+      );
+      // Store user data in redis with session_id
+      const redis_cache_data = (await this.redis.get(
+        `session:${session_id}`,
+      )) as SessionCacheDoc;
+      if (redis_cache_data) {
+        redis_cache_data.user =
+          user_decode_data as unknown as AuthenticatedUser;
+        await this.redis.set(`session:${session_id}`, redis_cache_data);
+      }
       return {
         success: true,
         message: 'User found',
@@ -202,6 +221,11 @@ export class UserService {
   }): Promise<Response<UserDecodeDoc>> {
     const { session_id, fingerprint_hashed } = input;
     try {
+      console.log(
+        'user service get my decode profile input',
+        session_id,
+        fingerprint_hashed,
+      );
       const user_decode = await this.decodeApiClient.getMyProfile(
         session_id,
         fingerprint_hashed,
