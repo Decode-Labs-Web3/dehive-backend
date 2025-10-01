@@ -21,7 +21,7 @@ import { CreateMessageDto } from '../dto/create-message.dto';
 import { AttachmentDto } from '../dto/attachment.dto';
 import { GetMessagesDto } from '../dto/get-messages.dto';
 import { Upload, UploadDocument } from '../schemas/upload.schema';
-import { UploadInitDto, UploadResponseDto } from '../dto/upload.dto';
+import { UploadInitDto, UploadResponseDto } from '../dto/channel-upload.dto';
 import { AttachmentType } from '../enum/enum';
 import sharp from 'sharp';
 import * as childProcess from 'child_process';
@@ -406,8 +406,8 @@ export class MessagingService {
     if (!Types.ObjectId.isValid(editorUserDehiveId)) {
       throw new BadRequestException('Invalid user id');
     }
-    if (typeof newContent !== 'string' || newContent.trim().length === 0) {
-      throw new BadRequestException('Content must be non-empty');
+    if (typeof newContent !== 'string') {
+      throw new BadRequestException('Content must be a string');
     }
     const msg = await this.channelMessageModel.findById(messageId);
     if (!msg) throw new NotFoundException('Message not found');
@@ -434,7 +434,8 @@ export class MessagingService {
       throw new BadRequestException('You can only delete your own message');
     }
     (msg as unknown as { isDeleted?: boolean }).isDeleted = true;
-    msg.content = '';
+    msg.content = '[deleted]';
+    (msg as unknown as { attachments?: unknown[] }).attachments = [];
     await msg.save();
     return msg;
   }

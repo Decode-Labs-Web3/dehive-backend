@@ -23,13 +23,46 @@ import {
 } from '@nestjs/swagger';
 import { MessagingService } from './channel-messaging.service';
 import { GetMessagesDto } from '../dto/get-messages.dto';
-import { UploadInitDto } from '../dto/upload.dto';
-import { AttachmentType } from '../enum/enum';
+import { UploadInitDto, UploadResponseDto } from '../dto/channel-upload.dto';
+import { ListUploadsDto } from '../dto/list-channel-upload.dto';
+import { CreateMessageDto } from '../dto/create-message.dto';
 
 @ApiTags('Channel Messages')
 @Controller('messages')
 export class MessagingController {
   constructor(private readonly messagingService: MessagingService) {}
+
+  @Post('send')
+  @ApiOperation({ summary: 'Send a message to a channel conversation' })
+  @ApiHeader({
+    name: 'x-user-id',
+    description: 'The UserDehive ID of the sender',
+    required: true,
+  })
+  @ApiBody({ type: CreateMessageDto })
+  @ApiResponse({ status: 201, description: 'Message sent successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid input or missing fields.' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'User is not allowed to post in this channel (future implementation).',
+  })
+  @ApiResponse({ status: 404, description: 'Conversation not found.' })
+  async sendMessage(
+    @Headers('x-user-id') userId: string,
+    @Body() createMessageDto: CreateMessageDto,
+  ) {
+    const savedMessage = await this.messagingService.createMessage(
+      createMessageDto,
+      userId,
+    );
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'Message sent successfully',
+      data: savedMessage,
+    };
+  }
 
   @Get('conversation/:conversationId')
   @ApiOperation({ summary: 'Get paginated messages for a conversation' })
@@ -79,7 +112,11 @@ export class MessagingController {
       required: ['file', 'serverId', 'conversationId'],
     },
   })
-  @ApiResponse({ status: 201, description: 'File uploaded successfully.' })
+  @ApiResponse({
+    status: 201,
+    description: 'File uploaded successfully.',
+    type: UploadResponseDto,
+  })
   @ApiResponse({
     status: 400,
     description:
@@ -87,7 +124,7 @@ export class MessagingController {
   })
   @UseInterceptors(FileInterceptor('file'))
   async upload(
-    @UploadedFile() file: any,
+    @UploadedFile() file: Express.Multer.File,
     @Body() body: UploadInitDto,
     @Headers() headers: Record<string, string | undefined>,
   ): Promise<any> {
@@ -99,16 +136,12 @@ export class MessagingController {
       );
     }
     const result = await this.messagingService.handleUpload(file, body, userId);
-    const merged = Object.assign(
-      {},
-      result as unknown as Record<string, unknown>,
-      {
-        success: true,
-        statusCode: 201,
-        message: 'File uploaded successfully',
-      },
-    );
-    return merged;
+    return {
+      success: true,
+      statusCode: 201,
+      message: 'File uploaded successfully',
+      data: result,
+    };
   }
 
   @Get('files/list')
@@ -124,10 +157,7 @@ export class MessagingController {
   @ApiResponse({ status: 403, description: 'Not allowed.' })
   async listUploads(
     @Headers() headers: Record<string, string | undefined>,
-    @Query('serverId') serverId: string,
-    @Query('type') type?: AttachmentType,
-    @Query('page') page = '1',
-    @Query('limit') limit = '30',
+    @Query() query: ListUploadsDto,
   ) {
     const raw = headers['x-user-id'] || headers['x-userid'] || '';
     const userId = typeof raw === 'string' ? raw : String(raw || '');
@@ -137,11 +167,11 @@ export class MessagingController {
       );
     }
     const result = await this.messagingService.listUploads({
-      serverId,
+      serverId: query.serverId,
       userId,
-      type,
-      page: parseInt(String(page || '1'), 10) || 1,
-      limit: Math.min(100, parseInt(String(limit || '30'), 10) || 30),
+      type: query.type,
+      page: query.page,
+      limit: query.limit,
     });
     return {
       success: true,

@@ -3,7 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { MessagingModule } from './channel-messaging.module';
-import { WsAdapter } from '@nestjs/platform-ws';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import * as express from 'express';
 import * as path from 'path';
 
@@ -11,7 +11,7 @@ async function bootstrap() {
   const app = await NestFactory.create(MessagingModule);
   const configService = app.get(ConfigService);
 
-  app.useWebSocketAdapter(new WsAdapter(app));
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   app.enableCors({ origin: '*' });
   app.setGlobalPrefix('api');

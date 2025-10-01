@@ -14,12 +14,13 @@ import {
   DirectMessage,
   DirectMessageDocument,
 } from '../schemas/direct-message.schema';
+import { CreateOrGetConversationDto } from '../dto/create-or-get-conversation.dto.ts';
 import {
-  CreateOrGetConversationDto,
   DirectUploadInitDto,
-  ListDirectMessagesDto,
-  SendDirectMessageDto,
-} from '../dto/create-direct-message.dto';
+  DirectUploadResponseDto,
+} from '../dto/direct-upload.dto';
+import { ListDirectMessagesDto } from '../dto/list-direct-messages.dto';
+import { SendDirectMessageDto } from '../dto/send-direct-message.dto';
 import {
   DirectUpload,
   DirectUploadDocument,
@@ -33,6 +34,7 @@ import * as childProcess from 'child_process';
 import ffmpegPath from 'ffmpeg-static';
 import ffprobePath from 'ffprobe-static';
 import { ConfigService } from '@nestjs/config';
+import { ListDirectUploadsDto } from '../dto/list-direct-upload.dto';
 
 @Injectable()
 export class DirectMessagingService {
@@ -130,7 +132,11 @@ export class DirectMessagingService {
     return doc;
   }
 
-  async handleUpload(selfId: string, file: unknown, body: DirectUploadInitDto) {
+  async handleUpload(
+    selfId: string,
+    file: unknown,
+    body: DirectUploadInitDto,
+  ): Promise<DirectUploadResponseDto> {
     if (!file || typeof file !== 'object') {
       throw new BadRequestException('File is required');
     }
@@ -323,7 +329,7 @@ export class DirectMessagingService {
 
     return {
       uploadId: (doc._id as Types.ObjectId).toString(),
-      type: doc.type,
+      type: doc.type as AttachmentType,
       url: doc.url,
       name: doc.name,
       size: doc.size,
@@ -422,6 +428,76 @@ export class DirectMessagingService {
       this.messageModel.countDocuments({
         conversationId: new Types.ObjectId(conversationId),
       }),
+    ]);
+
+    return { page, limit, total, items };
+  }
+
+  async editMessage(selfId: string, messageId: string, content: string) {
+    if (!Types.ObjectId.isValid(selfId))
+      throw new BadRequestException('Invalid self id');
+    if (!Types.ObjectId.isValid(messageId))
+      throw new BadRequestException('Invalid message id');
+    if (typeof content !== 'string')
+      throw new BadRequestException('Content must be a string');
+
+    const message = await this.messageModel.findById(messageId);
+    if (!message) throw new NotFoundException('Message not found');
+    if (String(message.senderId) !== selfId)
+      throw new BadRequestException('You can only edit your own message');
+    if (message.isDeleted)
+      throw new BadRequestException('Cannot edit a deleted message');
+
+    message.content = content;
+    message.isEdited = true;
+    message.editedAt = new Date();
+    await message.save();
+    return message.toJSON();
+  }
+
+  async deleteMessage(selfId: string, messageId: string) {
+    if (!Types.ObjectId.isValid(selfId))
+      throw new BadRequestException('Invalid self id');
+    if (!Types.ObjectId.isValid(messageId))
+      throw new BadRequestException('Invalid message id');
+
+    const message = await this.messageModel.findById(messageId);
+    if (!message) throw new NotFoundException('Message not found');
+    if (String(message.senderId) !== selfId)
+      throw new BadRequestException('You can only delete your own message');
+    if (message.isDeleted) return message.toJSON();
+
+    message.isDeleted = true;
+    message.content = '[deleted]';
+    (message as unknown as { attachments?: unknown[] }).attachments = [];
+    await message.save();
+    return message.toJSON();
+  }
+
+  async listUploads(selfId: string, dto: ListDirectUploadsDto) {
+    if (!selfId || !Types.ObjectId.isValid(selfId)) {
+      throw new BadRequestException('Invalid user id');
+    }
+
+    const page = dto.page > 0 ? dto.page : 1;
+    const limit = dto.limit > 0 ? Math.min(dto.limit, 100) : 50;
+    const skip = (page - 1) * limit;
+
+    const query: Record<string, any> = {
+      ownerId: new Types.ObjectId(selfId),
+    };
+    if (dto.type) {
+      query.type = dto.type;
+    }
+
+    const [items, total] = await Promise.all([
+      this.directuploadModel
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.directuploadModel.countDocuments(query),
     ]);
 
     return { page, limit, total, items };

@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-base-to-string */
 import {
   WebSocketGateway,
   SubscribeMessage,
@@ -10,7 +9,7 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Server as WSServer, WebSocket } from 'ws';
+import { Server as IOServer, Socket } from 'socket.io';
 import { CreateMessageDto } from '../dto/create-message.dto';
 import { MessagingService } from '../src/channel-messaging.service';
 import { InjectModel } from '@nestjs/mongoose';
@@ -35,7 +34,7 @@ import {
   ChannelConversationDocument,
 } from '../schemas/channel-conversation.schema';
 
-type SocketMeta = { userDehiveId?: string; channels: Set<string> };
+type SocketMeta = { userDehiveId?: string };
 
 @WebSocketGateway({
   cors: {
@@ -44,7 +43,7 @@ type SocketMeta = { userDehiveId?: string; channels: Set<string> };
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: WSServer;
+  server: IOServer;
 
   constructor(
     private readonly messagingService: MessagingService,
@@ -62,42 +61,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly channelConversationModel: Model<ChannelConversationDocument>,
   ) {}
 
-  private readonly meta = new WeakMap<WebSocket, SocketMeta>();
-  private readonly channelRooms = new Map<string, Set<WebSocket>>();
+  private readonly meta = new WeakMap<Socket, SocketMeta>();
 
-  private send(client: WebSocket, event: string, data: unknown) {
-    const payload = JSON.stringify({ event, data });
-    try {
-      (client as unknown as { send: (data: string) => void }).send(payload);
-    } catch {
-      // ignore send errors on closed sockets
-    }
+  private send(client: Socket, event: string, data: unknown) {
+    client.emit(event, data);
   }
 
-  handleConnection(client: WebSocket) {
+  handleConnection(client: Socket) {
     console.log('[WebSocket] Client connected. Awaiting identity.');
-    this.meta.set(client, { channels: new Set<string>() });
+    this.meta.set(client, {});
   }
 
-  handleDisconnect(client: WebSocket) {
+  handleDisconnect(client: Socket) {
     console.log('[WebSocket] Client disconnected.');
     const meta = this.meta.get(client);
-    if (meta) {
-      for (const channelId of meta.channels) {
-        const set = this.channelRooms.get(channelId);
-        if (set) {
-          set.delete(client);
-          if (set.size === 0) this.channelRooms.delete(channelId);
-        }
-      }
-      this.meta.delete(client);
-    }
+    if (meta) this.meta.delete(client);
   }
 
   @SubscribeMessage('identity')
   async handleIdentity(
     @MessageBody() userDehiveId: string,
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     if (!userDehiveId || typeof userDehiveId !== 'string') {
       return this.send(client, 'error', {
@@ -134,7 +118,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleJoinChannel(
     @MessageBody()
     data: { serverId: string; categoryId: string; channelId: string },
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     if (!meta?.userDehiveId) {
@@ -193,16 +177,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         { upsert: true, new: true, runValidators: true },
       );
 
-      this.send(client, 'joinChannelSuccess', {
-        message:
-          'Successfully authorized to join channel. Please join the conversation room.',
-        conversationId:
-          conversation &&
-          typeof conversation === 'object' &&
-          '_id' in conversation &&
-          conversation._id
-            ? String(conversation._id)
-            : undefined,
+      const conversationId = String((conversation as any)._id);
+      await client.join(conversationId);
+
+      this.send(client, 'joinedChannel', {
+        conversationId,
+        message: 'Joined channel room successfully',
       });
     } catch (error) {
       console.error('[WebSocket] Error handling joinChannel:', error);
@@ -217,7 +197,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleJoinConversation(
     @MessageBody()
     payload: string | { conversationId: string },
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     if (!meta?.userDehiveId) {
@@ -241,24 +221,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(
       `[WebSocket] User ${meta.userDehiveId} joined conversation room: ${conversationId}`,
     );
-    let set = this.channelRooms.get(conversationId);
-    if (!set) {
-      set = new Set<WebSocket>();
-      this.channelRooms.set(conversationId, set);
-    }
-    set.add(client);
-    meta.channels.add(conversationId);
-    this.send(
-      client,
-      'joinedConversation',
-      `You have successfully joined conversation ${conversationId}`,
-    );
+    void client.join(conversationId);
+    this.send(client, 'joinedConversation', {
+      conversationId,
+      message: `You have successfully joined conversation ${conversationId}`,
+    });
   }
 
   @SubscribeMessage('sendMessage')
   async handleMessage(
     @MessageBody() data: CreateMessageDto,
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     if (!meta?.userDehiveId) {
@@ -279,20 +252,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           message: 'Invalid conversationId.',
         });
       }
-      if (
-        typeof (data as { content?: unknown }).content !== 'string' ||
-        String(data.content ?? '').trim().length === 0
-      ) {
+      if (typeof (data as { content?: unknown }).content !== 'string') {
         return this.send(client, 'error', {
-          message: 'Content must be a non-empty string (1-2000 chars).',
+          message: 'Content must be a string (0-2000 chars).',
         });
       }
-      if (data.uploadIds !== undefined) {
-        if (!Array.isArray(data.uploadIds)) {
-          return this.send(client, 'error', {
-            message: 'uploadIds must be an array of MongoIds',
-          });
-        }
+      if (String(data.content ?? '').length > 2000) {
+        return this.send(client, 'error', {
+          message: 'Content must not exceed 2000 characters.',
+        });
+      }
+      if (!Array.isArray(data.uploadIds)) {
+        return this.send(client, 'error', {
+          message: 'uploadIds is required and must be an array',
+        });
+      }
+      if (data.uploadIds.length > 0) {
         const allValid = data.uploadIds.every((id: unknown) => {
           return typeof id === 'string' && Types.ObjectId.isValid(id);
         });
@@ -341,12 +316,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         isEdited: populatedMessage.isEdited,
       };
 
-      const recipients = this.channelRooms.get(data.conversationId);
-      if (recipients) {
-        for (const socket of recipients) {
-          this.send(socket, 'newMessage', messageToBroadcast);
-        }
-      }
+      this.server
+        .to(String(data.conversationId))
+        .emit('newMessage', messageToBroadcast);
     } catch (error: unknown) {
       console.error('[WebSocket] Error handling message:', error);
       this.send(client, 'error', {
@@ -360,7 +332,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleEditMessage(
     @MessageBody()
     data: { messageId: string; content: string },
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     if (!meta?.userDehiveId) {
@@ -383,12 +355,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           updated.conversationId as unknown as Types.ObjectId
         ).toString(),
       };
-      const recipients = this.channelRooms.get(payload.conversationId);
-      if (recipients) {
-        for (const socket of recipients) {
-          this.send(socket, 'messageEdited', payload);
-        }
-      }
+      this.server
+        .to(String(payload.conversationId))
+        .emit('messageEdited', payload);
     } catch (error: unknown) {
       this.send(client, 'error', {
         message: 'Failed to edit message.',
@@ -401,7 +370,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   async handleDeleteMessage(
     @MessageBody()
     data: { messageId: string },
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     if (!meta?.userDehiveId) {
@@ -421,12 +390,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           updated.conversationId as unknown as Types.ObjectId
         ).toString(),
       };
-      const recipients = this.channelRooms.get(payload.conversationId);
-      if (recipients) {
-        for (const socket of recipients) {
-          this.send(socket, 'messageDeleted', payload);
-        }
-      }
+      this.server
+        .to(String(payload.conversationId))
+        .emit('messageDeleted', payload);
     } catch (error: unknown) {
       this.send(client, 'error', {
         message: 'Failed to delete message.',
