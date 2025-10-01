@@ -1,46 +1,32 @@
 import { Module } from '@nestjs/common';
 import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
+import { SessionService } from './services/session.service';
+import { RegisterService } from './services/register.service';
+import { UserService } from './services/user.service';
 import { MongooseModule } from '@nestjs/mongoose';
-import { User, UserSchema } from '../schemas/user.schema';
-import { Session, SessionSchema } from '../schemas/session.schema';
-import {
-  DeviceFingerprint,
-  DeviceFingerprintSchema,
-} from '../schemas/device_fingerprint.schema';
-import { Wallet, WalletSchema } from '../schemas/wallet.schema';
+import { UserDehiveSchema } from './schemas/user-dehive.schema';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { DecodeApiClient } from './infrastructure/external-services/decode-api.client';
+import { RedisInfrastructure } from './infrastructure/redis.infrastructure';
 import { RedisModule } from '@nestjs-modules/ioredis';
-import { JwtModule } from '@nestjs/jwt';
+import { HttpModule } from '@nestjs/axios';
+import configuration from './config/configuration';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      load: [configuration],
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
         uri: config.get<string>('MONGO_URI'),
+        dbName: 'dehive_db', // Explicitly set database name
       }),
       inject: [ConfigService],
     }),
-    MongooseModule.forFeature([
-      { name: User.name, schema: UserSchema },
-      { name: Session.name, schema: SessionSchema },
-      { name: DeviceFingerprint.name, schema: DeviceFingerprintSchema },
-      { name: Wallet.name, schema: WalletSchema },
-    ]),
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '1h' },
-      }),
-      inject: [ConfigService],
-    }),
+    HttpModule,
     RedisModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
@@ -49,19 +35,17 @@ import { JwtModule } from '@nestjs/jwt';
       }),
       inject: [ConfigService],
     }),
-    ClientsModule.register([
-      {
-        name: 'EMAIL_SERVICE',
-        transport: Transport.RMQ,
-        options: {
-          urls: [process.env.RABBITMQ_URI || ''],
-          queue: 'email.send',
-          queueOptions: { durable: false },
-        },
-      },
+    MongooseModule.forFeature([
+      { name: 'UserDehive', schema: UserDehiveSchema },
     ]),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [
+    SessionService,
+    RegisterService,
+    UserService,
+    DecodeApiClient,
+    RedisInfrastructure,
+  ],
 })
 export class AuthModule {}

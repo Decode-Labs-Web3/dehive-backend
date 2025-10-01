@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@nestjs-modules/ioredis": "^2.0.2",
+    "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",
@@ -34,12 +35,14 @@
     "@nestjs/platform-ws": "^11.1.6",
     "@nestjs/swagger": "^11.2.0",
     "@nestjs/websockets": "^11.1.6",
+    "axios": "^1.10.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "ffmpeg-static": "^5.2.0",
     "ffprobe-static": "^3.1.0",
     "fluent-ffmpeg": "^2.1.2",
     "ioredis": "^5.6.1",
+    "joi": "^18.0.1",
     "kafkajs": "^2.2.4",
     "mongodb": "^6.17.0",
     "mongoose": "^8.15.1",
@@ -52,6 +55,7 @@
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "swagger-ui-express": "^5.0.1",
+    "uuid": "^13.0.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {

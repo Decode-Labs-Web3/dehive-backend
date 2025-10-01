@@ -1,88 +1,79 @@
-import { Controller } from '@nestjs/common';
-import { MessagePattern } from '@nestjs/microservices';
-import { AuthService } from './auth.service';
-import { RegisterDto } from '../dto/register.dto';
-import { LoginDto } from '../dto/login.dto';
-import { CreateUserDto } from '../dto/createUser.dto';
-import { DeviceFingerprintDto } from '../dto/deviceFingerprint.dto';
-import { CreateSessionDto } from '../dto/createSession.dto';
-@Controller()
+import {
+  Controller,
+  Get,
+  UseGuards,
+  Post,
+  Body,
+  Headers,
+  Param,
+} from '@nestjs/common';
+import { SessionService } from './services/session.service';
+import { RegisterService } from './services/register.service';
+import { DecodeAuthGuard, Public } from './common/guards/decode-auth.guard';
+import { UserService } from './services/user.service';
+
+@Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly sessionService: SessionService,
+    private readonly registerService: RegisterService,
+    private readonly userService: UserService,
+  ) {}
 
-  @MessagePattern('auth.health')
-  checkHealth(): { status: string } {
-    return { status: 'ok auth.health' };
+  @Post('session/create')
+  @Public()
+  async createSession(
+    @Body() body: { sso_token: string; fingerprint_hashed: string },
+  ) {
+    return await this.sessionService.createDecodeSession(body.sso_token);
   }
 
-  @MessagePattern('auth.register')
-  register(dto: RegisterDto) {
-    return this.authService.register(dto);
+  @Post('create-dehive-account')
+  async createDehiveAccount(@Body() body: { user_id: string }) {
+    return await this.registerService.register(body.user_id);
   }
 
-  @MessagePattern('auth.verify')
-  verify(token: string) {
-    return this.authService.verify(token);
+  @Post('session/check')
+  async checkSession(@Body() body: { session_id: string }) {
+    return await this.sessionService.checkValidSession(body.session_id);
   }
 
-  @MessagePattern('auth.checkLogin')
-  checkLogin(dto: { username_or_email: string, password: string }) {
-    return this.authService.checkLogin(dto.username_or_email, dto.password);
+  @UseGuards(DecodeAuthGuard)
+  @Get('profile/:user_id')
+  async getUserProfile(
+    @Param() param: { user_id: string },
+    @Headers()
+    headers: { 'x-session-id': string; 'x-fingerprint-hashed': string },
+  ) {
+    const session_id = headers['x-session-id'];
+    const fingerprint_hashed = headers['x-fingerprint-hashed'];
+    const user_response = await this.userService.getUser({
+      user_dehive_id: param.user_id,
+      session_id: session_id,
+      fingerprint_hashed: fingerprint_hashed,
+    });
+    return user_response;
   }
 
-  @MessagePattern('auth.login')
-  login(dto: LoginDto) {
-    return this.authService.login(dto);
-  }
-
-  @MessagePattern('auth.resendEmailVerification')
-  async resendEmailVerification(dto: {
-    email: string;
-    username: string;
-    password_hashed: string;
-  }) {
-    const userCreateDto: CreateUserDto = {
-      email: dto.email,
-      username: dto.username,
-      password_hashed: dto.password_hashed,
-    };
-    return this.authService.resendVerification(
-      userCreateDto.email,
-      userCreateDto.username,
-      userCreateDto.password_hashed,
+  @UseGuards(DecodeAuthGuard)
+  @Get('profile')
+  async getMyProfile(
+    @Headers()
+    headers: {
+      'x-session-id': string;
+      'x-fingerprint-hashed': string;
+    },
+  ) {
+    const session_id = headers['x-session-id'];
+    const fingerprint_hashed = headers['x-fingerprint-hashed'];
+    console.log(
+      'auth controller getMyProfile headers',
+      session_id,
+      fingerprint_hashed,
     );
-  }
-
-  @MessagePattern('auth.fingerprintCheckOrCreate')
-  fingerprintCheckOrCreate(dto: DeviceFingerprintDto) {
-    return this.authService.fingerprintCheckOrCreate(dto);
-  }
-
-  @MessagePattern('auth.fingerprintTrust')
-  fingerprintTrust(token: string) {
-    return this.authService.fingerprintTrust(token);
-  }
-
-  @MessagePattern('auth.sessionCreate')
-  sessionCreate(payload: CreateSessionDto) {
-    return this.authService.sessionCreate(
-      payload.jwt_token,
-      payload.fingerprint_hash,
-    );
-  }
-
-  @MessagePattern('auth.refreshSession')
-  refreshSession(payload: { refreshToken: string }) {
-    return this.authService.refreshSession(payload.refreshToken);
-  }
-
-  @MessagePattern('auth.authCheck')
-  authCheck(payload: { refreshToken: string }) {
-    return this.authService.authCheck(payload.refreshToken);
-  }
-
-  @MessagePattern('auth.get_refresh_token_by_sso_token')
-  get_refresh_token_by_sso_token(payload: { ssoToken: string }) {
-    return this.authService.get_refresh_token_by_sso_token(payload.ssoToken);
+    return await this.userService.getMyProfile({
+      session_id: session_id,
+      fingerprint_hashed: fingerprint_hashed,
+    });
   }
 }

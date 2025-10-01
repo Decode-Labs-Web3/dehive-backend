@@ -459,7 +459,6 @@ export class UserDehiveServerService {
         s.server_id && viewerServerIds.has((s.server_id as any)._id.toString()),
     );
     return {
-      // eslint-disable-next-line @typescript-eslint/no-base-to-string
       _id: baseUser._id.toString(),
       username: baseUser.username,
       bio: targetDehiveProfile.bio,
