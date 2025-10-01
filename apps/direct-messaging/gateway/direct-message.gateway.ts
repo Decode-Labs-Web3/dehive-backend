@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
+
 import {
   ConnectedSocket,
   MessageBody,
@@ -10,7 +9,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { Server as WSServer, WebSocket } from 'ws';
+import { Server, Socket } from 'socket.io';
 import { Model, Types } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { DirectMessagingService } from '../src/direct-messaging.service';
@@ -31,10 +30,9 @@ type SocketMeta = { userDehiveId?: string };
 })
 export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: WSServer;
+  server: Server;
 
-  private readonly userSockets = new Map<string, WebSocket>();
-  private readonly meta = new WeakMap<WebSocket, SocketMeta>();
+  private readonly meta = new WeakMap<Socket, SocketMeta>();
 
   constructor(
     private readonly service: DirectMessagingService,
@@ -44,19 +42,18 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly conversationModel: Model<DirectConversationDocument>,
   ) {}
 
-  private send(client: WebSocket, event: string, data: unknown) {
-    client.send(JSON.stringify({ event, data }));
+  private send(client: Socket, event: string, data: unknown) {
+    client.emit(event, data);
   }
 
-  handleConnection(client: WebSocket) {
+  handleConnection(client: Socket) {
     console.log('[DM-WS] Client connected. Awaiting identity.');
     this.meta.set(client, {});
   }
 
-  handleDisconnect(client: WebSocket) {
+  handleDisconnect(client: Socket) {
     const meta = this.meta.get(client);
     if (meta?.userDehiveId) {
-      this.userSockets.delete(meta.userDehiveId);
       console.log(`[DM-WS] User ${meta.userDehiveId} disconnected.`);
     }
     this.meta.delete(client);
@@ -65,7 +62,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('identity')
   async handleIdentity(
     @MessageBody() userDehiveId: string,
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     if (!userDehiveId || !Types.ObjectId.isValid(userDehiveId)) {
       return this.send(client, 'error', { message: 'Invalid userDehiveId' });
@@ -81,7 +78,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const meta = this.meta.get(client);
     if (meta) {
       meta.userDehiveId = userDehiveId;
-      this.userSockets.set(userDehiveId, client);
+      void client.join(`user:${userDehiveId}`);
       console.log(`[DM-WS] User identified as ${userDehiveId}`);
       this.send(client, 'identityConfirmed', { userDehiveId });
     }
@@ -90,7 +87,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
     @MessageBody() data: SendDirectMessageDto,
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const selfId = meta?.userDehiveId;
@@ -148,12 +145,10 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
         createdAt: savedMessage.get('createdAt'),
       };
 
-      const recipientSocket = this.userSockets.get(recipientId);
-      if (recipientSocket) {
-        this.send(recipientSocket, 'newMessage', messageToBroadcast);
-      }
-
-      this.send(client, 'newMessage', messageToBroadcast);
+      this.server
+        .to(`user:${recipientId}`)
+        .to(`user:${selfId}`)
+        .emit('newMessage', messageToBroadcast);
     } catch (error) {
       console.error('[DM-WS] Error handling message:', error);
       this.send(client, 'error', {
@@ -166,7 +161,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('editMessage')
   async handleEditMessage(
     @MessageBody() data: { messageId: string; content: string },
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const selfId = meta?.userDehiveId;
@@ -193,9 +188,10 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
         isEdited: true,
         editedAt: (updated as unknown as { editedAt?: Date }).editedAt,
       };
-      const recipientSocket = this.userSockets.get(recipientId);
-      if (recipientSocket) this.send(recipientSocket, 'messageEdited', payload);
-      this.send(client, 'messageEdited', payload);
+      this.server
+        .to(`user:${recipientId}`)
+        .to(`user:${selfId}`)
+        .emit('messageEdited', payload);
     } catch (error) {
       this.send(client, 'error', {
         message: 'Failed to edit message',
@@ -207,7 +203,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('deleteMessage')
   async handleDeleteMessage(
     @MessageBody() data: { messageId: string },
-    @ConnectedSocket() client: WebSocket,
+    @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const selfId = meta?.userDehiveId;
@@ -227,10 +223,10 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
         conversationId: updated.conversationId,
         isDeleted: true,
       };
-      const recipientSocket = this.userSockets.get(recipientId);
-      if (recipientSocket)
-        this.send(recipientSocket, 'messageDeleted', payload);
-      this.send(client, 'messageDeleted', payload);
+      this.server
+        .to(`user:${recipientId}`)
+        .to(`user:${selfId}`)
+        .emit('messageDeleted', payload);
     } catch (error) {
       this.send(client, 'error', {
         message: 'Failed to delete message',
