@@ -1,4 +1,4 @@
-import { ServerRole } from '../constants/enum';
+import { ServerRole } from '../enum/enum';
 
 export class UserDehiveServer {
   _id: string;

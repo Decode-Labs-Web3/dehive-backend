@@ -7,7 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { UserDehiveServer } from '../entities/user-dehive-server.entity';
-import { ServerRole } from '../constants/enum';
+import { ServerRole } from '../enum/enum';
 
 interface RequestWithBody {
   body: {

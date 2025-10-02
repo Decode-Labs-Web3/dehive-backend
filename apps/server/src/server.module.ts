@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { HttpModule } from '@nestjs/axios';
 import { ServerController } from './server.controller';
 import { ServerService } from './server.service';
 import { Server, ServerSchema } from '../schemas/server.schema';
@@ -19,12 +20,17 @@ import {
   ChannelMessageSchema,
 } from '../schemas/channel-message.schema';
 import { UserDehiveServerModule } from '../../user-dehive-server/src/user-dehive-server.module';
+import { AuthGuard } from '../common/guards/auth.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: `.env`,
+    }),
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 5,
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
@@ -46,6 +52,6 @@ import { UserDehiveServerModule } from '../../user-dehive-server/src/user-dehive
     ]),
   ],
   controllers: [ServerController],
-  providers: [ServerService],
+  providers: [ServerService, AuthGuard],
 })
 export class ServerModule {}

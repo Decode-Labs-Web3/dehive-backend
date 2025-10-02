@@ -2,12 +2,12 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
   Post,
   Query,
   UploadedFile,
   UseInterceptors,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBody,
@@ -29,17 +29,20 @@ import { ListDirectMessagesDto } from '../dto/list-direct-messages.dto';
 import { Express } from 'express';
 import { ListDirectUploadsDto } from '../dto/list-direct-upload.dto';
 import { SendDirectMessageDto } from '../dto/send-direct-message.dto';
+import { AuthGuard } from '../common/guards/auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Direct Messages')
 @Controller('dm')
+@UseGuards(AuthGuard)
 export class DirectMessagingController {
   constructor(private readonly service: DirectMessagingService) {}
 
   @Post('send')
   @ApiOperation({ summary: 'Send a message to a direct conversation' })
   @ApiHeader({
-    name: 'x-user-id',
-    description: 'The UserDehive ID of the sender',
+    name: 'x-session-id',
+    description: 'The session ID of the authenticated user',
     required: true,
   })
   @ApiBody({ type: SendDirectMessageDto })
@@ -51,7 +54,7 @@ export class DirectMessagingController {
   })
   @ApiResponse({ status: 404, description: 'Conversation not found.' })
   async sendMessage(
-    @Headers('x-user-id') selfId: string,
+    @CurrentUser('userId') selfId: string,
     @Body() body: SendDirectMessageDto,
   ) {
     const newMessage = await this.service.sendMessage(selfId, body);
@@ -66,16 +69,14 @@ export class DirectMessagingController {
   @Post('conversation')
   @ApiOperation({ summary: 'Create or get a 1:1 conversation' })
   @ApiHeader({
-    name: 'x-user-id',
-    description: 'UserDehiveId of caller',
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
     required: true,
   })
   async createOrGet(
-    @Headers() headers: Record<string, string | undefined>,
+    @CurrentUser('userId') selfId: string,
     @Body() body: CreateOrGetConversationDto,
   ) {
-    const raw = headers['x-user-id'] || headers['x-userid'] || '';
-    const selfId = typeof raw === 'string' ? raw : String(raw || '');
     const conv = await this.service.createOrGetConversation(selfId, body);
     return { success: true, statusCode: 200, message: 'OK', data: conv };
   }
@@ -83,18 +84,16 @@ export class DirectMessagingController {
   @Get('messages/:conversationId')
   @ApiOperation({ summary: 'List messages in a conversation' })
   @ApiHeader({
-    name: 'x-user-id',
-    description: 'UserDehiveId of caller',
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
     required: true,
   })
   @ApiParam({ name: 'conversationId' })
   async list(
-    @Headers() headers: Record<string, string | undefined>,
+    @CurrentUser('userId') selfId: string,
     @Param('conversationId') conversationId: string,
     @Query() query: ListDirectMessagesDto,
   ) {
-    const raw = headers['x-user-id'] || headers['x-userid'] || '';
-    const selfId = typeof raw === 'string' ? raw : String(raw || '');
     const data = await this.service.listMessages(selfId, conversationId, query);
     return { success: true, statusCode: 200, message: 'OK', data };
   }
@@ -102,7 +101,11 @@ export class DirectMessagingController {
   @Post('files/upload')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload a file to a direct conversation' })
-  @ApiHeader({ name: 'x-user-id', required: true })
+  @ApiHeader({
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
+    required: true,
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -139,7 +142,7 @@ export class DirectMessagingController {
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: DirectUploadInitDto,
-    @Headers('x-user-id') selfId: string,
+    @CurrentUser('userId') selfId: string,
   ) {
     const result = await this.service.handleUpload(selfId, file, body);
     return {
@@ -153,8 +156,8 @@ export class DirectMessagingController {
   @Get('files/list')
   @ApiOperation({ summary: 'List files uploaded by the current user in DMs' })
   @ApiHeader({
-    name: 'x-user-id',
-    description: 'UserDehiveId of caller',
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
     required: true,
   })
   @ApiResponse({
@@ -166,7 +169,7 @@ export class DirectMessagingController {
     description: 'Invalid user ID or pagination parameters.',
   })
   async listUploads(
-    @Headers('x-user-id') selfId: string,
+    @CurrentUser('userId') selfId: string,
     @Query() query: ListDirectUploadsDto,
   ) {
     const data = await this.service.listUploads(selfId, query);

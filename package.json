@@ -55,7 +55,7 @@
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "swagger-ui-express": "^5.0.1",
-    "uuid": "^13.0.0",
+    "uuid": "^8.3.2",
     "ws": "^8.18.3"
   },
   "devDependencies": {

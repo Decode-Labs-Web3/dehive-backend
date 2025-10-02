@@ -9,8 +9,8 @@ export class Server {
   @Prop({ required: true })
   description: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'UserDehive', required: true })
-  owner_id: Types.ObjectId;
+  @Prop({ type: String, required: true })
+  owner_id: string;
 
   @Prop({ default: 0 })
   member_count: number;

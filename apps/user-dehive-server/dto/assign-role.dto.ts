@@ -1,6 +1,6 @@
 import { IsEnum, IsMongoId, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { ServerRole } from '../constants/enum';
+import { ServerRole } from '../enum/enum';
 
 export class AssignRoleDto {
   @ApiProperty({

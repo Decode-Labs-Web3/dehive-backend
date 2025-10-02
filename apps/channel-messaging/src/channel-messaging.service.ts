@@ -8,6 +8,7 @@ import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
+import { AuthServiceClient } from './auth-service.client';
 import { randomUUID } from 'crypto';
 import {
   ChannelMessage,
@@ -31,6 +32,10 @@ import {
   UserDehiveServer,
   UserDehiveServerDocument,
 } from '../../user-dehive-server/schemas/user-dehive-server.schema';
+import {
+  UserDehive,
+  UserDehiveDocument,
+} from '../../user-dehive-server/schemas/user-dehive.schema';
 
 @Injectable()
 export class MessagingService {
@@ -43,7 +48,10 @@ export class MessagingService {
     private readonly uploadModel: Model<UploadDocument>,
     @InjectModel(UserDehiveServer.name)
     private readonly userDehiveServerModel: Model<UserDehiveServerDocument>,
+    @InjectModel(UserDehive.name)
+    private readonly userDehiveModel: Model<UserDehiveDocument>,
     private readonly configService: ConfigService,
+    private readonly authClient: AuthServiceClient,
   ) {}
 
   private detectAttachmentType(mime: string): AttachmentType {
@@ -366,33 +374,82 @@ export class MessagingService {
   async getMessagesByConversationId(
     conversationId: string,
     getMessagesDto: GetMessagesDto,
-  ): Promise<ChannelMessageDocument[]> {
+  ): Promise<any[]> {
     const { page = 1, limit = 50 } = getMessagesDto;
-
     const skip = (page - 1) * limit;
 
     if (!Types.ObjectId.isValid(conversationId)) {
       throw new BadRequestException('Invalid conversationId');
     }
-    const filter = {
-      conversationId: new Types.ObjectId(conversationId),
-    };
 
+    // 1. Get messages with UserDehive populated to get user_id
     const messages = await this.channelMessageModel
-      .find(filter)
+      .find({ conversationId: new Types.ObjectId(conversationId) })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('senderId', 'username displayName')
-      .exec();
+      .populate<{
+        senderId: { _id: Types.ObjectId; user_id: Types.ObjectId };
+      }>({
+        path: 'senderId',
+        model: 'UserDehive',
+        select: 'user_id',
+      })
+      .lean();
 
-    if (!messages) {
-      throw new NotFoundException(
-        `No messages found for conversation ${conversationId}`,
-      );
+    if (!messages || messages.length === 0) {
+      return [];
     }
 
-    return messages;
+    // 2. Extract user_ids from UserDehive
+    const userIds = messages
+      .map((m) => {
+        const sender = m.senderId as {
+          _id: Types.ObjectId;
+          user_id: Types.ObjectId;
+        };
+        return sender?.user_id?.toString();
+      })
+      .filter((id): id is string => Boolean(id));
+
+    // 3. Batch get profiles from auth service (with cache)
+    const profiles = await this.authClient.batchGetProfiles(userIds);
+
+    // 4. Map messages with user profiles
+    return messages.map((msg) => {
+      const sender = msg.senderId as {
+        _id: Types.ObjectId;
+        user_id: Types.ObjectId;
+      };
+      const userId = sender?.user_id?.toString() || '';
+      const profile = profiles[userId] || {
+        username: 'Unknown User',
+        display_name: 'Unknown User',
+        avatar: null,
+      };
+
+      return {
+        _id: msg._id,
+        content: msg.content,
+        conversationId: msg.conversationId,
+        channelId: msg.channelId,
+        senderId: sender?._id,
+        sender: {
+          user_id: userId,
+          user_dehive_id: sender?._id?.toString() || '',
+          username: profile.username,
+          display_name: profile.display_name || profile.username,
+          avatar: profile.avatar,
+        },
+        attachments: msg.attachments,
+        isEdited: msg.isEdited,
+        editedAt: msg.editedAt,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        createdAt: (msg as any).createdAt,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+        updatedAt: (msg as any).updatedAt,
+      };
+    });
   }
 
   async editMessage(

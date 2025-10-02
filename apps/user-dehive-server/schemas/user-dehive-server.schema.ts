@@ -1,11 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { ServerRole } from '../constants/enum';
+import { ServerRole } from '../enum/enum';
 
 @Schema({ collection: 'userdehiveservers', timestamps: true })
 export class UserDehiveServer {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  user_id: Types.ObjectId;
+  @Prop({ type: String, required: true, index: true })
+  user_id: string;
 
   @Prop({
     type: Types.ObjectId,

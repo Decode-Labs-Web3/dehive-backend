@@ -18,7 +18,6 @@ import {
   UserDehive,
   UserDehiveDocument,
 } from '../../user-dehive-server/schemas/user-dehive.schema';
-import { UserDocument } from '../../user/schemas/user.schema';
 import { Server, ServerDocument } from '../../server/schemas/server.schema';
 import {
   Category,
@@ -287,7 +286,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
 
       const populatedMessage = await savedMessage.populate<{
-        senderId: UserDehiveDocument & { user_id: UserDocument };
+        senderId: UserDehiveDocument;
       }>({
         path: 'senderId',
         model: 'UserDehive',
@@ -302,8 +301,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         _id: populatedMessage._id,
         sender: {
           dehive_id: populatedMessage.senderId._id,
-          username:
-            populatedMessage.senderId?.user_id?.username || 'Unknown User',
+          username: 'User',
         },
         content: populatedMessage.content,
         attachments: (

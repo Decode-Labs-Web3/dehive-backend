@@ -26,17 +26,21 @@ import { GetMessagesDto } from '../dto/get-messages.dto';
 import { UploadInitDto, UploadResponseDto } from '../dto/channel-upload.dto';
 import { ListUploadsDto } from '../dto/list-channel-upload.dto';
 import { CreateMessageDto } from '../dto/create-message.dto';
+import { AuthGuard } from '../common/guards/auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { UseGuards } from '@nestjs/common';
 
 @ApiTags('Channel Messages')
 @Controller('messages')
+@UseGuards(AuthGuard)
 export class MessagingController {
   constructor(private readonly messagingService: MessagingService) {}
 
   @Post('send')
   @ApiOperation({ summary: 'Send a message to a channel conversation' })
   @ApiHeader({
-    name: 'x-user-id',
-    description: 'The UserDehive ID of the sender',
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
     required: true,
   })
   @ApiBody({ type: CreateMessageDto })
@@ -49,7 +53,7 @@ export class MessagingController {
   })
   @ApiResponse({ status: 404, description: 'Conversation not found.' })
   async sendMessage(
-    @Headers('x-user-id') userId: string,
+    @CurrentUser('userId') userId: string,
     @Body() createMessageDto: CreateMessageDto,
   ) {
     const savedMessage = await this.messagingService.createMessage(
@@ -66,6 +70,11 @@ export class MessagingController {
 
   @Get('conversation/:conversationId')
   @ApiOperation({ summary: 'Get paginated messages for a conversation' })
+  @ApiHeader({
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
+    required: true,
+  })
   @ApiParam({
     name: 'conversationId',
     description: 'The ID of the channel conversation to retrieve messages from',
@@ -93,8 +102,8 @@ export class MessagingController {
   @Post('files/upload')
   @ApiOperation({ summary: 'Upload a file and return metadata' })
   @ApiHeader({
-    name: 'x-user-id',
-    description: 'MongoId of User Dehive',
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
     required: true,
   })
   @ApiConsumes('multipart/form-data')
@@ -126,15 +135,8 @@ export class MessagingController {
   async upload(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: UploadInitDto,
-    @Headers() headers: Record<string, string | undefined>,
+    @CurrentUser('userId') userId: string,
   ): Promise<any> {
-    const raw = headers['x-user-id'] || headers['x-userid'] || '';
-    const userId = typeof raw === 'string' ? raw : String(raw || '');
-    if (!userId) {
-      throw new (await import('@nestjs/common')).BadRequestException(
-        'x-user-id header is required',
-      );
-    }
     const result = await this.messagingService.handleUpload(file, body, userId);
     return {
       success: true,
@@ -147,25 +149,17 @@ export class MessagingController {
   @Get('files/list')
   @ApiOperation({ summary: 'List previously uploaded files (gallery)' })
   @ApiHeader({
-    name: 'x-user-id',
-    description:
-      'MongoId of UserDehive (user_dehive_id); results are restricted to uploads owned by this user',
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
     required: true,
   })
   @ApiResponse({ status: 200, description: 'Returns paginated uploads.' })
   @ApiResponse({ status: 400, description: 'Invalid query or header.' })
   @ApiResponse({ status: 403, description: 'Not allowed.' })
   async listUploads(
-    @Headers() headers: Record<string, string | undefined>,
+    @CurrentUser('userId') userId: string,
     @Query() query: ListUploadsDto,
   ) {
-    const raw = headers['x-user-id'] || headers['x-userid'] || '';
-    const userId = typeof raw === 'string' ? raw : String(raw || '');
-    if (!userId) {
-      throw new (await import('@nestjs/common')).BadRequestException(
-        'x-user-id header is required',
-      );
-    }
     const result = await this.messagingService.listUploads({
       serverId: query.serverId,
       userId,

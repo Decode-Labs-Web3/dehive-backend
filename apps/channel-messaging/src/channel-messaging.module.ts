@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { HttpModule } from '@nestjs/axios';
+import { RedisModule } from '@nestjs-modules/ioredis';
 import { ChatGateway } from '../gateway/chat.gateway';
 import { MessagingController } from './channel-messaging.controller';
 import { MessagingService } from './channel-messaging.service';
+import { AuthServiceClient } from './auth-service.client';
 import {
   ChannelMessage,
   ChannelMessageSchema,
@@ -24,13 +27,25 @@ import {
   UserDehiveServer,
   UserDehiveServerSchema,
 } from '../../user-dehive-server/schemas/user-dehive-server.schema';
-import { User, UserSchema } from '../../user/schemas/user.schema';
+import { AuthGuard } from '../common/guards/auth.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 5,
+    }),
+    RedisModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => ({
+        type: 'single',
+        url: config.get<string>('REDIS_URI'),
+      }),
+      inject: [ConfigService],
     }),
 
     MongooseModule.forRootAsync({
@@ -49,11 +64,10 @@ import { User, UserSchema } from '../../user/schemas/user.schema';
       { name: Category.name, schema: CategorySchema },
       { name: Channel.name, schema: ChannelSchema },
       { name: UserDehiveServer.name, schema: UserDehiveServerSchema },
-      { name: User.name, schema: UserSchema },
       { name: ChannelConversation.name, schema: ChannelConversationSchema },
     ]),
   ],
   controllers: [MessagingController],
-  providers: [MessagingService, ChatGateway],
+  providers: [MessagingService, ChatGateway, AuthGuard, AuthServiceClient],
 })
 export class MessagingModule {}

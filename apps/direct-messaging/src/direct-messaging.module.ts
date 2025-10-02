@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { HttpModule } from '@nestjs/axios';
 import { DirectMessagingController } from './direct-messaging.controller';
 import { DirectMessagingService } from './direct-messaging.service';
 import {
@@ -20,10 +21,15 @@ import {
   UserDehive,
   UserDehiveSchema,
 } from '../../user-dehive-server/schemas/user-dehive.schema';
+import { AuthGuard } from '../common/guards/auth.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 5,
+    }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -39,6 +45,6 @@ import {
     ]),
   ],
   controllers: [DirectMessagingController],
-  providers: [DirectMessagingService, DmGateway],
+  providers: [DirectMessagingService, DmGateway, AuthGuard],
 })
 export class DirectMessagingModule {}

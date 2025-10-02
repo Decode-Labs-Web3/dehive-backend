@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
-import { AuditLogAction } from '../constants/enum';
+import { AuditLogAction } from '../enum/enum';
 
 @Schema({ timestamps: true })
 export class ServerAuditLog {

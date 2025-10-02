@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import { HttpModule } from '@nestjs/axios';
+import { RedisModule } from '@nestjs-modules/ioredis';
 import { UserDehiveServerController } from './user-dehive-server.controller';
 import { UserDehiveServerService } from './user-dehive-server.service';
+import { AuthServiceClient } from './auth-service.client';
 import { UserDehive, UserDehiveSchema } from '../schemas/user-dehive.schema';
 import { Server, ServerSchema } from '../schemas/server.schema';
 import { InviteLink, InviteLinkSchema } from '../schemas/invite-link.schema';
@@ -15,14 +18,12 @@ import {
   UserDehiveServer,
   UserDehiveServerSchema,
 } from '../schemas/user-dehive-server.schema';
-import { User, UserSchema } from '../../user/schemas/user.schema';
-import { FakeAuthGuard } from '../guards/fake-auth.guard';
+import { AuthGuard } from '../common/guards/auth.guard';
 
 const MONGOOSE_MODELS = MongooseModule.forFeature([
   { name: 'UserDehive', schema: UserDehiveSchema },
   { name: 'UserDehiveServer', schema: UserDehiveServerSchema },
   { name: 'Server', schema: ServerSchema },
-  { name: 'User', schema: UserSchema },
   { name: 'ServerBan', schema: ServerBanSchema },
   { name: 'InviteLink', schema: InviteLinkSchema },
 ]);
@@ -32,6 +33,18 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 5,
+    }),
+    RedisModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => ({
+        type: 'single',
+        url: config.get<string>('REDIS_URI'),
+      }),
+      inject: [ConfigService],
     }),
     MONGOOSE_MODELS,
 
@@ -50,11 +63,10 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
       { name: ServerAuditLog.name, schema: ServerAuditLogSchema },
       { name: ServerBan.name, schema: ServerBanSchema },
       { name: UserDehiveServer.name, schema: UserDehiveServerSchema },
-      { name: User.name, schema: UserSchema },
     ]),
   ],
   controllers: [UserDehiveServerController],
-  providers: [UserDehiveServerService, FakeAuthGuard],
-  exports: [UserDehiveServerService, MONGOOSE_MODELS],
+  providers: [UserDehiveServerService, AuthServiceClient, AuthGuard],
+  exports: [UserDehiveServerService, AuthServiceClient, MONGOOSE_MODELS],
 })
 export class UserDehiveServerModule {}

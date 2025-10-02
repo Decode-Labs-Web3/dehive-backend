@@ -1,11 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
-import { Status } from '../constants/enum';
+import { Document } from 'mongoose';
+import { Status } from '../enum/enum';
 
 @Schema({ collection: 'userdehives', timestamps: true })
 export class UserDehive {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, unique: true })
-  user_id: Types.ObjectId;
+  @Prop({ type: String, required: true, unique: true })
+  user_id: string;
 
   @Prop({ type: String, maxlength: 190, default: '' })
   bio: string;

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { Server, ServerDocument } from '../schemas/server.schema';
 import {
   UserDehive,
@@ -27,7 +29,7 @@ import {
   ChannelMessage,
   ChannelMessageDocument,
 } from '../schemas/channel-message.schema';
-import { ServerRole } from '../../user-dehive-server/constants/enum';
+import { ServerRole } from '../../user-dehive-server/enum/enum';
 
 @Injectable()
 export class ServerService {
@@ -44,29 +46,84 @@ export class ServerService {
     private readonly userDehiveModel: Model<UserDehiveDocument>,
     @InjectModel(ChannelMessage.name)
     private readonly channelMessageModel: Model<ChannelMessageDocument>,
+    private readonly httpService: HttpService,
   ) {}
+
+  // Helper method to fetch user profile from Auth service
+  private async fetchUserProfileFromAuth(userId: string): Promise<any> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`http://localhost:4006/auth/profile/${userId}`),
+      );
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch user profile from Auth service:', error);
+      return null;
+    }
+  }
+
+  // Helper method to auto-create UserDehive profile
+  private async ensureUserDehiveProfile(userId: string) {
+    console.log('🔍 [ENSURE USER PROFILE] userId:', userId);
+
+    // 1. Check if UserDehive exists using userId as _id or user_id
+    let userDehiveProfile = await this.userDehiveModel
+      .findOne({ $or: [{ _id: userId }, { user_id: userId }] })
+      .lean();
+
+    console.log(
+      '🔍 [ENSURE USER PROFILE] Existing profile:',
+      userDehiveProfile,
+    );
+
+    if (!userDehiveProfile) {
+      console.log('🔍 [ENSURE USER PROFILE] Creating new profile...');
+      const newUserDehive = new this.userDehiveModel({
+        _id: userId, // Set _id = userId from Decode (user_dehive_id = user_id)
+        user_id: userId, // Also keep user_id for reference
+        bio: '',
+        banner_color: null,
+        server_count: 0,
+        status: 'offline',
+        last_login: new Date(),
+      });
+
+      const savedUserDehive = await newUserDehive.save();
+      console.log(
+        '✅ [ENSURE USER PROFILE] Profile created:',
+        savedUserDehive.toObject(),
+      );
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      userDehiveProfile = savedUserDehive.toObject() as any;
+    } else {
+      console.log('✅ [ENSURE USER PROFILE] Using existing profile');
+    }
+
+    return userDehiveProfile;
+  }
 
   async createServer(
     createServerDto: CreateServerDto,
     ownerBaseId: string,
   ): Promise<Server> {
-    const ownerBaseObjectId = new Types.ObjectId(ownerBaseId);
-    const query = { user_id: ownerBaseObjectId };
-    const ownerDehiveProfile = await this.userDehiveModel.findOne(query).lean();
+    console.log('🚀 [CREATE SERVER] Starting with ownerBaseId:', ownerBaseId);
 
-    if (!ownerDehiveProfile) {
-      throw new NotFoundException(
-        `Dehive profile not found for user ID: ${ownerBaseId}`,
-      );
+    if (!ownerBaseId) {
+      throw new BadRequestException('Owner ID is required');
     }
 
-    const ownerDehiveId = ownerDehiveProfile._id;
+    // 1. Ensure UserDehive profile exists (auto-create if needed)
+    const ownerDehiveProfile = await this.ensureUserDehiveProfile(ownerBaseId);
+    const ownerDehiveId = ownerBaseId; // user_dehive_id = user_id from Decode
+
+    console.log('🔍 [CREATE SERVER] ownerDehiveProfile:', ownerDehiveProfile);
+    console.log('🔍 [CREATE SERVER] ownerDehiveId:', ownerDehiveId);
     const session = await this.serverModel.db.startSession();
     session.startTransaction();
     try {
       const newServerData = {
         ...createServerDto,
-        owner_id: ownerBaseObjectId,
+        owner_id: ownerBaseId, // Use ownerBaseId directly as string (same as Auth service _id)
         member_count: 1,
         is_private: false,
         tags: [],
@@ -77,7 +134,7 @@ export class ServerService {
       });
       const newServer = createdServers[0];
       const newMembership = new this.userDehiveServerModel({
-        user_id: ownerBaseObjectId,
+        user_id: ownerBaseId, // Use ownerBaseId directly as string (same as Auth service _id)
         user_dehive_id: ownerDehiveId,
         server_id: newServer._id,
         role: ServerRole.OWNER,
@@ -102,14 +159,8 @@ export class ServerService {
   }
 
   async findAllServers(actorBaseId: string): Promise<Server[]> {
-    const actorDehiveProfile = await this.userDehiveModel
-      .findOne({ user_id: new Types.ObjectId(actorBaseId) })
-      .select('_id')
-      .lean();
-    if (!actorDehiveProfile) {
-      throw new NotFoundException(`Dehive profile not found for user.`);
-    }
-    const actorDehiveId = actorDehiveProfile._id;
+    // 1. Ensure UserDehive profile exists (auto-create if needed)
+    const actorDehiveId = actorBaseId; // user_dehive_id = user_id from Decode
     const memberships = await this.userDehiveServerModel
       .find({ user_dehive_id: actorDehiveId })
       .select('server_id')

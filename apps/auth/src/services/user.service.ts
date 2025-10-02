@@ -39,14 +39,22 @@ export class UserService {
         };
       }
       const user_decode_data = user_decode.data;
-      const user_dehive_data =
-        await this.userDehiveModel.findById(user_dehive_id);
+      
+      // Check if UserDehive exists, if not create it
+      let user_dehive_data = await this.userDehiveModel.findById(user_dehive_id);
+      
       if (!user_dehive_data) {
-        return {
-          success: false,
-          message: 'User not found',
-          statusCode: HttpStatus.NOT_FOUND,
-        };
+        // Auto-create UserDehive record
+        const newUserDehive = new this.userDehiveModel({
+          _id: user_dehive_id,
+          user_id: user_dehive_id,
+          bio: '',
+          banner_color: null,
+          server_count: 0,
+          status: 'offline',
+          last_login: new Date(),
+        });
+        user_dehive_data = await newUserDehive.save();
       }
       const user = {
         _id: user_dehive_data._id,
@@ -104,19 +112,24 @@ export class UserService {
         };
       }
       const user_decode_data = user_decode.data;
-      const user_dehive_data = await this.userDehiveModel.findById(
+      
+      // Check if UserDehive exists, if not create it
+      let user_dehive_data = await this.userDehiveModel.findById(
         user_decode_data._id,
       );
-      console.log(
-        'user service get my decode profile user_dehive_data',
-        user_dehive_data,
-      );
+      
       if (!user_dehive_data) {
-        return {
-          success: false,
-          message: 'User not found',
-          statusCode: HttpStatus.NOT_FOUND,
-        };
+        // Auto-create UserDehive record
+        const newUserDehive = new this.userDehiveModel({
+          _id: user_decode_data._id,
+          user_id: user_decode_data._id,
+          bio: '',
+          banner_color: null,
+          server_count: 0,
+          status: 'offline',
+          last_login: new Date(),
+        });
+        user_dehive_data = await newUserDehive.save();
       }
       const user = {
         _id: user_dehive_data._id,
