@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema({ timestamps: true })
+@Schema({ collection: 'invite_link', timestamps: true })
 export class InviteLink {
   @Prop({ required: true, unique: true })
   code: string;

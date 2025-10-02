@@ -25,9 +25,16 @@ export class AuthGuard implements CanActivate {
   private readonly logger = new Logger(AuthGuard.name);
   private readonly authServiceUrl = 'http://localhost:4006';
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(private readonly httpService: HttpService) {
+    console.log(
+      '🔥 [USER-DEHIVE AUTH GUARD] Constructor called - This is the user-dehive-server AuthGuard!',
+    );
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    console.log(
+      '🚨 [USER-DEHIVE AUTH GUARD] canActivate called - This is the user-dehive-server AuthGuard!',
+    );
     const request = context.switchToHttp().getRequest<Request>();
 
     // Check if route is marked as public
@@ -35,13 +42,17 @@ export class AuthGuard implements CanActivate {
       PUBLIC_KEY,
       context.getHandler(),
     );
+    console.log('🚨 [USER-DEHIVE AUTH GUARD] isPublic:', isPublic);
     if (isPublic) {
+      console.log('🚨 [USER-DEHIVE AUTH GUARD] Route is public, skipping auth');
       return true;
     }
 
     // Extract session_id from request headers
     const sessionId = this.extractSessionIdFromHeader(request);
+    console.log('🚨 [USER-DEHIVE AUTH GUARD] sessionId:', sessionId);
     if (!sessionId) {
+      console.log('❌ [USER-DEHIVE AUTH GUARD] No session ID found!');
       throw new UnauthorizedException({
         message: 'Session ID is required',
         error: 'MISSING_SESSION_ID',

@@ -25,9 +25,16 @@ export class AuthGuard implements CanActivate {
   private readonly logger = new Logger(AuthGuard.name);
   private readonly authServiceUrl = 'http://localhost:4006';
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(private readonly httpService: HttpService) {
+    console.log(
+      '🔥 [CHANNEL-MESSAGING AUTH GUARD] Constructor called - This is the channel-messaging AuthGuard!',
+    );
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    console.log(
+      '🚨 [CHANNEL-MESSAGING AUTH GUARD] canActivate called - This is the channel-messaging AuthGuard!',
+    );
     const request = context.switchToHttp().getRequest<Request>();
 
     // Check if route is marked as public
@@ -35,13 +42,19 @@ export class AuthGuard implements CanActivate {
       PUBLIC_KEY,
       context.getHandler(),
     );
+    console.log('🚨 [CHANNEL-MESSAGING AUTH GUARD] isPublic:', isPublic);
     if (isPublic) {
+      console.log(
+        '🚨 [CHANNEL-MESSAGING AUTH GUARD] Route is public, skipping auth',
+      );
       return true;
     }
 
     // Extract session_id from request headers
     const sessionId = this.extractSessionIdFromHeader(request);
+    console.log('🚨 [CHANNEL-MESSAGING AUTH GUARD] sessionId:', sessionId);
     if (!sessionId) {
+      console.log('❌ [CHANNEL-MESSAGING AUTH GUARD] No session ID found!');
       throw new UnauthorizedException({
         message: 'Session ID is required',
         error: 'MISSING_SESSION_ID',
@@ -82,6 +95,10 @@ export class AuthGuard implements CanActivate {
           role: 'user' as const,
         };
         request['sessionId'] = sessionId;
+        console.log(
+          '✅ [CHANNEL-MESSAGING AUTH GUARD] User attached to request:',
+          request['user'],
+        );
       }
 
       return true;

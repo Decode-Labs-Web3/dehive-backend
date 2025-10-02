@@ -53,6 +53,7 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         uri: configService.get<string>('MONGODB_URI'),
+        dbName: 'dehive_db', // Explicitly set database name
       }),
     }),
 

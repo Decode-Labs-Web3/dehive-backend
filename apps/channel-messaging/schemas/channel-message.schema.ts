@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema({ collection: 'channelmessages', timestamps: true })
+@Schema({ collection: 'channel_message', timestamps: true })
 export class ChannelMessage {
   @Prop({ required: true, trim: true, maxlength: 2000 })
   content: string;

@@ -35,6 +35,7 @@ import { AuthGuard } from '../common/guards/auth.guard';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         uri: config.get<string>('MONGODB_URI'),
+        dbName: 'dehive_db',
       }),
     }),
     MongooseModule.forFeature([

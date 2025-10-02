@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { AuditLogAction } from '../enum/enum';
 
-@Schema({ timestamps: true })
+@Schema({ collection: 'server_audit_log', timestamps: true })
 export class ServerAuditLog {
   @Prop({ type: Types.ObjectId, ref: 'Server', required: true })
   server_id: Types.ObjectId;

@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema({ timestamps: true })
+@Schema({ collection: 'server_ban', timestamps: true })
 export class ServerBan {
   @Prop({ type: Types.ObjectId, ref: 'Server', required: true })
   server_id: Types.ObjectId;

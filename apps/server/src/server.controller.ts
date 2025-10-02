@@ -30,8 +30,6 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 @UseGuards(AuthGuard)
 export class ServerController {
   constructor(private readonly serverService: ServerService) {}
-
-
   @Post()
   @ApiOperation({ summary: 'Create a new server' })
   @ApiHeader({

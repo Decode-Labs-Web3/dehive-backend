@@ -4,6 +4,6 @@
     "declaration": false,
     "outDir": "../../dist/apps/user-dehive-server"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "common/**/*", "dto/**/*", "interfaces/**/*", "schemas/**/*", "enum/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }

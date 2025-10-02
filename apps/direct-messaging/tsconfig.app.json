@@ -4,6 +4,6 @@
     "declaration": false,
     "outDir": "../../dist/apps/direct-messaging"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "common/**/*", "dto/**/*", "interfaces/**/*", "schemas/**/*", "enum/**/*", "gateway/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }

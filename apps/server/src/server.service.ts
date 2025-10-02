@@ -62,46 +62,6 @@ export class ServerService {
     }
   }
 
-  // Helper method to auto-create UserDehive profile
-  private async ensureUserDehiveProfile(userId: string) {
-    console.log('🔍 [ENSURE USER PROFILE] userId:', userId);
-
-    // 1. Check if UserDehive exists using userId as _id or user_id
-    let userDehiveProfile = await this.userDehiveModel
-      .findOne({ $or: [{ _id: userId }, { user_id: userId }] })
-      .lean();
-
-    console.log(
-      '🔍 [ENSURE USER PROFILE] Existing profile:',
-      userDehiveProfile,
-    );
-
-    if (!userDehiveProfile) {
-      console.log('🔍 [ENSURE USER PROFILE] Creating new profile...');
-      const newUserDehive = new this.userDehiveModel({
-        _id: userId, // Set _id = userId from Decode (user_dehive_id = user_id)
-        user_id: userId, // Also keep user_id for reference
-        bio: '',
-        banner_color: null,
-        server_count: 0,
-        status: 'offline',
-        last_login: new Date(),
-      });
-
-      const savedUserDehive = await newUserDehive.save();
-      console.log(
-        '✅ [ENSURE USER PROFILE] Profile created:',
-        savedUserDehive.toObject(),
-      );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      userDehiveProfile = savedUserDehive.toObject() as any;
-    } else {
-      console.log('✅ [ENSURE USER PROFILE] Using existing profile');
-    }
-
-    return userDehiveProfile;
-  }
-
   async createServer(
     createServerDto: CreateServerDto,
     ownerBaseId: string,
@@ -112,11 +72,8 @@ export class ServerService {
       throw new BadRequestException('Owner ID is required');
     }
 
-    // 1. Ensure UserDehive profile exists (auto-create if needed)
-    const ownerDehiveProfile = await this.ensureUserDehiveProfile(ownerBaseId);
     const ownerDehiveId = ownerBaseId; // user_dehive_id = user_id from Decode
 
-    console.log('🔍 [CREATE SERVER] ownerDehiveProfile:', ownerDehiveProfile);
     console.log('🔍 [CREATE SERVER] ownerDehiveId:', ownerDehiveId);
     const session = await this.serverModel.db.startSession();
     session.startTransaction();

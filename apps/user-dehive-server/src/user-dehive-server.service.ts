@@ -49,38 +49,6 @@ export class UserDehiveServerService {
       .lean();
   }
 
-  // Helper method to auto-create UserDehive profile
-  private async ensureUserDehiveProfile(userId: string) {
-    // 1. Check if UserDehive exists using userId as _id or user_id
-    let userDehiveProfile = await this.findUserDehiveProfile(userId);
-
-    if (!userDehiveProfile) {
-      // 2. Fetch user profile from Auth service
-      const authProfile = await this.authClient.getUserProfile(userId);
-      if (!authProfile) {
-        throw new BadRequestException(
-          'Failed to fetch user profile from Auth service',
-        );
-      }
-
-      // 3. Auto-create UserDehive record with _id = userId (user_dehive_id = user_id)
-      const newUserDehive = new this.userDehiveModel({
-        _id: userId, // Set _id = userId from Decode (user_dehive_id = user_id)
-        user_id: userId, // Also keep user_id for reference
-        bio: '',
-        banner_color: null,
-        server_count: 0,
-        status: 'offline',
-        last_login: new Date(),
-      });
-      const savedUserDehive = await newUserDehive.save();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      userDehiveProfile = savedUserDehive.toObject() as any;
-    }
-
-    return userDehiveProfile;
-  }
-
   async joinServer(
     dto: JoinServerDto,
     userId: string,
@@ -148,8 +116,8 @@ export class UserDehiveServerService {
   ): Promise<{ message: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // Find UserDehive by user_id (auto-create if needed)
-    const userDehive = await this.ensureUserDehiveProfile(userId);
+    // Find UserDehive by user_id
+    const userDehive = await this.findUserDehiveProfile(userId);
 
     if (!userDehive) {
       throw new NotFoundException('UserDehive profile not found.');
@@ -544,43 +512,6 @@ export class UserDehiveServerService {
     await this.redis.del(`server_members:${serverId}`);
   }
 
-  async createUserDehiveProfile(userId: string) {
-    // Check if UserDehive already exists
-    const existingProfile = await this.userDehiveModel
-      .findOne({
-        user_id: new Types.ObjectId(userId),
-      })
-      .lean();
-
-    if (existingProfile) {
-      return {
-        success: true,
-        statusCode: 200,
-        message: 'Dehive profile already exists',
-        data: existingProfile,
-      };
-    }
-
-    // Create new UserDehive profile
-    const newUserDehive = new this.userDehiveModel({
-      user_id: new Types.ObjectId(userId),
-      bio: '',
-      banner_color: null,
-      server_count: 0,
-      status: 'offline',
-      last_login: new Date(),
-    });
-
-    const savedProfile = await newUserDehive.save();
-
-    return {
-      success: true,
-      statusCode: 201,
-      message: 'Dehive profile created successfully',
-      data: savedProfile,
-    };
-  }
-
   async getEnrichedUserProfile(targetUserId: string, viewerUserId: string) {
     // 1. Fetch target user profile from auth service (with cache)
     const targetAuthProfile =
@@ -601,9 +532,13 @@ export class UserDehiveServerService {
         .lean(),
     ]);
 
-    // Auto-create UserDehive for viewer if not exists
+    // Find UserDehive for viewer
     const finalViewerDehiveProfile =
-      await this.ensureUserDehiveProfile(viewerUserId);
+      await this.findUserDehiveProfile(viewerUserId);
+
+    if (!finalViewerDehiveProfile) {
+      throw new NotFoundException('Viewer UserDehive profile not found.');
+    }
 
     // 3. Get mutual servers
     const targetDehiveId = targetDehiveProfile?._id;

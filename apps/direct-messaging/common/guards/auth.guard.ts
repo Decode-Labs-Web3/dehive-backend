@@ -25,9 +25,16 @@ export class AuthGuard implements CanActivate {
   private readonly logger = new Logger(AuthGuard.name);
   private readonly authServiceUrl = 'http://localhost:4006';
 
-  constructor(private readonly httpService: HttpService) {}
+  constructor(private readonly httpService: HttpService) {
+    console.log(
+      '🔥 [DIRECT-MESSAGING AUTH GUARD] Constructor called - This is the direct-messaging AuthGuard!',
+    );
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    console.log(
+      '🚨 [DIRECT-MESSAGING AUTH GUARD] canActivate called - This is the direct-messaging AuthGuard!',
+    );
     const request = context.switchToHttp().getRequest<Request>();
 
     // Check if route is marked as public
@@ -35,13 +42,19 @@ export class AuthGuard implements CanActivate {
       PUBLIC_KEY,
       context.getHandler(),
     );
+    console.log('🚨 [DIRECT-MESSAGING AUTH GUARD] isPublic:', isPublic);
     if (isPublic) {
+      console.log(
+        '🚨 [DIRECT-MESSAGING AUTH GUARD] Route is public, skipping auth',
+      );
       return true;
     }
 
     // Extract session_id from request headers
     const sessionId = this.extractSessionIdFromHeader(request);
+    console.log('🚨 [DIRECT-MESSAGING AUTH GUARD] sessionId:', sessionId);
     if (!sessionId) {
+      console.log('❌ [DIRECT-MESSAGING AUTH GUARD] No session ID found!');
       throw new UnauthorizedException({
         message: 'Session ID is required',
         error: 'MISSING_SESSION_ID',
@@ -72,14 +85,20 @@ export class AuthGuard implements CanActivate {
       }
 
       // Attach user to request for use in controllers
-      const session_check_response = response.data as Response<SessionCacheDoc>;
-      if (session_check_response.data) {
+      const session_check_response = response.data;
+      if (session_check_response.success && session_check_response.data) {
+        // Use _id from Auth service directly as userId for Dehive
         request['user'] = {
           userId: session_check_response.data.user._id,
-          email: session_check_response.data.user.email,
-          username: session_check_response.data.user.username,
+          email: session_check_response.data.user.email || '',
+          username: session_check_response.data.user.username || '',
           role: 'user' as const,
         };
+        request['sessionId'] = sessionId;
+        console.log(
+          '✅ [DIRECT-MESSAGING AUTH GUARD] User attached to request:',
+          request['user'],
+        );
       }
 
       return true;

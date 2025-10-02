@@ -269,26 +269,6 @@ export class UserDehiveServerController {
     return this.service.updateNotification(dto, actorBaseId);
   }
 
-  @Post('create-profile')
-  @ApiOperation({
-    summary: 'Create Dehive profile for user',
-    description:
-      'Creates a Dehive profile for the authenticated user if it does not exist.',
-  })
-  @ApiHeader({
-    name: 'x-session-id',
-    description: 'Session ID of authenticated user',
-    required: true,
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Dehive profile created successfully.',
-  })
-  @ApiResponse({ status: 200, description: 'Dehive profile already exists.' })
-  createProfile(@CurrentUser('userId') userId: string) {
-    return this.service.createUserDehiveProfile(userId);
-  }
-
   @Get('user/:userId/profile')
   @Public()
   @ApiOperation({

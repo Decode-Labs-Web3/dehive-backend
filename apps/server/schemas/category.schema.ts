@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema({ timestamps: true })
+@Schema({ collection: 'category', timestamps: true })
 export class Category {
   @Prop({ required: true, trim: true, maxlength: 100 })
   name: string;

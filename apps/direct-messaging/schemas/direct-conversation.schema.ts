@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema({ collection: 'directconversations', timestamps: true })
+@Schema({ collection: 'direct_conversation', timestamps: true })
 export class DirectConversation {
   @Prop({
     type: Types.ObjectId,

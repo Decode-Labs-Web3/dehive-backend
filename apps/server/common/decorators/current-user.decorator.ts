@@ -21,40 +21,39 @@ export const CurrentUser = createParamDecorator(
     data: keyof AuthenticatedUser | 'sessionId' | undefined,
     ctx: ExecutionContext,
   ): AuthenticatedUser | string | undefined => {
+    console.log('🎯 [SERVER CURRENT USER] Decorator called with data:', data);
     try {
-      console.log('🎯 [CURRENT USER] Decorator called with data:', data);
       const request = ctx
         .switchToHttp()
         .getRequest<{ user: AuthenticatedUser; sessionId?: string }>();
 
-      console.log('🎯 [CURRENT USER] request.user:', request.user);
-      console.log('🎯 [CURRENT USER] request.sessionId:', request.sessionId);
-      console.log('🎯 [CURRENT USER] request keys:', Object.keys(request));
-
-    // If sessionId is requested, return it from request
-    if (data === 'sessionId') {
-      console.log('🎯 [CURRENT USER] Returning sessionId:', request.sessionId);
-      return request.sessionId;
-    }
-
-    const user = request.user;
-
-    // If a specific property is requested, return only that property
-    if (data && user) {
+      console.log('🎯 [SERVER CURRENT USER] Request user:', request.user);
       console.log(
-        '🎯 [CURRENT USER] Returning user property:',
-        data,
-        '=',
-        user[data],
+        '🎯 [SERVER CURRENT USER] Request sessionId:',
+        request.sessionId,
       );
-      return user[data];
-    }
 
-    // Return the entire user object
-    console.log('🎯 [CURRENT USER] Returning entire user object:', user);
-    return user;
+      // If sessionId is requested, return it from request
+      if (data === 'sessionId') {
+        return request.sessionId;
+      }
+
+      const user = request.user;
+
+      // If a specific property is requested, return only that property
+      if (data && user) {
+        console.log(
+          `🎯 [SERVER CURRENT USER] Returning user.${data}:`,
+          user[data],
+        );
+        return user[data];
+      }
+
+      // Return the entire user object
+      console.log('🎯 [SERVER CURRENT USER] Returning full user:', user);
+      return user;
     } catch (error) {
-      console.log('💥 [CURRENT USER] Error in decorator:', error);
+      console.error('❌ [SERVER CURRENT USER] Error:', error);
       return undefined;
     }
   },

@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ServerRole } from '../enum/enum';
 
-@Schema({ collection: 'userdehiveservers', timestamps: true })
+@Schema({ collection: 'user_dehive_server', timestamps: true })
 export class UserDehiveServer {
   @Prop({ type: String, required: true, index: true })
   user_id: string;

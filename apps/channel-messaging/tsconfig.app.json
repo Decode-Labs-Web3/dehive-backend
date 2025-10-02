@@ -3,14 +3,16 @@
   "compilerOptions": {
     "declaration": false,
     "outDir": "../../dist/apps/channel-messaging",
-    "emitDecoratorMetadata": true 
+    "emitDecoratorMetadata": true
   },
   "include": [
     "src/**/*",
     "dto/**/*",
     "schemas/**/*",
     "gateway/**/*",
-    "enum/**/*"
+    "enum/**/*",
+    "common/**/*",
+    "interfaces/**/*"
   ],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }

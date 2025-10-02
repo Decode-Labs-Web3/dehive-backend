@@ -2,7 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { ChannelType } from '../dto/create-channel.dto';
 
-@Schema({ timestamps: true })
+@Schema({ collection: 'channel', timestamps: true })
 export class Channel {
   @Prop({ required: true, trim: true, maxlength: 100 })
   name: string;

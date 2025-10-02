@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema({ collection: 'channeluploads', timestamps: true })
+@Schema({ collection: 'channel_upload', timestamps: true })
 export class Upload {
   @Prop({
     type: Types.ObjectId,

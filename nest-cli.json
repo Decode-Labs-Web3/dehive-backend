@@ -76,7 +76,7 @@
       "type": "application",
       "root": "apps/user-dehive-server",
       "entryFile": "main",
-      "sourceRoot": "apps/user-dehive-server/src",
+      "sourceRoot": "apps/user-dehive-server",
       "compilerOptions": {
         "tsConfigPath": "apps/user-dehive-server/tsconfig.app.json"
       }

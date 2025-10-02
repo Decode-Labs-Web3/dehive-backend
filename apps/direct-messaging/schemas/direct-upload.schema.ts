@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-@Schema({ collection: 'directuploads', timestamps: true })
+@Schema({ collection: 'direct_upload', timestamps: true })
 export class DirectUpload {
   @Prop({
     type: Types.ObjectId,
