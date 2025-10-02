@@ -63,6 +63,15 @@
         "tsConfigPath": "libs/shared/tsconfig.lib.json"
       }
     },
+    "test-auth": {
+      "type": "application",
+      "root": "apps/test-auth",
+      "entryFile": "main",
+      "sourceRoot": "apps/test-auth/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/test-auth/tsconfig.app.json"
+      }
+    },
     "user-dehive-server": {
       "type": "application",
       "root": "apps/user-dehive-server",
