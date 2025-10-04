@@ -1,0 +1,33 @@
+import { CanActivate, ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
+import { RedisInfrastructure } from '../../infrastructure/redis.infrastructure';
+import { DecodeApiClient } from '../../infrastructure/external-services/decode-api.client';
+export declare const ROLES_KEY = "roles";
+export declare const PERMISSIONS_KEY = "permissions";
+export declare const PUBLIC_KEY = "public";
+export declare const Roles: (...roles: ("user" | "admin" | "moderator")[]) => import("@nestjs/common").CustomDecorator<string>;
+export declare const Permissions: (...permissions: string[]) => import("@nestjs/common").CustomDecorator<string>;
+export declare const Public: () => import("@nestjs/common").CustomDecorator<string>;
+export declare class DecodeAuthGuard implements CanActivate {
+    private readonly reflector;
+    private readonly configService;
+    private readonly httpService;
+    private readonly redis;
+    private readonly decodeApiClient;
+    private readonly logger;
+    private readonly authServiceUrl;
+    private readonly cache;
+    private readonly cacheTtl;
+    constructor(reflector: Reflector, configService: ConfigService, httpService: HttpService, redis: RedisInfrastructure, decodeApiClient: DecodeApiClient);
+    canActivate(context: ExecutionContext): Promise<boolean>;
+    private extractSessionIdFromHeader;
+    private validateSession;
+    private getSessionFromRedis;
+    private validateAccessToken;
+    private refreshSession;
+    private checkRoleAccess;
+    clearCache(): void;
+    getCacheSize(): number;
+}
