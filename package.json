@@ -22,10 +22,10 @@
     "start:all:bg": "concurrently -k \"npm run start:dev auth\" \"npm run start:dev user-dehive-server\" \"npm run start:dev server\" \"npm run start:dev channel-messaging\" \"npm run start:dev direct-messaging\"",
     "kill:all": "pkill -f 'nest start' || true",
     "restart:all": "npm run kill:all && sleep 2 && npm run start:all",
-    "setup": "node setup.js",
+    "setup": "node setup-safe.js",
     "setup:manual": "npm install && npm run build",
     "start:all:setup": "npm run setup && npm run start:all",
-    "postinstall": "node setup.js",
+    "postinstall": "node setup-safe.js",
     "fix": "node fix-dist.js"
   },
   "dependencies": {

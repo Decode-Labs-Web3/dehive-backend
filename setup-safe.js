@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * Setup script for Dehive Backend
- * Run this after pulling code from git
+ * Safe setup script for Dehive Backend
+ * This script only builds, doesn't install dependencies
  */
 
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-console.log('🚀 Dehive Backend Setup Script');
-console.log('==============================');
+console.log('🚀 Dehive Backend Safe Setup');
+console.log('============================');
 
 function runCommand(command, description) {
   try {
@@ -62,14 +62,14 @@ async function main() {
     const nodeVersion = process.version;
     console.log(`Node.js version: ${nodeVersion}`);
 
-    // Step 2: Check if node_modules exists (don't install if already exists)
+    // Step 2: Check if node_modules exists
     const nodeModulesPath = path.join(__dirname, 'node_modules');
     if (!fs.existsSync(nodeModulesPath)) {
-      console.log('⚠️  node_modules not found. Please run: npm install');
-      console.log('Then run: npm run start:all');
+      console.log('❌ node_modules not found!');
+      console.log('Please run: npm install');
       process.exit(1);
     } else {
-      console.log('✅ Dependencies already installed');
+      console.log('✅ Dependencies found');
     }
 
     // Step 3: Check and build
@@ -104,8 +104,6 @@ async function main() {
       console.log('');
       console.log('🚀 You can now run:');
       console.log('   npm run start:all');
-      console.log('   npm run start:all:setup');
-      console.log('   ./start.sh');
     } else {
       console.log('❌ Setup incomplete. Please run:');
       console.log('   npm run build');
@@ -116,7 +114,6 @@ async function main() {
     console.error('❌ Setup failed:', error.message);
     console.log('');
     console.log('🔧 Manual setup:');
-    console.log('   npm install');
     console.log('   npm run build');
     console.log('   npm run start:all');
     process.exit(1);
