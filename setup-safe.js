@@ -76,9 +76,23 @@ async function main() {
     const needsBuild = checkAndCreateDist();
 
     if (needsBuild) {
-      if (!runCommand('npm run build', 'Building project')) {
-        console.log('❌ Failed to build project');
-        process.exit(1);
+      console.log('🔨 Building project...');
+      try {
+        execSync('npm run build', { stdio: 'inherit', cwd: __dirname });
+        console.log('✅ Build completed!');
+      } catch (error) {
+        console.log('❌ Build failed, trying to fix...');
+        console.log('🔧 Running fix script...');
+        try {
+          execSync('node fix-dist.js', { stdio: 'inherit', cwd: __dirname });
+          console.log('✅ Fix completed!');
+        } catch (fixError) {
+          console.log('❌ Fix also failed');
+          console.log('Please run manually:');
+          console.log('   npm run build');
+          console.log('   npm run start:all');
+          process.exit(1);
+        }
       }
     } else {
       console.log('✅ All compiled files exist');
