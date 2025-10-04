@@ -21,7 +21,10 @@
     "start:all": "concurrently \"npm run start:dev auth\" \"npm run start:dev user-dehive-server\" \"npm run start:dev server\" \"npm run start:dev channel-messaging\" \"npm run start:dev direct-messaging\"",
     "start:all:bg": "concurrently -k \"npm run start:dev auth\" \"npm run start:dev user-dehive-server\" \"npm run start:dev server\" \"npm run start:dev channel-messaging\" \"npm run start:dev direct-messaging\"",
     "kill:all": "pkill -f 'nest start' || true",
-    "restart:all": "npm run kill:all && sleep 2 && npm run start:all"
+    "restart:all": "npm run kill:all && sleep 2 && npm run start:all",
+    "setup": "npm install && npm run build",
+    "start:all:setup": "npm run setup && npm run start:all",
+    "postinstall": "node post-install.js"
   },
   "dependencies": {
     "@nestjs-modules/ioredis": "^2.0.2",
