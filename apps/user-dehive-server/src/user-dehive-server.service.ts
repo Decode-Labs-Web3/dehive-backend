@@ -4,6 +4,8 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { UserDehive, UserDehiveDocument } from '../schemas/user-dehive.schema';
@@ -40,13 +42,90 @@ export class UserDehiveServerService {
     private inviteLinkModel: Model<InviteLinkDocument>,
     private readonly authClient: AuthServiceClient,
     @InjectRedis() private readonly redis: Redis,
+    private readonly httpService: HttpService,
   ) {}
 
   // Helper method to find UserDehive profile (without auto-create)
   private async findUserDehiveProfile(userId: string) {
-    return await this.userDehiveModel
-      .findOne({ $or: [{ _id: userId }, { user_id: userId }] })
-      .lean();
+    return await this.userDehiveModel.findById(userId).lean();
+  }
+
+  /**
+   * Helper function to decode session_id and get user_dehive_id
+   */
+  private async getUserDehiveIdFromSession(
+    sessionId: string,
+  ): Promise<Types.ObjectId> {
+    try {
+      console.log(
+        '🔍 [GET USER DEHIVE ID] Calling auth service for session:',
+        sessionId,
+      );
+      // Call auth service to validate session and get user_dehive_id
+      const response = await firstValueFrom(
+        this.httpService.get<{
+          success: boolean;
+          data: any;
+          message?: string;
+        }>(`http://localhost:4006/auth/session/check`, {
+          headers: {
+            'x-session-id': sessionId,
+            'Content-Type': 'application/json',
+          },
+          timeout: 5000,
+        }),
+      );
+
+      console.log(
+        '🔍 [GET USER DEHIVE ID] Auth service response:',
+        response.data,
+      );
+
+      if (!response.data.success || !response.data.data) {
+        throw new NotFoundException('Invalid session for target user');
+      }
+
+      // Extract user_dehive_id from session data
+      const sessionData = response.data.data;
+      const sessionToken = sessionData.session_token;
+
+      if (!sessionToken) {
+        throw new NotFoundException('No session token for target user');
+      }
+
+      // Decode JWT to get _id (user_dehive_id)
+      const payload = sessionToken.split('.')[1];
+      const decodedPayload = JSON.parse(
+        Buffer.from(payload, 'base64').toString(),
+      );
+
+      console.log('🔍 [GET USER DEHIVE ID] JWT payload:', decodedPayload);
+      console.log(
+        '🔍 [GET USER DEHIVE ID] Available fields:',
+        Object.keys(decodedPayload),
+      );
+
+      // Try different possible field names
+      const userDehiveId =
+        decodedPayload._id ||
+        decodedPayload.user_id ||
+        decodedPayload.sub ||
+        decodedPayload.id;
+      console.log(
+        '🔍 [GET USER DEHIVE ID] Found user_dehive_id:',
+        userDehiveId,
+      );
+
+      if (!userDehiveId) {
+        throw new NotFoundException('No user_dehive_id in target session');
+      }
+
+      return new Types.ObjectId(userDehiveId);
+    } catch (error) {
+      throw new NotFoundException(
+        `Failed to get user_dehive_id from session: ${error.message}`,
+      );
+    }
   }
 
   async joinServer(
@@ -57,15 +136,24 @@ export class UserDehiveServerService {
 
     // 1. Ensure UserDehive profile exists (auto-create if needed)
 
-    const userDehiveId = userId; // user_dehive_id = user_id from Decode
+    const userDehiveId = userId; // user_dehive_id = _id from AuthGuard
 
-    const [server, isAlreadyMember, isBanned] = await Promise.all([
+    // Check if user is banned from this specific server
+    const userDehiveProfile = await this.userDehiveModel
+      .findById(userId)
+      .lean();
+
+    if (!userDehiveProfile) {
+      throw new NotFoundException('UserDehive profile not found.');
+    }
+
+    const isBannedFromServer = userDehiveProfile.banned_by_servers?.includes(
+      serverId.toString(),
+    );
+
+    const [server, isAlreadyMember] = await Promise.all([
       this.serverModel.findById(serverId).lean(),
       this.userDehiveServerModel.exists({
-        user_dehive_id: userDehiveId,
-        server_id: serverId,
-      }),
-      this.serverBanModel.exists({
         user_dehive_id: userDehiveId,
         server_id: serverId,
       }),
@@ -74,13 +162,12 @@ export class UserDehiveServerService {
     if (!server) throw new NotFoundException(`Server not found.`);
     if (isAlreadyMember)
       throw new BadRequestException('User is already a member.');
-    if (isBanned)
+    if (isBannedFromServer)
       throw new ForbiddenException('You are banned from this server.');
     const session = await this.serverModel.db.startSession();
     session.startTransaction();
     try {
       const newMembership = new this.userDehiveServerModel({
-        user_id: new Types.ObjectId(userId),
         user_dehive_id: userDehiveId,
         server_id: serverId,
       });
@@ -116,14 +203,14 @@ export class UserDehiveServerService {
   ): Promise<{ message: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // Find UserDehive by user_id
+    // Find UserDehive by _id
     const userDehive = await this.findUserDehiveProfile(userId);
 
     if (!userDehive) {
       throw new NotFoundException('UserDehive profile not found.');
     }
 
-    const userDehiveId = userId; // user_dehive_id = user_id from Decode
+    const userDehiveId = userId; // user_dehive_id = _id from AuthGuard
     const membership = await this.userDehiveServerModel.findOne({
       user_dehive_id: userDehiveId,
       server_id: serverId,
@@ -173,7 +260,7 @@ export class UserDehiveServerService {
   ): Promise<InviteLinkDocument> {
     const serverId = new Types.ObjectId(dto.server_id);
     const actorDehiveProfile = await this.userDehiveModel
-      .findOne({ user_id: new Types.ObjectId(actorBaseId) })
+      .findById(actorBaseId)
       .select('_id')
       .lean();
     if (!actorDehiveProfile)
@@ -181,7 +268,7 @@ export class UserDehiveServerService {
     const actorDehiveId = actorDehiveProfile._id;
     const isMember = await this.userDehiveServerModel.exists({
       server_id: serverId,
-      user_dehive_id: actorDehiveId,
+      user_dehive_id: actorBaseId, // Use string instead of ObjectId
     });
     if (!isMember)
       throw new ForbiddenException('Only server members can generate invites.');
@@ -223,10 +310,14 @@ export class UserDehiveServerService {
     actorBaseId: string,
   ): Promise<{ message: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
-    const targetDehiveId = new Types.ObjectId(dto.target_user_id);
+
+    // Decode target session_id to get user_dehive_id
+    const targetDehiveId = await this.getUserDehiveIdFromSession(
+      dto.target_session_id,
+    );
 
     const actorDehiveProfile = await this.userDehiveModel
-      .findOne({ user_id: new Types.ObjectId(actorBaseId) })
+      .findById(actorBaseId)
       .select('_id')
       .lean();
     if (!actorDehiveProfile)
@@ -286,6 +377,17 @@ export class UserDehiveServerService {
         { session },
       );
       if (action === 'ban') {
+        // Add server to user's banned_by_servers array
+        await this.userDehiveModel.findByIdAndUpdate(
+          targetDehiveId,
+          {
+            $addToSet: { banned_by_servers: serverId.toString() },
+            $set: { is_banned: true },
+          },
+          { session },
+        );
+
+        // Also create ban record for audit
         await this.serverBanModel.create(
           [
             {
@@ -318,10 +420,14 @@ export class UserDehiveServerService {
     actorBaseId: string,
   ): Promise<{ message: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
-    const targetDehiveId = new Types.ObjectId(dto.target_user_id);
+
+    // Decode target session_id to get user_dehive_id
+    const targetDehiveId = await this.getUserDehiveIdFromSession(
+      dto.target_session_id,
+    );
 
     const actorDehiveProfile = await this.userDehiveModel
-      .findOne({ user_id: new Types.ObjectId(actorBaseId) })
+      .findById(actorBaseId)
       .select('_id')
       .lean();
     if (!actorDehiveProfile)
@@ -338,12 +444,31 @@ export class UserDehiveServerService {
         'You do not have permission to unban members.',
       );
 
-    const result = await this.serverBanModel.deleteOne({
+    // Remove server from user's banned_by_servers array
+    const result = await this.userDehiveModel.findByIdAndUpdate(
+      targetDehiveId,
+      {
+        $pull: { banned_by_servers: serverId.toString() },
+      },
+    );
+
+    if (!result) {
+      throw new NotFoundException('User not found.');
+    }
+
+    // Check if user is still banned by any server
+    const updatedUser = await this.userDehiveModel.findById(targetDehiveId);
+    if (updatedUser && updatedUser.banned_by_servers.length === 0) {
+      await this.userDehiveModel.findByIdAndUpdate(targetDehiveId, {
+        $set: { is_banned: false },
+      });
+    }
+
+    // Also remove from ban records for audit
+    await this.serverBanModel.deleteOne({
       server_id: serverId,
       user_dehive_id: targetDehiveId,
     });
-    if (result.deletedCount === 0)
-      throw new NotFoundException('Ban record not found for this user.');
 
     return { message: 'User successfully unbanned.' };
   }
@@ -353,10 +478,14 @@ export class UserDehiveServerService {
     actorBaseId: string,
   ): Promise<UserDehiveServerDocument> {
     const serverId = new Types.ObjectId(dto.server_id);
-    const targetDehiveId = new Types.ObjectId(dto.target_user_id);
+
+    // Decode target session_id to get user_dehive_id
+    const targetDehiveId = await this.getUserDehiveIdFromSession(
+      dto.target_session_id,
+    );
 
     const actorDehiveProfile = await this.userDehiveModel
-      .findOne({ user_id: new Types.ObjectId(actorBaseId) })
+      .findById(actorBaseId)
       .select('_id')
       .lean();
     if (!actorDehiveProfile)
@@ -398,7 +527,7 @@ export class UserDehiveServerService {
     actorBaseId: string,
   ): Promise<{ message: string }> {
     const actorDehiveProfile = await this.userDehiveModel
-      .findOne({ user_id: new Types.ObjectId(actorBaseId) })
+      .findById(actorBaseId)
       .select('_id')
       .lean();
     if (!actorDehiveProfile)
@@ -426,7 +555,7 @@ export class UserDehiveServerService {
 
     // 2. Get Dehive-specific data
     const userDehive = await this.userDehiveModel
-      .findOne({ user_id: new Types.ObjectId(userId) })
+      .findById(userId)
       .select('bio status banner_color server_count last_login')
       .lean();
 
@@ -471,14 +600,14 @@ export class UserDehiveServerService {
     }
 
     // 3. Extract user IDs
-    const userIds = memberships.map((m) => m.user_id.toString());
+    const userIds = memberships.map((m) => m.user_dehive_id.toString());
 
     // 4. Batch get profiles from auth service (with cache)
     const profiles = await this.authClient.batchGetProfiles(userIds);
 
     // 5. Merge membership data with profiles
     const result = memberships.map((m) => {
-      const userId = m.user_id.toString();
+      const userId = m.user_dehive_id.toString();
       const profile = profiles[userId] || {
         username: 'Unknown User',
         display_name: 'Unknown User',
@@ -488,7 +617,6 @@ export class UserDehiveServerService {
       return {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
         membership_id: (m._id as any).toString(),
-        user_id: userId,
         user_dehive_id: m.user_dehive_id.toString(),
         username: profile.username,
         display_name: profile.display_name || profile.username,
@@ -524,12 +652,8 @@ export class UserDehiveServerService {
 
     // 2. Get Dehive profiles
     const [targetDehiveProfile] = await Promise.all([
-      this.userDehiveModel
-        .findOne({ user_id: new Types.ObjectId(targetUserId) })
-        .lean(),
-      this.userDehiveModel
-        .findOne({ user_id: new Types.ObjectId(viewerUserId) })
-        .lean(),
+      this.userDehiveModel.findById(targetUserId).lean(),
+      this.userDehiveModel.findById(viewerUserId).lean(),
     ]);
 
     // Find UserDehive for viewer

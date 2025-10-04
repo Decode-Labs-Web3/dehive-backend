@@ -1,31 +1,48 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
-import { Status } from '../enum/enum';
+import { Document, ObjectId } from 'mongoose';
 
-@Schema({ collection: 'user_dehive', timestamps: true })
-export class UserDehive {
-  @Prop({ type: String, required: true, unique: true })
-  user_id: string;
+@Schema({
+  collection: 'user_dehive',
+  timestamps: true,
+})
+export class UserDehive extends Document {
+  @Prop({
+    type: String,
+    enum: ['ADMIN', 'MODERATOR', 'USER'],
+    default: 'USER',
+  })
+  dehive_role: string;
 
-  @Prop({ type: String, maxlength: 190, default: '' })
-  bio: string;
+  @Prop({ type: String })
+  role_subscription: ObjectId;
 
-  @Prop({ type: String, maxlength: 7, default: null })
-  banner_color: string;
+  @Prop({
+    type: String,
+    enum: ['ACTIVE', 'INACTIVE', 'BANNED'],
+    default: 'ACTIVE',
+  })
+  status: string;
 
   @Prop({ type: Number, default: 0 })
   server_count: number;
 
-  @Prop({
-    type: String,
-    enum: Status,
-    default: 'offline',
-  })
-  status: string;
-
   @Prop({ type: Date })
   last_login: Date;
+
+  // Profile fields
+  @Prop({ type: String, default: '' })
+  bio: string;
+
+  @Prop({ type: String })
+  banner_color: string;
+
+  // Banned fields - track which servers have banned this user
+  @Prop({ type: Boolean, default: false })
+  is_banned: boolean;
+
+  @Prop({ type: [String], default: [] })
+  banned_by_servers: string[];
 }
 
-export type UserDehiveDocument = UserDehive & Document;
 export const UserDehiveSchema = SchemaFactory.createForClass(UserDehive);
+export type UserDehiveDocument = UserDehive & Document;

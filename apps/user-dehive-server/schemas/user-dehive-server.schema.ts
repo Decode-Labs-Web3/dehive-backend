@@ -4,9 +4,6 @@ import { ServerRole } from '../enum/enum';
 
 @Schema({ collection: 'user_dehive_server', timestamps: true })
 export class UserDehiveServer {
-  @Prop({ type: String, required: true, index: true })
-  user_id: string;
-
   @Prop({
     type: Types.ObjectId,
     ref: 'UserDehive',

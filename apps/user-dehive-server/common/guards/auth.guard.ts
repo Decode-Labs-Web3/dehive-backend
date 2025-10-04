@@ -25,7 +25,10 @@ export class AuthGuard implements CanActivate {
   private readonly logger = new Logger(AuthGuard.name);
   private readonly authServiceUrl = 'http://localhost:4006';
 
-  constructor(private readonly httpService: HttpService) {
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly reflector: Reflector,
+  ) {
     console.log(
       '🔥 [USER-DEHIVE AUTH GUARD] Constructor called - This is the user-dehive-server AuthGuard!',
     );
@@ -38,7 +41,7 @@ export class AuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
 
     // Check if route is marked as public
-    const isPublic = new Reflector().get<boolean>(
+    const isPublic = this.reflector.get<boolean>(
       PUBLIC_KEY,
       context.getHandler(),
     );
@@ -61,6 +64,10 @@ export class AuthGuard implements CanActivate {
 
     try {
       // Call auth service to validate session and get user data
+      console.log(
+        '🔐 [USER-DEHIVE AUTH GUARD] Calling auth service for session validation',
+      );
+
       const response = await firstValueFrom(
         this.httpService.get<{
           success: boolean;
@@ -83,14 +90,74 @@ export class AuthGuard implements CanActivate {
       }
 
       // Attach user to request for use in controllers
-      const session_check_response = response.data as Response<SessionCacheDoc>;
-      if (session_check_response.data) {
-        request['user'] = {
-          userId: session_check_response.data.user._id,
-          email: session_check_response.data.user.email,
-          username: session_check_response.data.user.username,
-          role: 'user' as const,
-        };
+      const session_check_response = response.data;
+      console.log(
+        '🔍 [USER-DEHIVE AUTH GUARD] Session check response:',
+        session_check_response,
+      );
+      if (session_check_response.success && session_check_response.data) {
+        // Use session data directly - no need to call /auth/profile
+        console.log('🔐 [USER-DEHIVE AUTH GUARD] Using session data directly');
+
+        // Decode JWT token to get _id
+        const sessionData = session_check_response.data;
+        const sessionToken = sessionData.session_token;
+
+        if (sessionToken) {
+          console.log(
+            '🔍 [USER-DEHIVE AUTH GUARD] Session token:',
+            sessionToken,
+          );
+
+          // Decode JWT payload (base64 decode)
+          const payload = sessionToken.split('.')[1];
+          console.log('🔍 [USER-DEHIVE AUTH GUARD] JWT payload:', payload);
+
+          const decodedPayload = JSON.parse(
+            Buffer.from(payload, 'base64').toString(),
+          );
+          console.log(
+            '🔍 [USER-DEHIVE AUTH GUARD] Decoded payload:',
+            decodedPayload,
+          );
+
+          // Try different possible field names
+          const userId =
+            decodedPayload._id ||
+            decodedPayload.user_id ||
+            decodedPayload.sub ||
+            decodedPayload.id;
+          console.log('🔍 [USER-DEHIVE AUTH GUARD] User ID:', userId);
+          console.log(
+            '🔍 [USER-DEHIVE AUTH GUARD] Available fields in JWT:',
+            Object.keys(decodedPayload),
+          );
+
+          if (userId) {
+            request['user'] = {
+              _id: userId,
+              userId: userId,
+              email: 'user@example.com',
+              username: 'user',
+              role: 'user' as const,
+            };
+            request['sessionId'] = sessionId;
+            console.log(
+              '✅ [USER-DEHIVE AUTH GUARD] User ID from JWT:',
+              request['user'],
+            );
+          } else {
+            throw new UnauthorizedException({
+              message: 'No _id in JWT token',
+              error: 'NO_ID_IN_JWT',
+            });
+          }
+        } else {
+          throw new UnauthorizedException({
+            message: 'No session token available',
+            error: 'NO_SESSION_TOKEN',
+          });
+        }
       }
 
       return true;

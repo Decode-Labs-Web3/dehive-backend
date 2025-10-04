@@ -149,7 +149,7 @@ export class DirectMessagingService {
     const uploaded = file as UploadedFileLike;
 
     if (!selfId || !Types.ObjectId.isValid(selfId)) {
-      throw new BadRequestException('Invalid or missing x-user-id header');
+      throw new BadRequestException('Invalid or missing user_dehive_id');
     }
     if (!body.conversationId || !Types.ObjectId.isValid(body.conversationId)) {
       throw new BadRequestException('Invalid conversationId');

@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsMongoId } from 'class-validator';
+import { IsNotEmpty, IsMongoId, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UnbanDto {
@@ -11,10 +11,10 @@ export class UnbanDto {
   server_id: string;
 
   @ApiProperty({
-    description: 'The Dehive Profile ID of the user to unban.',
-    example: '68c14a75264e42f26828c52d',
+    description: 'The session ID of the user to unban.',
+    example: 'c7b3ae91-ca16-4c53-bb61-21eac681457d',
   })
   @IsNotEmpty()
-  @IsMongoId()
-  target_user_id: string;
+  @IsString()
+  target_session_id: string;
 }

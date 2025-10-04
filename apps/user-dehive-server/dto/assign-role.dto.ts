@@ -1,4 +1,4 @@
-import { IsEnum, IsMongoId, IsNotEmpty } from 'class-validator';
+import { IsEnum, IsMongoId, IsNotEmpty, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { ServerRole } from '../enum/enum';
 
@@ -12,12 +12,12 @@ export class AssignRoleDto {
   server_id: string;
 
   @ApiProperty({
-    description: 'The Dehive Profile ID of the target user.',
-    example: '68c14a75264e42f26828c52d',
+    description: 'The session ID of the target user to assign role.',
+    example: 'c7b3ae91-ca16-4c53-bb61-21eac681457d',
   })
   @IsNotEmpty()
-  @IsMongoId()
-  target_user_id: string;
+  @IsString()
+  target_session_id: string;
 
   @ApiProperty({
     description: 'The new role to assign.',

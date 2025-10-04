@@ -131,9 +131,7 @@ export class MessagingService {
       throw new BadRequestException('Invalid conversationId');
     }
     if (!userId || !Types.ObjectId.isValid(userId)) {
-      throw new BadRequestException(
-        'Invalid or missing x-user-id (user_dehive_id) header',
-      );
+      throw new BadRequestException('Invalid or missing user_dehive_id');
     }
     const isMember = await this.userDehiveServerModel.exists({
       user_dehive_id: new Types.ObjectId(userId),
@@ -382,18 +380,18 @@ export class MessagingService {
       throw new BadRequestException('Invalid conversationId');
     }
 
-    // 1. Get messages with UserDehive populated to get user_id
+    // 1. Get messages with UserDehive populated
     const messages = await this.channelMessageModel
       .find({ conversationId: new Types.ObjectId(conversationId) })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .populate<{
-        senderId: { _id: Types.ObjectId; user_id: Types.ObjectId };
+        senderId: { _id: Types.ObjectId };
       }>({
         path: 'senderId',
         model: 'UserDehive',
-        select: 'user_id',
+        select: '_id',
       })
       .lean();
 
@@ -401,14 +399,13 @@ export class MessagingService {
       return [];
     }
 
-    // 2. Extract user_ids from UserDehive
+    // 2. Extract user IDs from senderId (which is UserDehive _id)
     const userIds = messages
       .map((m) => {
         const sender = m.senderId as {
           _id: Types.ObjectId;
-          user_id: Types.ObjectId;
         };
-        return sender?.user_id?.toString();
+        return sender?._id?.toString();
       })
       .filter((id): id is string => Boolean(id));
 
@@ -419,9 +416,8 @@ export class MessagingService {
     return messages.map((msg) => {
       const sender = msg.senderId as {
         _id: Types.ObjectId;
-        user_id: Types.ObjectId;
       };
-      const userId = sender?.user_id?.toString() || '';
+      const userId = sender?._id?.toString() || '';
       const profile = profiles[userId] || {
         username: 'Unknown User',
         display_name: 'Unknown User',
@@ -508,7 +504,7 @@ export class MessagingService {
       throw new BadRequestException('Invalid serverId');
     }
     if (!userId || !Types.ObjectId.isValid(userId)) {
-      throw new BadRequestException('Invalid x-user-id (user_dehive_id)');
+      throw new BadRequestException('Invalid user_dehive_id');
     }
 
     const membership = await this.userDehiveServerModel.exists({

@@ -3,7 +3,7 @@ import { AuthenticatedUser } from './authenticated-user.interface';
 
 export type SessionDoc = {
   _id: string;
-  user_id: Types.ObjectId;
+  user_dehive_id: Types.ObjectId;
   device_fingerprint_id: Types.ObjectId;
   session_token: string;
   access_token: string;

@@ -28,6 +28,20 @@ export class UserDehive extends Document {
 
   @Prop({ type: Date })
   last_login: Date;
+
+  // Profile fields
+  @Prop({ type: String, default: '' })
+  bio: string;
+
+  @Prop({ type: String })
+  banner_color: string;
+
+  // Banned fields - track which servers have banned this user
+  @Prop({ type: Boolean, default: false })
+  is_banned: boolean;
+
+  @Prop({ type: [String], default: [] })
+  banned_by_servers: string[];
 }
 
 export const UserDehiveSchema = SchemaFactory.createForClass(UserDehive);

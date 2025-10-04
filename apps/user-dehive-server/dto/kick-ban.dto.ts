@@ -11,12 +11,12 @@ export class KickBanDto {
   server_id: string;
 
   @ApiProperty({
-    description: 'The Dehive Profile ID of the target user.',
-    example: '68c14a75264e42f26828c52d',
+    description: 'The session ID of the target user to kick/ban.',
+    example: 'c7b3ae91-ca16-4c53-bb61-21eac681457d',
   })
   @IsNotEmpty()
-  @IsMongoId()
-  target_user_id: string;
+  @IsString()
+  target_session_id: string;
 
   @ApiProperty({
     description: 'The reason for the action (optional).',

@@ -7,7 +7,6 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
 import { Server, ServerDocument } from '../schemas/server.schema';
 import {
   UserDehive,
@@ -49,19 +48,6 @@ export class ServerService {
     private readonly httpService: HttpService,
   ) {}
 
-  // Helper method to fetch user profile from Auth service
-  private async fetchUserProfileFromAuth(userId: string): Promise<any> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(`http://localhost:4006/auth/profile/${userId}`),
-      );
-      return response.data;
-    } catch (error) {
-      console.error('Failed to fetch user profile from Auth service:', error);
-      return null;
-    }
-  }
-
   async createServer(
     createServerDto: CreateServerDto,
     ownerBaseId: string,
@@ -97,11 +83,23 @@ export class ServerService {
         role: ServerRole.OWNER,
       });
       await newMembership.save({ session });
+      // Update or create UserDehive profile
       await this.userDehiveModel.findByIdAndUpdate(
         ownerDehiveId,
-        { $inc: { server_count: 1 } },
+        {
+          $inc: { server_count: 1 },
+          $setOnInsert: {
+            dehive_role: 'USER',
+            status: 'ACTIVE',
+            bio: '',
+            banner_color: null,
+            is_banned: false,
+            banned_by_servers: [],
+          },
+        },
         {
           session,
+          upsert: true,
         },
       );
       await session.commitTransaction();
