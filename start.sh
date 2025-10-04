@@ -3,16 +3,14 @@
 # Dehive Backend Quick Start Script
 echo "🚀 Starting Dehive Backend..."
 
-# Check if node_modules exists
-if [ ! -d "node_modules" ]; then
-    echo "📦 Installing dependencies..."
-    npm install
-fi
+# Run setup script first
+echo "🔧 Running setup..."
+npm run setup
 
-# Check if dist folder exists
-if [ ! -d "dist" ]; then
-    echo "🔨 Building project..."
-    npm run build
+# Check if setup was successful
+if [ $? -ne 0 ]; then
+    echo "❌ Setup failed. Please check the errors above."
+    exit 1
 fi
 
 # Kill any existing processes
