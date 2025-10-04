@@ -7,11 +7,11 @@ export declare class ServerBan {
     expires_at: Date;
 }
 export type ServerBanDocument = ServerBan & Document;
-export declare const ServerBanSchema: import("mongoose").Schema<ServerBan, import("mongoose").Model<ServerBan, any, any, any, Document<unknown, any, ServerBan, any> & ServerBan & {
+export declare const ServerBanSchema: import("mongoose").Schema<ServerBan, import("mongoose").Model<ServerBan, any, any, any, Document<unknown, any, ServerBan, any, {}> & ServerBan & {
     _id: Types.ObjectId;
 } & {
     __v: number;
-}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, ServerBan, Document<unknown, {}, import("mongoose").FlatRecord<ServerBan>, {}> & import("mongoose").FlatRecord<ServerBan> & {
+}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, ServerBan, Document<unknown, {}, import("mongoose").FlatRecord<ServerBan>, {}, import("mongoose").ResolveSchemaOptions<import("mongoose").DefaultSchemaOptions>> & import("mongoose").FlatRecord<ServerBan> & {
     _id: Types.ObjectId;
 } & {
     __v: number;

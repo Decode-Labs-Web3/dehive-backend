@@ -8,11 +8,11 @@ export declare class Server {
     tags: string[];
 }
 export type ServerDocument = Server & Document;
-export declare const ServerSchema: import("mongoose").Schema<Server, import("mongoose").Model<Server, any, any, any, Document<unknown, any, Server, any> & Server & {
+export declare const ServerSchema: import("mongoose").Schema<Server, import("mongoose").Model<Server, any, any, any, Document<unknown, any, Server, any, {}> & Server & {
     _id: Types.ObjectId;
 } & {
     __v: number;
-}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, Server, Document<unknown, {}, import("mongoose").FlatRecord<Server>, {}> & import("mongoose").FlatRecord<Server> & {
+}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, Server, Document<unknown, {}, import("mongoose").FlatRecord<Server>, {}, import("mongoose").ResolveSchemaOptions<import("mongoose").DefaultSchemaOptions>> & import("mongoose").FlatRecord<Server> & {
     _id: Types.ObjectId;
 } & {
     __v: number;

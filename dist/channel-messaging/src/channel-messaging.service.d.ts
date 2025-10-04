@@ -24,18 +24,18 @@ export declare class MessagingService {
     private validateUploadSize;
     handleUpload(file: unknown, body: UploadInitDto, userId?: string): Promise<UploadResponseDto>;
     createMessage(createMessageDto: CreateMessageDto, senderId: string): Promise<ChannelMessageDocument>;
-    getOrCreateConversationByChannelId(channelId: string): Promise<import("mongoose").Document<unknown, {}, ChannelConversationDocument, {}> & ChannelConversation & import("mongoose").Document<unknown, any, any, Record<string, any>> & Required<{
+    getOrCreateConversationByChannelId(channelId: string): Promise<import("mongoose").Document<unknown, {}, ChannelConversationDocument, {}, {}> & ChannelConversation & import("mongoose").Document<unknown, any, any, Record<string, any>, {}> & Required<{
         _id: unknown;
     }> & {
         __v: number;
     }>;
     getMessagesByConversationId(conversationId: string, getMessagesDto: GetMessagesDto): Promise<any[]>;
-    editMessage(messageId: string, editorUserDehiveId: string, newContent: string): Promise<import("mongoose").Document<unknown, {}, ChannelMessageDocument, {}> & ChannelMessage & import("mongoose").Document<unknown, any, any, Record<string, any>> & Required<{
+    editMessage(messageId: string, editorUserDehiveId: string, newContent: string): Promise<import("mongoose").Document<unknown, {}, ChannelMessageDocument, {}, {}> & ChannelMessage & import("mongoose").Document<unknown, any, any, Record<string, any>, {}> & Required<{
         _id: unknown;
     }> & {
         __v: number;
     }>;
-    deleteMessage(messageId: string, requesterUserDehiveId: string): Promise<import("mongoose").Document<unknown, {}, ChannelMessageDocument, {}> & ChannelMessage & import("mongoose").Document<unknown, any, any, Record<string, any>> & Required<{
+    deleteMessage(messageId: string, requesterUserDehiveId: string): Promise<import("mongoose").Document<unknown, {}, ChannelMessageDocument, {}, {}> & ChannelMessage & import("mongoose").Document<unknown, any, any, Record<string, any>, {}> & Required<{
         _id: unknown;
     }> & {
         __v: number;

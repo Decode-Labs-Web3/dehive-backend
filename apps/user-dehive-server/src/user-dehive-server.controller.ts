@@ -106,8 +106,12 @@ export class UserDehiveServerController {
     status: 200,
     description: 'Returns a list of members.',
   })
-  getMembersInServer(@Param('serverId') serverId: string) {
-    return this.service.getMembersInServer(serverId);
+  getMembersInServer(
+    @Param('serverId') serverId: string,
+    @CurrentUser() user: any,
+  ) {
+    console.log('🎯 [GET MEMBERS CONTROLLER] User from CurrentUser:', user);
+    return this.service.getMembersInServer(serverId, user);
   }
 
   @Post('invite/generate')
@@ -270,21 +274,29 @@ export class UserDehiveServerController {
   }
 
   @Get('user/:userId/profile')
-  @Public()
   @ApiOperation({
     summary: 'Get a base user profile',
     description: 'Retrieves the basic, public profile of a user.',
+  })
+  @ApiHeader({
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
+    required: true,
   })
   @ApiParam({
     name: 'userId',
     description: 'The Base User ID of the user to view',
   })
   @ApiResponse({ status: 200, description: 'Returns the base user profile.' })
-  getUserProfile(@Param('userId') userId: string) {
-    return this.service.getUserProfile(userId);
+  getUserProfile(
+    @Param('userId') userId: string,
+    @CurrentUser() user: any,
+  ) {
+    console.log('🎯 [GET USER PROFILE CONTROLLER] User from CurrentUser:', user);
+    return this.service.getUserProfile(userId, user);
   }
 
-  @Get('profile/enriched/target/:targetUserId')
+  @Get('profile/enriched/target/:targetSessionId')
   @ApiOperation({
     summary: 'Get an enriched user profile',
     description:
@@ -296,8 +308,8 @@ export class UserDehiveServerController {
     required: true,
   })
   @ApiParam({
-    name: 'targetUserId',
-    description: 'The Base User ID of the profile to be viewed',
+    name: 'targetSessionId',
+    description: 'Session ID of the target user',
   })
   @ApiResponse({ status: 200, description: 'Returns the enriched profile.' })
   @ApiResponse({
@@ -305,9 +317,11 @@ export class UserDehiveServerController {
     description: 'Profile for target or viewer not found.',
   })
   getEnrichedUserProfile(
-    @Param('targetUserId') targetUserId: string,
+    @Param('targetSessionId') targetSessionId: string,
     @CurrentUser('userId') viewerUserId: string,
+    @CurrentUser() currentUser: any,
   ) {
-    return this.service.getEnrichedUserProfile(targetUserId, viewerUserId);
+    console.log('🎯 [GET ENRICHED PROFILE CONTROLLER] User from CurrentUser:', currentUser);
+    return this.service.getEnrichedUserProfile(targetSessionId, viewerUserId, currentUser);
   }
 }

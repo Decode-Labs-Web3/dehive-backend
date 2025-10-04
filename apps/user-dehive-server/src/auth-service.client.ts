@@ -64,6 +64,10 @@ export class AuthServiceClient {
       this.logger.debug(
         `Cache miss for user profile: ${userId}, fetching from auth service`,
       );
+      console.log('🔍 [AUTH CLIENT] Fetching profile for userId:', userId);
+      console.log('🔍 [AUTH CLIENT] Auth service URL:', this.authServiceUrl);
+      console.log('🔍 [AUTH CLIENT] Full URL:', `${this.authServiceUrl}/auth/profile/${userId}`);
+
       const response = await firstValueFrom(
         this.httpService.get<{
           success: boolean;
@@ -73,6 +77,8 @@ export class AuthServiceClient {
           timeout: 5000,
         }),
       );
+
+      console.log('🔍 [AUTH CLIENT] Response:', response.data);
 
       if (!response.data.success || !response.data.data) {
         this.logger.warn(`User profile not found in auth service: ${userId}`);

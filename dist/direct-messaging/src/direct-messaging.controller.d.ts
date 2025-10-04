@@ -11,7 +11,7 @@ export declare class DirectMessagingController {
         success: boolean;
         statusCode: number;
         message: string;
-        data: import("mongoose").Document<unknown, {}, import("../schemas/direct-message.schema").DirectMessageDocument, {}> & import("../schemas/direct-message.schema").DirectMessage & import("mongoose").Document<unknown, any, any, Record<string, any>> & Required<{
+        data: import("mongoose").Document<unknown, {}, import("../schemas/direct-message.schema").DirectMessageDocument, {}, {}> & import("../schemas/direct-message.schema").DirectMessage & import("mongoose").Document<unknown, any, any, Record<string, any>, {}> & Required<{
             _id: unknown;
         }> & {
             __v: number;
@@ -21,7 +21,7 @@ export declare class DirectMessagingController {
         success: boolean;
         statusCode: number;
         message: string;
-        data: import("mongoose").Document<unknown, {}, import("../schemas/direct-conversation.schema").DirectConversationDocument, {}> & import("../schemas/direct-conversation.schema").DirectConversation & import("mongoose").Document<unknown, any, any, Record<string, any>> & Required<{
+        data: import("mongoose").Document<unknown, {}, import("../schemas/direct-conversation.schema").DirectConversationDocument, {}, {}> & import("../schemas/direct-conversation.schema").DirectConversation & import("mongoose").Document<unknown, any, any, Record<string, any>, {}> & Required<{
             _id: unknown;
         }> & {
             __v: number;

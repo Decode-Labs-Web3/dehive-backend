@@ -106,6 +106,8 @@ export class AuthGuard implements CanActivate {
             Buffer.from(payload, 'base64').toString(),
           );
           const userId = decodedPayload.user_id;
+          console.log('🔍 [SERVER AUTH GUARD] JWT decodedPayload:', decodedPayload);
+          console.log('🔍 [SERVER AUTH GUARD] userId from JWT:', userId);
 
           if (userId) {
             request['user'] = {
@@ -117,7 +119,7 @@ export class AuthGuard implements CanActivate {
             };
             request['sessionId'] = sessionId;
             console.log(
-              '✅ [SERVER AUTH GUARD] User ID from JWT:',
+              '✅ [SERVER AUTH GUARD] User attached to request:',
               request['user'],
             );
           } else {

@@ -38,8 +38,9 @@ let UserDehiveServerController = class UserDehiveServerController {
         };
         return this.service.leaveServer(dto, userId);
     }
-    getMembersInServer(serverId) {
-        return this.service.getMembersInServer(serverId);
+    getMembersInServer(serverId, user) {
+        console.log('🎯 [GET MEMBERS CONTROLLER] User from CurrentUser:', user);
+        return this.service.getMembersInServer(serverId, user);
     }
     generateInvite(dto, actorBaseId) {
         return this.service.generateInvite(dto, actorBaseId);
@@ -62,11 +63,13 @@ let UserDehiveServerController = class UserDehiveServerController {
     updateNotification(dto, actorBaseId) {
         return this.service.updateNotification(dto, actorBaseId);
     }
-    getUserProfile(userId) {
-        return this.service.getUserProfile(userId);
+    getUserProfile(userId, user) {
+        console.log('🎯 [GET USER PROFILE CONTROLLER] User from CurrentUser:', user);
+        return this.service.getUserProfile(userId, user);
     }
-    getEnrichedUserProfile(targetUserId, viewerUserId) {
-        return this.service.getEnrichedUserProfile(targetUserId, viewerUserId);
+    getEnrichedUserProfile(targetSessionId, viewerUserId, currentUser) {
+        console.log('🎯 [GET ENRICHED PROFILE CONTROLLER] User from CurrentUser:', currentUser);
+        return this.service.getEnrichedUserProfile(targetSessionId, viewerUserId, currentUser);
     }
 };
 exports.UserDehiveServerController = UserDehiveServerController;
@@ -143,8 +146,9 @@ __decorate([
         description: 'Returns a list of members.',
     }),
     __param(0, (0, common_1.Param)('serverId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "getMembersInServer", null);
 __decorate([
@@ -304,10 +308,14 @@ __decorate([
 ], UserDehiveServerController.prototype, "updateNotification", null);
 __decorate([
     (0, common_1.Get)('user/:userId/profile'),
-    (0, auth_guard_1.Public)(),
     (0, swagger_1.ApiOperation)({
         summary: 'Get a base user profile',
         description: 'Retrieves the basic, public profile of a user.',
+    }),
+    (0, swagger_1.ApiHeader)({
+        name: 'x-session-id',
+        description: 'Session ID of authenticated user',
+        required: true,
     }),
     (0, swagger_1.ApiParam)({
         name: 'userId',
@@ -315,12 +323,13 @@ __decorate([
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns the base user profile.' }),
     __param(0, (0, common_1.Param)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "getUserProfile", null);
 __decorate([
-    (0, common_1.Get)('profile/enriched/target/:targetUserId'),
+    (0, common_1.Get)('profile/enriched/target/:targetSessionId'),
     (0, swagger_1.ApiOperation)({
         summary: 'Get an enriched user profile',
         description: 'Retrieves a social user profile, including mutual servers, from the perspective of the viewer.',
@@ -331,18 +340,19 @@ __decorate([
         required: true,
     }),
     (0, swagger_1.ApiParam)({
-        name: 'targetUserId',
-        description: 'The Base User ID of the profile to be viewed',
+        name: 'targetSessionId',
+        description: 'Session ID of the target user',
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns the enriched profile.' }),
     (0, swagger_1.ApiResponse)({
         status: 404,
         description: 'Profile for target or viewer not found.',
     }),
-    __param(0, (0, common_1.Param)('targetUserId')),
+    __param(0, (0, common_1.Param)('targetSessionId')),
     __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "getEnrichedUserProfile", null);
 exports.UserDehiveServerController = UserDehiveServerController = __decorate([

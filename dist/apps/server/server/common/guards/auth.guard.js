@@ -71,6 +71,8 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
                     const payload = sessionToken.split('.')[1];
                     const decodedPayload = JSON.parse(Buffer.from(payload, 'base64').toString());
                     const userId = decodedPayload.user_id;
+                    console.log('🔍 [SERVER AUTH GUARD] JWT decodedPayload:', decodedPayload);
+                    console.log('🔍 [SERVER AUTH GUARD] userId from JWT:', userId);
                     if (userId) {
                         request['user'] = {
                             _id: userId,
@@ -80,7 +82,7 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
                             role: 'user',
                         };
                         request['sessionId'] = sessionId;
-                        console.log('✅ [SERVER AUTH GUARD] User ID from JWT:', request['user']);
+                        console.log('✅ [SERVER AUTH GUARD] User attached to request:', request['user']);
                     }
                     else {
                         throw new common_1.UnauthorizedException({

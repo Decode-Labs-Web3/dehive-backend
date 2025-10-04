@@ -8,11 +8,11 @@ export declare class ChannelMessage {
     is_edited: boolean;
 }
 export type ChannelMessageDocument = ChannelMessage & Document;
-export declare const ChannelMessageSchema: import("mongoose").Schema<ChannelMessage, import("mongoose").Model<ChannelMessage, any, any, any, Document<unknown, any, ChannelMessage, any> & ChannelMessage & {
+export declare const ChannelMessageSchema: import("mongoose").Schema<ChannelMessage, import("mongoose").Model<ChannelMessage, any, any, any, Document<unknown, any, ChannelMessage, any, {}> & ChannelMessage & {
     _id: Types.ObjectId;
 } & {
     __v: number;
-}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, ChannelMessage, Document<unknown, {}, import("mongoose").FlatRecord<ChannelMessage>, {}> & import("mongoose").FlatRecord<ChannelMessage> & {
+}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, ChannelMessage, Document<unknown, {}, import("mongoose").FlatRecord<ChannelMessage>, {}, import("mongoose").ResolveSchemaOptions<import("mongoose").DefaultSchemaOptions>> & import("mongoose").FlatRecord<ChannelMessage> & {
     _id: Types.ObjectId;
 } & {
     __v: number;

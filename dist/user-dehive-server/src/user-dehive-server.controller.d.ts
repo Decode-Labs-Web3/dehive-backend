@@ -14,7 +14,7 @@ export declare class UserDehiveServerController {
     leaveServer(serverId: string, userId: string): Promise<{
         message: string;
     }>;
-    getMembersInServer(serverId: string): Promise<any[]>;
+    getMembersInServer(serverId: string, user: any): Promise<any[]>;
     generateInvite(dto: GenerateInviteDto, actorBaseId: string): Promise<import("../schemas/invite-link.schema").InviteLinkDocument>;
     useInvite(code: string, actorBaseId: string): Promise<{
         message: string;
@@ -32,7 +32,7 @@ export declare class UserDehiveServerController {
     updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{
         message: string;
     }>;
-    getUserProfile(userId: string): Promise<{
+    getUserProfile(userId: string, user: any): Promise<{
         dehive_data: {
             bio: string;
             status: string;
@@ -46,32 +46,28 @@ export declare class UserDehiveServerController {
             server_count: number;
             last_login: null;
         };
-        _id: string;
-        username: string;
-        display_name?: string;
-        email: string;
-        avatar?: string;
-        bio?: string;
-        created_at?: Date;
+        username: any;
+        display_name: any;
+        avatar: any;
+        email: any;
     }>;
-    getEnrichedUserProfile(targetUserId: string, viewerUserId: string): Promise<{
+    getEnrichedUserProfile(targetSessionId: string, viewerUserId: string, currentUser: any): Promise<{
         bio: string;
         status: string;
         mutual_servers_count: number;
         mutual_servers: never[];
-        _id: string;
-        username: string;
-        display_name?: string;
-        email: string;
-        avatar?: string;
-        created_at?: Date;
+        username: any;
+        display_name: any;
+        avatar: any;
+        email: any;
+        _id?: undefined;
         banner_color?: undefined;
     } | {
-        _id: string;
-        username: string;
-        display_name: string;
-        email: string;
-        avatar: string | undefined;
+        _id: import("mongoose").Types.ObjectId;
+        username: any;
+        display_name: any;
+        email: any;
+        avatar: any;
         bio: string;
         status: string;
         banner_color: string;

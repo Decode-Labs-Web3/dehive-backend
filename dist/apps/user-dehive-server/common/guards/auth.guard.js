@@ -81,15 +81,50 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
                     console.log('🔍 [USER-DEHIVE AUTH GUARD] User ID:', userId);
                     console.log('🔍 [USER-DEHIVE AUTH GUARD] Available fields in JWT:', Object.keys(decodedPayload));
                     if (userId) {
-                        request['user'] = {
-                            _id: userId,
-                            userId: userId,
-                            email: 'user@example.com',
-                            username: 'user',
-                            role: 'user',
-                        };
+                        console.log('🔍 [USER-DEHIVE AUTH GUARD] Fetching full user profile from decode service');
+                        try {
+                            const profileResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`http://localhost:4006/auth/profile/${userId}`, {
+                                headers: {
+                                    'x-session-id': sessionId,
+                                    'Content-Type': 'application/json',
+                                },
+                                timeout: 5000,
+                            }));
+                            console.log('🔍 [USER-DEHIVE AUTH GUARD] Profile response:', profileResponse.data);
+                            console.log('🔍 [USER-DEHIVE AUTH GUARD] Profile data structure:', JSON.stringify(profileResponse.data, null, 2));
+                            if (profileResponse.data.success && profileResponse.data.data) {
+                                const userProfile = profileResponse.data.data;
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile fields:', Object.keys(userProfile));
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile values:', JSON.stringify(userProfile, null, 2));
+                                request['user'] = {
+                                    _id: userId,
+                                    userId: userId,
+                                    email: userProfile.email || `${userProfile.username}@decode.com`,
+                                    username: userProfile.username || 'user',
+                                    display_name: userProfile.display_name || userProfile.username || 'user',
+                                    avatar: userProfile.avatar_ipfs_hash || null,
+                                    role: 'user',
+                                };
+                                console.log('✅ [USER-DEHIVE AUTH GUARD] Full user profile loaded:', request['user']);
+                            }
+                            else {
+                                throw new Error('Failed to fetch user profile');
+                            }
+                        }
+                        catch (profileError) {
+                            console.log('❌ [USER-DEHIVE AUTH GUARD] Failed to fetch profile, using basic info:', profileError.message);
+                            request['user'] = {
+                                _id: userId,
+                                userId: userId,
+                                email: 'user@example.com',
+                                username: 'user',
+                                display_name: 'user',
+                                avatar: null,
+                                role: 'user',
+                            };
+                        }
                         request['sessionId'] = sessionId;
-                        console.log('✅ [USER-DEHIVE AUTH GUARD] User ID from JWT:', request['user']);
+                        console.log('✅ [USER-DEHIVE AUTH GUARD] User attached to request:', request['user']);
                     }
                     else {
                         throw new common_1.UnauthorizedException({

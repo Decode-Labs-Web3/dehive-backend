@@ -9,11 +9,11 @@ export declare class ServerAuditLog {
     reason?: string;
 }
 export type ServerAuditLogDocument = ServerAuditLog & Document;
-export declare const ServerAuditLogSchema: import("mongoose").Schema<ServerAuditLog, import("mongoose").Model<ServerAuditLog, any, any, any, Document<unknown, any, ServerAuditLog, any> & ServerAuditLog & {
+export declare const ServerAuditLogSchema: import("mongoose").Schema<ServerAuditLog, import("mongoose").Model<ServerAuditLog, any, any, any, Document<unknown, any, ServerAuditLog, any, {}> & ServerAuditLog & {
     _id: Types.ObjectId;
 } & {
     __v: number;
-}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, ServerAuditLog, Document<unknown, {}, import("mongoose").FlatRecord<ServerAuditLog>, {}> & import("mongoose").FlatRecord<ServerAuditLog> & {
+}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, ServerAuditLog, Document<unknown, {}, import("mongoose").FlatRecord<ServerAuditLog>, {}, import("mongoose").ResolveSchemaOptions<import("mongoose").DefaultSchemaOptions>> & import("mongoose").FlatRecord<ServerAuditLog> & {
     _id: Types.ObjectId;
 } & {
     __v: number;

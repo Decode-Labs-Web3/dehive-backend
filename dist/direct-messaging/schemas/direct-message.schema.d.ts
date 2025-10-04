@@ -9,11 +9,11 @@ export declare class DirectMessage {
     isDeleted: boolean;
 }
 export type DirectMessageDocument = DirectMessage & Document;
-export declare const DirectMessageSchema: import("mongoose").Schema<DirectMessage, import("mongoose").Model<DirectMessage, any, any, any, Document<unknown, any, DirectMessage, any> & DirectMessage & {
+export declare const DirectMessageSchema: import("mongoose").Schema<DirectMessage, import("mongoose").Model<DirectMessage, any, any, any, Document<unknown, any, DirectMessage, any, {}> & DirectMessage & {
     _id: Types.ObjectId;
 } & {
     __v: number;
-}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, DirectMessage, Document<unknown, {}, import("mongoose").FlatRecord<DirectMessage>, {}> & import("mongoose").FlatRecord<DirectMessage> & {
+}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, DirectMessage, Document<unknown, {}, import("mongoose").FlatRecord<DirectMessage>, {}, import("mongoose").ResolveSchemaOptions<import("mongoose").DefaultSchemaOptions>> & import("mongoose").FlatRecord<DirectMessage> & {
     _id: Types.ObjectId;
 } & {
     __v: number;

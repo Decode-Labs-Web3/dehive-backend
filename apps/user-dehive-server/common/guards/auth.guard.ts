@@ -134,16 +134,61 @@ export class AuthGuard implements CanActivate {
           );
 
           if (userId) {
-            request['user'] = {
-              _id: userId,
-              userId: userId,
-              email: 'user@example.com',
-              username: 'user',
-              role: 'user' as const,
-            };
+            // Use ONLY basic user info from JWT (no need to call auth service)
+            console.log('🔍 [USER-DEHIVE AUTH GUARD] Fetching full user profile from decode service');
+
+            // Fetch full user profile from decode service
+            try {
+              const profileResponse = await firstValueFrom(
+                this.httpService.get<{
+                  success: boolean;
+                  data: any;
+                  message?: string;
+                }>(`http://localhost:4006/auth/profile/${userId}`, {
+                  headers: {
+                    'x-session-id': sessionId,
+                    'Content-Type': 'application/json',
+                  },
+                  timeout: 5000,
+                }),
+              );
+
+              console.log('🔍 [USER-DEHIVE AUTH GUARD] Profile response:', profileResponse.data);
+              console.log('🔍 [USER-DEHIVE AUTH GUARD] Profile data structure:', JSON.stringify(profileResponse.data, null, 2));
+
+              if (profileResponse.data.success && profileResponse.data.data) {
+                const userProfile = profileResponse.data.data;
+                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile fields:', Object.keys(userProfile));
+                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile values:', JSON.stringify(userProfile, null, 2));
+                request['user'] = {
+                  _id: userId,
+                  userId: userId,
+                  email: userProfile.email || `${userProfile.username}@decode.com`, // Use username-based email if no email field
+                  username: userProfile.username || 'user',
+                  display_name: userProfile.display_name || userProfile.username || 'user',
+                  avatar: userProfile.avatar_ipfs_hash || null, // Use avatar_ipfs_hash field
+                  role: 'user' as const,
+                };
+                console.log('✅ [USER-DEHIVE AUTH GUARD] Full user profile loaded:', request['user']);
+              } else {
+                throw new Error('Failed to fetch user profile');
+              }
+            } catch (profileError) {
+              console.log('❌ [USER-DEHIVE AUTH GUARD] Failed to fetch profile, using basic info:', profileError.message);
+              request['user'] = {
+                _id: userId,
+                userId: userId,
+                email: 'user@example.com',
+                username: 'user',
+                display_name: 'user',
+                avatar: null,
+                role: 'user' as const,
+              };
+            }
+
             request['sessionId'] = sessionId;
             console.log(
-              '✅ [USER-DEHIVE AUTH GUARD] User ID from JWT:',
+              '✅ [USER-DEHIVE AUTH GUARD] User attached to request:',
               request['user'],
             );
           } else {

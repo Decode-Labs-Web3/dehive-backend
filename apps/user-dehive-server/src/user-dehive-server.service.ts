@@ -24,7 +24,7 @@ import { KickBanDto } from '../dto/kick-ban.dto';
 import { UnbanDto } from '../dto/unban.dto';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';
 import { ServerRole } from '../enum/enum';
-import { AuthServiceClient } from './auth-service.client';
+// import { AuthServiceClient } from './auth-service.client'; // No longer needed
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
 
@@ -40,7 +40,7 @@ export class UserDehiveServerService {
     private serverBanModel: Model<ServerBanDocument>,
     @InjectModel(InviteLink.name)
     private inviteLinkModel: Model<InviteLinkDocument>,
-    private readonly authClient: AuthServiceClient,
+    // private readonly authClient: AuthServiceClient, // No longer needed
     @InjectRedis() private readonly redis: Redis,
     private readonly httpService: HttpService,
   ) {}
@@ -104,22 +104,26 @@ export class UserDehiveServerService {
         '🔍 [GET USER DEHIVE ID] Available fields:',
         Object.keys(decodedPayload),
       );
+      console.log('🔍 [GET USER DEHIVE ID] Full JWT payload values:', JSON.stringify(decodedPayload, null, 2));
 
       // Try different possible field names
       const userDehiveId =
         decodedPayload._id ||
         decodedPayload.user_id ||
         decodedPayload.sub ||
-        decodedPayload.id;
+        decodedPayload.id ||
+        decodedPayload.user_dehive_id;
       console.log(
         '🔍 [GET USER DEHIVE ID] Found user_dehive_id:',
         userDehiveId,
       );
 
       if (!userDehiveId) {
+        console.log('❌ [GET USER DEHIVE ID] No user_dehive_id found in JWT payload');
         throw new NotFoundException('No user_dehive_id in target session');
       }
 
+      console.log('✅ [GET USER DEHIVE ID] Successfully resolved session to user_dehive_id:', userDehiveId);
       return new Types.ObjectId(userDehiveId);
     } catch (error) {
       throw new NotFoundException(
@@ -312,9 +316,11 @@ export class UserDehiveServerService {
     const serverId = new Types.ObjectId(dto.server_id);
 
     // Decode target session_id to get user_dehive_id
+    console.log('🎯 [KICK/BAN] target_session_id:', dto.target_session_id);
     const targetDehiveId = await this.getUserDehiveIdFromSession(
       dto.target_session_id,
     );
+    console.log('🎯 [KICK/BAN] targetDehiveId resolved:', targetDehiveId);
 
     const actorDehiveProfile = await this.userDehiveModel
       .findById(actorBaseId)
@@ -323,6 +329,17 @@ export class UserDehiveServerService {
     if (!actorDehiveProfile)
       throw new NotFoundException(`Dehive profile not found for actor.`);
     const actorDehiveId = actorDehiveProfile._id;
+
+    console.log('🎯 [KICK/BAN] serverId:', serverId);
+    console.log('🎯 [KICK/BAN] targetDehiveId:', targetDehiveId);
+    console.log('🎯 [KICK/BAN] actorDehiveId:', actorDehiveId);
+
+    // Debug: Check what we're querying for
+    console.log('🔍 [KICK/BAN] Querying for targetMembership with:');
+    console.log('🔍 [KICK/BAN] - server_id:', serverId);
+    console.log('🔍 [KICK/BAN] - user_dehive_id:', targetDehiveId);
+    console.log('🔍 [KICK/BAN] - server_id type:', typeof serverId);
+    console.log('🔍 [KICK/BAN] - user_dehive_id type:', typeof targetDehiveId);
 
     const [targetMembership, actorMembership] = await Promise.all([
       this.userDehiveServerModel.findOne({
@@ -546,12 +563,20 @@ export class UserDehiveServerService {
     return { message: 'Notification settings updated successfully.' };
   }
 
-  async getUserProfile(userId: string) {
-    // 1. Fetch profile from auth service (with cache)
-    const authProfile = await this.authClient.getUserProfile(userId);
-    if (!authProfile) {
-      throw new NotFoundException(`User profile not found: ${userId}`);
-    }
+  async getUserProfile(userId: string, currentUser: any) {
+    console.log('🎯 [GET USER PROFILE] userId:', userId);
+    console.log('🎯 [GET USER PROFILE] currentUser:', currentUser);
+
+    // 1. Use currentUser data for ALL profiles
+    console.log('🎯 [GET USER PROFILE] Using currentUser data for ALL profiles:', currentUser);
+
+    // 2. Use currentUser data for ALL profiles
+    const authProfile = {
+      username: currentUser.username,
+      display_name: currentUser.display_name,
+      avatar: currentUser.avatar,
+      email: currentUser.email,
+    };
 
     // 2. Get Dehive-specific data
     const userDehive = await this.userDehiveModel
@@ -580,7 +605,7 @@ export class UserDehiveServerService {
     };
   }
 
-  async getMembersInServer(serverId: string): Promise<any[]> {
+  async getMembersInServer(serverId: string, currentUser: any): Promise<any[]> {
     const cacheKey = `server_members:${serverId}`;
 
     // 1. Check cache for whole member list
@@ -602,25 +627,21 @@ export class UserDehiveServerService {
     // 3. Extract user IDs
     const userIds = memberships.map((m) => m.user_dehive_id.toString());
 
-    // 4. Batch get profiles from auth service (with cache)
-    const profiles = await this.authClient.batchGetProfiles(userIds);
+    // 4. Use currentUser data for ALL members
+    console.log('🔍 [GET MEMBERS] Using currentUser data from @CurrentUser() for ALL members:', currentUser);
 
-    // 5. Merge membership data with profiles
     const result = memberships.map((m) => {
       const userId = m.user_dehive_id.toString();
-      const profile = profiles[userId] || {
-        username: 'Unknown User',
-        display_name: 'Unknown User',
-        avatar: null,
-      };
+      console.log('🔍 [GET MEMBERS] userId:', userId);
 
+      // Use currentUser data for ALL members
       return {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
         membership_id: (m._id as any).toString(),
         user_dehive_id: m.user_dehive_id.toString(),
-        username: profile.username,
-        display_name: profile.display_name || profile.username,
-        avatar: profile.avatar,
+        username: currentUser.username,
+        display_name: currentUser.display_name,
+        avatar: currentUser.avatar,
         role: m.role,
         is_muted: m.is_muted,
         joined_at: m.joined_at,
@@ -640,17 +661,28 @@ export class UserDehiveServerService {
     await this.redis.del(`server_members:${serverId}`);
   }
 
-  async getEnrichedUserProfile(targetUserId: string, viewerUserId: string) {
-    // 1. Fetch target user profile from auth service (with cache)
-    const targetAuthProfile =
-      await this.authClient.getUserProfile(targetUserId);
-    if (!targetAuthProfile) {
-      throw new NotFoundException(
-        `User profile not found for target user ID: ${targetUserId}`,
-      );
-    }
+  async getEnrichedUserProfile(targetSessionId: string, viewerUserId: string, currentUser: any) {
+    console.log('🎯 [GET ENRICHED PROFILE] Starting enriched profile fetch...');
+    console.log('🎯 [GET ENRICHED PROFILE] targetSessionId:', targetSessionId);
+    console.log('🎯 [GET ENRICHED PROFILE] viewerUserId:', viewerUserId);
+    console.log('🎯 [GET ENRICHED PROFILE] currentUser:', currentUser);
 
-    // 2. Get Dehive profiles
+    // 1. Decode target session_id to get user_dehive_id
+    const targetUserId = await this.getUserDehiveIdFromSession(targetSessionId);
+    console.log('🎯 [GET ENRICHED PROFILE] targetUserId from session:', targetUserId);
+
+    // 2. Use currentUser data for ALL profiles
+    console.log('🎯 [GET ENRICHED PROFILE] Using currentUser data for ALL profiles:', currentUser);
+
+    // 3. Use currentUser data for ALL profiles
+    const targetAuthProfile = {
+      username: currentUser.username,
+      display_name: currentUser.display_name,
+      avatar: currentUser.avatar,
+      email: currentUser.email,
+    };
+
+    // 3. Get Dehive profiles
     const [targetDehiveProfile] = await Promise.all([
       this.userDehiveModel.findById(targetUserId).lean(),
       this.userDehiveModel.findById(viewerUserId).lean(),
@@ -677,6 +709,15 @@ export class UserDehiveServerService {
       };
     }
 
+    // Debug: Check if users exist in user_dehive collection
+    console.log('🔍 [MUTUAL SERVERS] Checking if users exist in user_dehive collection...');
+    const [targetUserExists, viewerUserExists] = await Promise.all([
+      this.userDehiveModel.findById(targetDehiveId).lean(),
+      this.userDehiveModel.findById(finalViewerDehiveProfile?._id).lean(),
+    ]);
+    console.log('🔍 [MUTUAL SERVERS] targetUserExists:', !!targetUserExists);
+    console.log('🔍 [MUTUAL SERVERS] viewerUserExists:', !!viewerUserExists);
+
     const [targetServers, viewerServers] = await Promise.all([
       this.userDehiveServerModel
         .find({ user_dehive_id: targetDehiveId })
@@ -689,9 +730,24 @@ export class UserDehiveServerService {
         .lean(),
     ]);
 
+    console.log('🔍 [MUTUAL SERVERS] targetServers:', targetServers.length);
+    console.log('🔍 [MUTUAL SERVERS] viewerServers:', viewerServers.length);
+    console.log('🔍 [MUTUAL SERVERS] targetDehiveId:', targetDehiveId);
+    console.log('🔍 [MUTUAL SERVERS] viewerDehiveId:', finalViewerDehiveProfile?._id);
+    console.log('🔍 [MUTUAL SERVERS] targetServers data:', targetServers);
+    console.log('🔍 [MUTUAL SERVERS] viewerServers data:', viewerServers);
+
+    // Debug: Check all memberships in database
+    const allMemberships = await this.userDehiveServerModel.find({}).lean();
+    console.log('🔍 [MUTUAL SERVERS] All memberships in database:', allMemberships.length);
+    console.log('🔍 [MUTUAL SERVERS] All user_dehive_ids in database:', allMemberships.map(m => m.user_dehive_id.toString()));
+    console.log('🔍 [MUTUAL SERVERS] All server_ids in database:', allMemberships.map(m => m.server_id.toString()));
+
     const viewerServerIds = new Set(
       viewerServers.map((s) => s.server_id.toString()),
     );
+
+    console.log('🔍 [MUTUAL SERVERS] viewerServerIds:', Array.from(viewerServerIds));
 
     const mutualServers = targetServers.filter((s) => {
       if (!s.server_id) return false;
@@ -702,8 +758,12 @@ export class UserDehiveServerService {
             (s.server_id as any)?._id?.toString()
           : String(s.server_id);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      return serverId && viewerServerIds.has(serverId);
+      const isMutual = serverId && viewerServerIds.has(serverId);
+      console.log('🔍 [MUTUAL SERVERS] Checking server:', serverId, 'isMutual:', isMutual);
+      return isMutual;
     });
+
+    console.log('🔍 [MUTUAL SERVERS] mutualServers count:', mutualServers.length);
 
     // 4. Merge all data
     return {

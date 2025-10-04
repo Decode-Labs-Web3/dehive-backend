@@ -12,7 +12,6 @@ import { GenerateInviteDto } from '../dto/generate-invite.dto';
 import { KickBanDto } from '../dto/kick-ban.dto';
 import { UnbanDto } from '../dto/unban.dto';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';
-import { AuthServiceClient } from './auth-service.client';
 import { Redis } from 'ioredis';
 export declare class UserDehiveServerService {
     private userDehiveModel;
@@ -20,10 +19,9 @@ export declare class UserDehiveServerService {
     private serverModel;
     private serverBanModel;
     private inviteLinkModel;
-    private readonly authClient;
     private readonly redis;
     private readonly httpService;
-    constructor(userDehiveModel: Model<UserDehiveDocument>, userDehiveServerModel: Model<UserDehiveServerDocument>, serverModel: Model<ServerDocument>, serverBanModel: Model<ServerBanDocument>, inviteLinkModel: Model<InviteLinkDocument>, authClient: AuthServiceClient, redis: Redis, httpService: HttpService);
+    constructor(userDehiveModel: Model<UserDehiveDocument>, userDehiveServerModel: Model<UserDehiveServerDocument>, serverModel: Model<ServerDocument>, serverBanModel: Model<ServerBanDocument>, inviteLinkModel: Model<InviteLinkDocument>, redis: Redis, httpService: HttpService);
     private findUserDehiveProfile;
     private getUserDehiveIdFromSession;
     joinServer(dto: JoinServerDto, userId: string): Promise<{
@@ -46,7 +44,7 @@ export declare class UserDehiveServerService {
     updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{
         message: string;
     }>;
-    getUserProfile(userId: string): Promise<{
+    getUserProfile(userId: string, currentUser: any): Promise<{
         dehive_data: {
             bio: string;
             status: string;
@@ -60,34 +58,30 @@ export declare class UserDehiveServerService {
             server_count: number;
             last_login: null;
         };
-        _id: string;
-        username: string;
-        display_name?: string;
-        email: string;
-        avatar?: string;
-        bio?: string;
-        created_at?: Date;
+        username: any;
+        display_name: any;
+        avatar: any;
+        email: any;
     }>;
-    getMembersInServer(serverId: string): Promise<any[]>;
+    getMembersInServer(serverId: string, currentUser: any): Promise<any[]>;
     private invalidateMemberListCache;
-    getEnrichedUserProfile(targetUserId: string, viewerUserId: string): Promise<{
+    getEnrichedUserProfile(targetSessionId: string, viewerUserId: string, currentUser: any): Promise<{
         bio: string;
         status: string;
         mutual_servers_count: number;
         mutual_servers: never[];
-        _id: string;
-        username: string;
-        display_name?: string;
-        email: string;
-        avatar?: string;
-        created_at?: Date;
+        username: any;
+        display_name: any;
+        avatar: any;
+        email: any;
+        _id?: undefined;
         banner_color?: undefined;
     } | {
-        _id: string;
-        username: string;
-        display_name: string;
-        email: string;
-        avatar: string | undefined;
+        _id: Types.ObjectId;
+        username: any;
+        display_name: any;
+        email: any;
+        avatar: any;
         bio: string;
         status: string;
         banner_color: string;

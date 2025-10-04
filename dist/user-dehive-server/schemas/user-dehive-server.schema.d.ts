@@ -9,11 +9,11 @@ export declare class UserDehiveServer {
     joined_at: Date;
 }
 export type UserDehiveServerDocument = UserDehiveServer & Document;
-export declare const UserDehiveServerSchema: import("mongoose").Schema<UserDehiveServer, import("mongoose").Model<UserDehiveServer, any, any, any, Document<unknown, any, UserDehiveServer, any> & UserDehiveServer & {
+export declare const UserDehiveServerSchema: import("mongoose").Schema<UserDehiveServer, import("mongoose").Model<UserDehiveServer, any, any, any, Document<unknown, any, UserDehiveServer, any, {}> & UserDehiveServer & {
     _id: Types.ObjectId;
 } & {
     __v: number;
-}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, UserDehiveServer, Document<unknown, {}, import("mongoose").FlatRecord<UserDehiveServer>, {}> & import("mongoose").FlatRecord<UserDehiveServer> & {
+}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, UserDehiveServer, Document<unknown, {}, import("mongoose").FlatRecord<UserDehiveServer>, {}, import("mongoose").ResolveSchemaOptions<import("mongoose").DefaultSchemaOptions>> & import("mongoose").FlatRecord<UserDehiveServer> & {
     _id: Types.ObjectId;
 } & {
     __v: number;

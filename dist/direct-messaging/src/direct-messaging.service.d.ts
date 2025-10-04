@@ -18,13 +18,13 @@ export declare class DirectMessagingService {
     private getLimits;
     private validateUploadSize;
     private participantsFilter;
-    createOrGetConversation(selfId: string, dto: CreateOrGetConversationDto): Promise<import("mongoose").Document<unknown, {}, DirectConversationDocument, {}> & DirectConversation & import("mongoose").Document<unknown, any, any, Record<string, any>> & Required<{
+    createOrGetConversation(selfId: string, dto: CreateOrGetConversationDto): Promise<import("mongoose").Document<unknown, {}, DirectConversationDocument, {}, {}> & DirectConversation & import("mongoose").Document<unknown, any, any, Record<string, any>, {}> & Required<{
         _id: unknown;
     }> & {
         __v: number;
     }>;
     handleUpload(selfId: string, file: unknown, body: DirectUploadInitDto): Promise<DirectUploadResponseDto>;
-    sendMessage(selfId: string, dto: SendDirectMessageDto): Promise<import("mongoose").Document<unknown, {}, DirectMessageDocument, {}> & DirectMessage & import("mongoose").Document<unknown, any, any, Record<string, any>> & Required<{
+    sendMessage(selfId: string, dto: SendDirectMessageDto): Promise<import("mongoose").Document<unknown, {}, DirectMessageDocument, {}, {}> & DirectMessage & import("mongoose").Document<unknown, any, any, Record<string, any>, {}> & Required<{
         _id: unknown;
     }> & {
         __v: number;
@@ -39,12 +39,12 @@ export declare class DirectMessagingService {
             __v: number;
         })[];
     }>;
-    editMessage(selfId: string, messageId: string, content: string): Promise<import("mongoose").FlattenMaps<DirectMessage & import("mongoose").Document<unknown, any, any, Record<string, any>> & Required<{
+    editMessage(selfId: string, messageId: string, content: string): Promise<import("mongoose").FlattenMaps<DirectMessage & import("mongoose").Document<unknown, any, any, Record<string, any>, {}> & Required<{
         _id: unknown;
     }> & {
         __v: number;
     }>>;
-    deleteMessage(selfId: string, messageId: string): Promise<import("mongoose").FlattenMaps<DirectMessage & import("mongoose").Document<unknown, any, any, Record<string, any>> & Required<{
+    deleteMessage(selfId: string, messageId: string): Promise<import("mongoose").FlattenMaps<DirectMessage & import("mongoose").Document<unknown, any, any, Record<string, any>, {}> & Required<{
         _id: unknown;
     }> & {
         __v: number;

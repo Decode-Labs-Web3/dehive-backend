@@ -13,11 +13,11 @@ export declare class DirectUpload {
     thumbnailUrl?: string;
 }
 export type DirectUploadDocument = DirectUpload & Document;
-export declare const DirectUploadSchema: import("mongoose").Schema<DirectUpload, import("mongoose").Model<DirectUpload, any, any, any, Document<unknown, any, DirectUpload, any> & DirectUpload & {
+export declare const DirectUploadSchema: import("mongoose").Schema<DirectUpload, import("mongoose").Model<DirectUpload, any, any, any, Document<unknown, any, DirectUpload, any, {}> & DirectUpload & {
     _id: Types.ObjectId;
 } & {
     __v: number;
-}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, DirectUpload, Document<unknown, {}, import("mongoose").FlatRecord<DirectUpload>, {}> & import("mongoose").FlatRecord<DirectUpload> & {
+}, any>, {}, {}, {}, {}, import("mongoose").DefaultSchemaOptions, DirectUpload, Document<unknown, {}, import("mongoose").FlatRecord<DirectUpload>, {}, import("mongoose").ResolveSchemaOptions<import("mongoose").DefaultSchemaOptions>> & import("mongoose").FlatRecord<DirectUpload> & {
     _id: Types.ObjectId;
 } & {
     __v: number;
