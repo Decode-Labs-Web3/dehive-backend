@@ -3,7 +3,6 @@ import {
   IsNotEmpty,
   Length,
   IsOptional,
-  IsNumber,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -18,13 +17,4 @@ export class UpdateCategoryDto {
   @IsNotEmpty()
   @Length(1, 100)
   name?: string;
-
-  @ApiProperty({
-    description: 'The new position of the category in the list.',
-    example: 1,
-    required: false,
-  })
-  @IsOptional()
-  @IsNumber()
-  position?: number;
 }

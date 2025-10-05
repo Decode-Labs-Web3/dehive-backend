@@ -15,7 +15,6 @@ const swagger_1 = require("@nestjs/swagger");
 class UpdateChannelDto {
     name;
     topic;
-    position;
     category_id;
 }
 exports.UpdateChannelDto = UpdateChannelDto;
@@ -42,16 +41,6 @@ __decorate([
     (0, class_validator_1.Length)(0, 1024),
     __metadata("design:type", String)
 ], UpdateChannelDto.prototype, "topic", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: 'The new position of the channel in the list.',
-        example: 0,
-        required: false,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], UpdateChannelDto.prototype, "position", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
         description: 'The ID of the new category to move this channel to.',

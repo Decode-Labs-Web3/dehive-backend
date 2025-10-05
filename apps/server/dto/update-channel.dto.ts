@@ -3,7 +3,6 @@ import {
   IsNotEmpty,
   Length,
   IsOptional,
-  IsNumber,
   IsMongoId,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
@@ -29,15 +28,6 @@ export class UpdateChannelDto {
   @IsString()
   @Length(0, 1024)
   topic?: string;
-
-  @ApiProperty({
-    description: 'The new position of the channel in the list.',
-    example: 0,
-    required: false,
-  })
-  @IsOptional()
-  @IsNumber()
-  position?: number;
 
   @ApiProperty({
     description: 'The ID of the new category to move this channel to.',

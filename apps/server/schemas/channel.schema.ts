@@ -15,9 +15,6 @@ export class Channel {
 
   @Prop({ type: String, maxlength: 1024 })
   topic: string;
-
-  @Prop({ type: Number, default: 0 })
-  position: number;
 }
 
 export type ChannelDocument = Channel & Document;

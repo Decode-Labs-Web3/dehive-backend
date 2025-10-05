@@ -14,7 +14,6 @@ const class_validator_1 = require("class-validator");
 const swagger_1 = require("@nestjs/swagger");
 class UpdateCategoryDto {
     name;
-    position;
 }
 exports.UpdateCategoryDto = UpdateCategoryDto;
 __decorate([
@@ -29,14 +28,4 @@ __decorate([
     (0, class_validator_1.Length)(1, 100),
     __metadata("design:type", String)
 ], UpdateCategoryDto.prototype, "name", void 0);
-__decorate([
-    (0, swagger_1.ApiProperty)({
-        description: 'The new position of the category in the list.',
-        example: 1,
-        required: false,
-    }),
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsNumber)(),
-    __metadata("design:type", Number)
-], UpdateCategoryDto.prototype, "position", void 0);
 //# sourceMappingURL=update-category.dto.js.map

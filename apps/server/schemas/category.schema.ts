@@ -8,9 +8,6 @@ export class Category {
 
   @Prop({ type: Types.ObjectId, ref: 'Server', required: true })
   server_id: Types.ObjectId;
-
-  @Prop({ type: Number, default: 0 })
-  position: number;
 }
 
 export type CategoryDocument = Category & Document;

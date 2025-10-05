@@ -15,7 +15,6 @@ const mongoose_2 = require("mongoose");
 let Category = class Category {
     name;
     server_id;
-    position;
 };
 exports.Category = Category;
 __decorate([
@@ -26,10 +25,6 @@ __decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Server', required: true }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Category.prototype, "server_id", void 0);
-__decorate([
-    (0, mongoose_1.Prop)({ type: Number, default: 0 }),
-    __metadata("design:type", Number)
-], Category.prototype, "position", void 0);
 exports.Category = Category = __decorate([
     (0, mongoose_1.Schema)({ collection: 'category', timestamps: true })
 ], Category);

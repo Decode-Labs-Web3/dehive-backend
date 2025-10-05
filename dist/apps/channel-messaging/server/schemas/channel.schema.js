@@ -18,7 +18,6 @@ let Channel = class Channel {
     type;
     category_id;
     topic;
-    position;
 };
 exports.Channel = Channel;
 __decorate([
@@ -37,10 +36,6 @@ __decorate([
     (0, mongoose_1.Prop)({ type: String, maxlength: 1024 }),
     __metadata("design:type", String)
 ], Channel.prototype, "topic", void 0);
-__decorate([
-    (0, mongoose_1.Prop)({ type: Number, default: 0 }),
-    __metadata("design:type", Number)
-], Channel.prototype, "position", void 0);
 exports.Channel = Channel = __decorate([
     (0, mongoose_1.Schema)({ collection: 'channel', timestamps: true })
 ], Channel);
