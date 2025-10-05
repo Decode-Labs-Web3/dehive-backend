@@ -221,9 +221,19 @@ export class ServerService {
         'Only the server owner can create categories.',
       );
     }
+
+    // Get the current highest position in this server
+    const lastCategory = await this.categoryModel
+      .findOne({ server_id: server._id })
+      .sort({ position: -1 })
+      .exec();
+
+    const nextPosition = lastCategory ? lastCategory.position + 1 : 0;
+
     const newCategory = new this.categoryModel({
       ...createCategoryDto,
       server_id: server._id,
+      position: nextPosition,
     });
     return newCategory.save();
   }
@@ -242,12 +252,22 @@ export class ServerService {
       },
       {
         $lookup: {
-          from: 'channels',
+          from: 'channel',
           localField: '_id',
           foreignField: 'category_id',
           as: 'channels',
         },
       },
+      {
+        $addFields: {
+          channels: {
+            $sortArray: {
+              input: '$channels',
+              sortBy: { position: 1 }
+            }
+          }
+        }
+      }
     ]);
   }
 
@@ -268,6 +288,34 @@ export class ServerService {
       throw new ForbiddenException(
         'You do not have permission to edit this category.',
       );
+    }
+
+    // Handle position update logic
+    if (updateCategoryDto.position !== undefined) {
+      const newPosition = updateCategoryDto.position;
+      const serverId = category.server_id;
+
+      // Get all categories in the same server, sorted by position
+      const categoriesInServer = await this.categoryModel
+        .find({ server_id: serverId })
+        .sort({ position: 1 })
+        .exec();
+
+      // Remove the current category from the list
+      const otherCategories = categoriesInServer.filter(
+        (c: any) => c._id.toString() !== categoryId
+      );
+
+      // Insert the category at the new position
+      otherCategories.splice(newPosition, 0, category);
+
+      // Update positions for all categories
+      for (let i = 0; i < otherCategories.length; i++) {
+        await this.categoryModel.findByIdAndUpdate(
+          otherCategories[i]._id,
+          { position: i }
+        );
+      }
     }
 
     Object.assign(category, updateCategoryDto);
@@ -386,9 +434,18 @@ export class ServerService {
       );
     }
 
+    // Get the current highest position in this category
+    const lastChannel = await this.channelModel
+      .findOne({ category_id: categoryObjectId })
+      .sort({ position: -1 })
+      .exec();
+
+    const nextPosition = lastChannel ? lastChannel.position + 1 : 0;
+
     const newChannel = new this.channelModel({
       ...createChannelDto,
       category_id: categoryObjectId,
+      position: nextPosition,
     });
     return newChannel.save();
   }
@@ -465,6 +522,35 @@ export class ServerService {
       ) {
         throw new BadRequestException(
           'The new category is invalid or does not belong to the same server.',
+        );
+      }
+    }
+
+    // Handle position update logic
+    if (updateChannelDto.position !== undefined) {
+      const newPosition = updateChannelDto.position;
+      const currentPosition = channel.position;
+      const categoryId = updateChannelDto.category_id || channel.category_id;
+
+      // Get all channels in the same category, sorted by position
+      const channelsInCategory = await this.channelModel
+        .find({ category_id: categoryId })
+        .sort({ position: 1 })
+        .exec();
+
+      // Remove the current channel from the list
+      const otherChannels = channelsInCategory.filter(
+        (c: any) => c._id.toString() !== channelId
+      );
+
+      // Insert the channel at the new position
+      otherChannels.splice(newPosition, 0, channel as any);
+
+      // Update positions for all channels
+      for (let i = 0; i < otherChannels.length; i++) {
+        await this.channelModel.findByIdAndUpdate(
+          otherChannels[i]._id,
+          { position: i }
         );
       }
     }

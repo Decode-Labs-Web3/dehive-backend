@@ -231,12 +231,12 @@ let UserDehiveServerService = class UserDehiveServerService {
         console.log('🔍 [KICK/BAN] Looking for actorDehiveId:', actorDehiveId.toString());
         const [targetMembership, actorMembership] = await Promise.all([
             this.userDehiveServerModel.findOne({
-                server_id: serverId.toString(),
-                user_dehive_id: targetDehiveId.toString(),
+                server_id: serverId,
+                user_dehive_id: targetDehiveId,
             }).lean(),
             this.userDehiveServerModel.findOne({
-                server_id: serverId.toString(),
-                user_dehive_id: actorDehiveId.toString(),
+                server_id: serverId,
+                user_dehive_id: actorDehiveId,
             }).lean(),
         ]);
         console.log('🔍 [KICK/BAN] targetMembership found:', !!targetMembership);

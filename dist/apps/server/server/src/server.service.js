@@ -166,9 +166,15 @@ let ServerService = class ServerService {
         if (server.owner_id.toString() !== actorId) {
             throw new common_1.ForbiddenException('Only the server owner can create categories.');
         }
+        const lastCategory = await this.categoryModel
+            .findOne({ server_id: server._id })
+            .sort({ position: -1 })
+            .exec();
+        const nextPosition = lastCategory ? lastCategory.position + 1 : 0;
         const newCategory = new this.categoryModel({
             ...createCategoryDto,
             server_id: server._id,
+            position: nextPosition,
         });
         return newCategory.save();
     }
@@ -186,12 +192,22 @@ let ServerService = class ServerService {
             },
             {
                 $lookup: {
-                    from: 'channels',
+                    from: 'channel',
                     localField: '_id',
                     foreignField: 'category_id',
                     as: 'channels',
                 },
             },
+            {
+                $addFields: {
+                    channels: {
+                        $sortArray: {
+                            input: '$channels',
+                            sortBy: { position: 1 }
+                        }
+                    }
+                }
+            }
         ]);
     }
     async updateCategory(categoryId, actorId, updateCategoryDto) {
@@ -202,6 +218,19 @@ let ServerService = class ServerService {
         const server = await this.findServerById(category.server_id.toString());
         if (server.owner_id.toString() !== actorId) {
             throw new common_1.ForbiddenException('You do not have permission to edit this category.');
+        }
+        if (updateCategoryDto.position !== undefined) {
+            const newPosition = updateCategoryDto.position;
+            const serverId = category.server_id;
+            const categoriesInServer = await this.categoryModel
+                .find({ server_id: serverId })
+                .sort({ position: 1 })
+                .exec();
+            const otherCategories = categoriesInServer.filter((c) => c._id.toString() !== categoryId);
+            otherCategories.splice(newPosition, 0, category);
+            for (let i = 0; i < otherCategories.length; i++) {
+                await this.categoryModel.findByIdAndUpdate(otherCategories[i]._id, { position: i });
+            }
         }
         Object.assign(category, updateCategoryDto);
         return category.save();
@@ -281,9 +310,15 @@ let ServerService = class ServerService {
             console.log('❌ [CREATE CHANNEL] actorMembership role:', actorMembership?.role);
             throw new common_1.ForbiddenException('Only server owners and moderators can create channels.');
         }
+        const lastChannel = await this.channelModel
+            .findOne({ category_id: categoryObjectId })
+            .sort({ position: -1 })
+            .exec();
+        const nextPosition = lastChannel ? lastChannel.position + 1 : 0;
         const newChannel = new this.channelModel({
             ...createChannelDto,
             category_id: categoryObjectId,
+            position: nextPosition,
         });
         return newChannel.save();
     }
@@ -333,6 +368,20 @@ let ServerService = class ServerService {
             if (!newCategory ||
                 newCategory.server_id.toString() !== category.server_id.toString()) {
                 throw new common_1.BadRequestException('The new category is invalid or does not belong to the same server.');
+            }
+        }
+        if (updateChannelDto.position !== undefined) {
+            const newPosition = updateChannelDto.position;
+            const currentPosition = channel.position;
+            const categoryId = updateChannelDto.category_id || channel.category_id;
+            const channelsInCategory = await this.channelModel
+                .find({ category_id: categoryId })
+                .sort({ position: 1 })
+                .exec();
+            const otherChannels = channelsInCategory.filter((c) => c._id.toString() !== channelId);
+            otherChannels.splice(newPosition, 0, channel);
+            for (let i = 0; i < otherChannels.length; i++) {
+                await this.channelModel.findByIdAndUpdate(otherChannels[i]._id, { position: i });
             }
         }
         const updatedChannel = await this.channelModel
