@@ -32,7 +32,7 @@ export declare class UserDehiveServerController {
     updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{
         message: string;
     }>;
-    getUserProfile(userId: string, user: any): Promise<{
+    getUserProfile(targetSessionId: string, user: any): Promise<{
         dehive_data: {
             bio: string;
             status: string;

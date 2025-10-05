@@ -160,15 +160,23 @@ export class AuthGuard implements CanActivate {
                 const userProfile = profileResponse.data.data;
                 console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile fields:', Object.keys(userProfile));
                 console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile values:', JSON.stringify(userProfile, null, 2));
-                request['user'] = {
-                  _id: userId,
-                  userId: userId,
-                  email: userProfile.email || `${userProfile.username}@decode.com`, // Use username-based email if no email field
-                  username: userProfile.username || 'user',
-                  display_name: userProfile.display_name || userProfile.username || 'user',
-                  avatar: userProfile.avatar_ipfs_hash || null, // Use avatar_ipfs_hash field
-                  role: 'user' as const,
-                };
+                 // Use email from userProfile directly (same as username and display_name)
+                 const realEmail = userProfile.email;
+                 console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.email:', realEmail);
+                 console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.username:', userProfile.username);
+                 console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.display_name:', userProfile.display_name);
+                 console.log('🔍 [USER-DEHIVE AUTH GUARD] All userProfile keys:', Object.keys(userProfile));
+                 console.log('🔍 [USER-DEHIVE AUTH GUARD] Full userProfile:', JSON.stringify(userProfile, null, 2));
+
+                 request['user'] = {
+                   _id: userId,
+                   userId: userId,
+                   email: realEmail,
+                   username: userProfile.username,
+                   display_name: userProfile.display_name,
+                   avatar: userProfile.avatar_ipfs_hash,
+                   role: 'user' as const,
+                 };
                 console.log('✅ [USER-DEHIVE AUTH GUARD] Full user profile loaded:', request['user']);
               } else {
                 throw new Error('Failed to fetch user profile');

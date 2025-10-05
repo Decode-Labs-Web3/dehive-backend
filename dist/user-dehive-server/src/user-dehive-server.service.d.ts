@@ -44,6 +44,25 @@ export declare class UserDehiveServerService {
     updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{
         message: string;
     }>;
+    getUserProfileBySession(targetSessionId: string, currentUser: any): Promise<{
+        dehive_data: {
+            bio: string;
+            status: string;
+            banner_color: string;
+            server_count: number;
+            last_login: Date;
+        } | {
+            bio: string;
+            status: string;
+            banner_color: null;
+            server_count: number;
+            last_login: null;
+        };
+        username: any;
+        display_name: any;
+        avatar: any;
+        email: any;
+    }>;
     getUserProfile(userId: string, currentUser: any): Promise<{
         dehive_data: {
             bio: string;

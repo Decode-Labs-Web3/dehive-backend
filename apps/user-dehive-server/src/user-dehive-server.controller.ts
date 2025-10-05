@@ -273,27 +273,27 @@ export class UserDehiveServerController {
     return this.service.updateNotification(dto, actorBaseId);
   }
 
-  @Get('user/:userId/profile')
+  @Get('profile/target/:targetSessionId')
   @ApiOperation({
     summary: 'Get a base user profile',
-    description: 'Retrieves the basic, public profile of a user.',
+    description: 'Retrieves the basic, public profile of a user using session IDs.',
   })
   @ApiHeader({
     name: 'x-session-id',
-    description: 'Session ID of authenticated user',
+    description: 'Session ID of authenticated user (viewer)',
     required: true,
   })
   @ApiParam({
-    name: 'userId',
-    description: 'The Base User ID of the user to view',
+    name: 'targetSessionId',
+    description: 'Session ID of the target user to view',
   })
   @ApiResponse({ status: 200, description: 'Returns the base user profile.' })
   getUserProfile(
-    @Param('userId') userId: string,
+    @Param('targetSessionId') targetSessionId: string,
     @CurrentUser() user: any,
   ) {
     console.log('🎯 [GET USER PROFILE CONTROLLER] User from CurrentUser:', user);
-    return this.service.getUserProfile(userId, user);
+    return this.service.getUserProfileBySession(targetSessionId, user);
   }
 
   @Get('profile/enriched/target/:targetSessionId')

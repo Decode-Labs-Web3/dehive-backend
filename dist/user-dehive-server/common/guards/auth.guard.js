@@ -96,13 +96,19 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
                                 const userProfile = profileResponse.data.data;
                                 console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile fields:', Object.keys(userProfile));
                                 console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile values:', JSON.stringify(userProfile, null, 2));
+                                const realEmail = userProfile.email;
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.email:', realEmail);
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.username:', userProfile.username);
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.display_name:', userProfile.display_name);
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] All userProfile keys:', Object.keys(userProfile));
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] Full userProfile:', JSON.stringify(userProfile, null, 2));
                                 request['user'] = {
                                     _id: userId,
                                     userId: userId,
-                                    email: userProfile.email || `${userProfile.username}@decode.com`,
-                                    username: userProfile.username || 'user',
-                                    display_name: userProfile.display_name || userProfile.username || 'user',
-                                    avatar: userProfile.avatar_ipfs_hash || null,
+                                    email: realEmail,
+                                    username: userProfile.username,
+                                    display_name: userProfile.display_name,
+                                    avatar: userProfile.avatar_ipfs_hash,
                                     role: 'user',
                                 };
                                 console.log('✅ [USER-DEHIVE AUTH GUARD] Full user profile loaded:', request['user']);
