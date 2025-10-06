@@ -63,13 +63,13 @@ let UserDehiveServerController = class UserDehiveServerController {
     updateNotification(dto, actorBaseId) {
         return this.service.updateNotification(dto, actorBaseId);
     }
-    getUserProfile(targetSessionId, user) {
+    getUserProfile(userDehiveId, user) {
         console.log('🎯 [GET USER PROFILE CONTROLLER] User from CurrentUser:', user);
-        return this.service.getUserProfileBySession(targetSessionId, user);
+        return this.service.getUserProfileByUserDehiveId(userDehiveId, user);
     }
-    getEnrichedUserProfile(targetSessionId, viewerUserId, currentUser) {
+    getEnrichedUserProfile(userDehiveId, viewerUserId, currentUser) {
         console.log('🎯 [GET ENRICHED PROFILE CONTROLLER] User from CurrentUser:', currentUser);
-        return this.service.getEnrichedUserProfile(targetSessionId, viewerUserId, currentUser);
+        return this.service.getEnrichedUserProfileByUserDehiveId(userDehiveId, viewerUserId, currentUser);
     }
 };
 exports.UserDehiveServerController = UserDehiveServerController;
@@ -307,10 +307,10 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "updateNotification", null);
 __decorate([
-    (0, common_1.Get)('profile/target/:targetSessionId'),
+    (0, common_1.Get)('profile/target/:user_dehive_id'),
     (0, swagger_1.ApiOperation)({
         summary: 'Get a base user profile',
-        description: 'Retrieves the basic, public profile of a user using session IDs.',
+        description: 'Retrieves the basic, public profile of a user using user_dehive_id.',
     }),
     (0, swagger_1.ApiHeader)({
         name: 'x-session-id',
@@ -318,18 +318,18 @@ __decorate([
         required: true,
     }),
     (0, swagger_1.ApiParam)({
-        name: 'targetSessionId',
-        description: 'Session ID of the target user to view',
+        name: 'user_dehive_id',
+        description: 'User Dehive ID of the target user to view',
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns the base user profile.' }),
-    __param(0, (0, common_1.Param)('targetSessionId')),
+    __param(0, (0, common_1.Param)('user_dehive_id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "getUserProfile", null);
 __decorate([
-    (0, common_1.Get)('profile/enriched/target/:targetSessionId'),
+    (0, common_1.Get)('profile/enriched/target/:user_dehive_id'),
     (0, swagger_1.ApiOperation)({
         summary: 'Get an enriched user profile',
         description: 'Retrieves a social user profile, including mutual servers, from the perspective of the viewer.',
@@ -340,15 +340,15 @@ __decorate([
         required: true,
     }),
     (0, swagger_1.ApiParam)({
-        name: 'targetSessionId',
-        description: 'Session ID of the target user',
+        name: 'user_dehive_id',
+        description: 'User Dehive ID of the target user',
     }),
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns the enriched profile.' }),
     (0, swagger_1.ApiResponse)({
         status: 404,
         description: 'Profile for target or viewer not found.',
     }),
-    __param(0, (0, common_1.Param)('targetSessionId')),
+    __param(0, (0, common_1.Param)('user_dehive_id')),
     __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
     __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),

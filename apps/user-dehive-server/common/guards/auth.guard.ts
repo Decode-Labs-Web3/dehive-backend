@@ -62,6 +62,10 @@ export class AuthGuard implements CanActivate {
       });
     }
 
+    // Extract user_dehive_id from URL if available
+    const userDehiveId = this.extractUserDehiveIdFromUrl(request);
+    console.log('🚨 [USER-DEHIVE AUTH GUARD] userDehiveId from URL:', userDehiveId);
+
     try {
       // Call auth service to validate session and get user data
       console.log(
@@ -134,17 +138,23 @@ export class AuthGuard implements CanActivate {
           );
 
           if (userId) {
-            // Use ONLY basic user info from JWT (no need to call auth service)
-            console.log('🔍 [USER-DEHIVE AUTH GUARD] Fetching full user profile from decode service');
+            // Fetch full user profile from auth service
+            console.log('🔍 [USER-DEHIVE AUTH GUARD] Fetching full user profile from auth service');
 
-            // Fetch full user profile from decode service
+            // If userDehiveId is provided, use it instead of userId from session
+            const targetUserId = userDehiveId || userId;
+            console.log('🔍 [USER-DEHIVE AUTH GUARD] Using targetUserId:', targetUserId);
+            console.log('🔍 [USER-DEHIVE AUTH GUARD] userDehiveId from URL:', userDehiveId);
+            console.log('🔍 [USER-DEHIVE AUTH GUARD] userId from session:', userId);
+
             try {
+              // Fetch full user profile from auth service
               const profileResponse = await firstValueFrom(
                 this.httpService.get<{
                   success: boolean;
                   data: any;
                   message?: string;
-                }>(`http://localhost:4006/auth/profile/${userId}`, {
+                }>(`${this.authServiceUrl}/auth/profile/${targetUserId}`, {
                   headers: {
                     'x-session-id': sessionId,
                     'Content-Type': 'application/json',
@@ -153,45 +163,35 @@ export class AuthGuard implements CanActivate {
                 }),
               );
 
-              console.log('🔍 [USER-DEHIVE AUTH GUARD] Profile response:', profileResponse.data);
-              console.log('🔍 [USER-DEHIVE AUTH GUARD] Profile data structure:', JSON.stringify(profileResponse.data, null, 2));
-
               if (profileResponse.data.success && profileResponse.data.data) {
-                const userProfile = profileResponse.data.data;
-                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile fields:', Object.keys(userProfile));
-                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile values:', JSON.stringify(userProfile, null, 2));
-                 // Use email from userProfile directly (same as username and display_name)
-                 const realEmail = userProfile.email;
-                 console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.email:', realEmail);
-                 console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.username:', userProfile.username);
-                 console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.display_name:', userProfile.display_name);
-                 console.log('🔍 [USER-DEHIVE AUTH GUARD] All userProfile keys:', Object.keys(userProfile));
-                 console.log('🔍 [USER-DEHIVE AUTH GUARD] Full userProfile:', JSON.stringify(userProfile, null, 2));
+                const userData = profileResponse.data.data;
+                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile from auth service:', userData);
+                console.log('🔍 [USER-DEHIVE AUTH GUARD] Available fields in userData:', Object.keys(userData));
+                console.log('🔍 [USER-DEHIVE AUTH GUARD] userData.email:', userData.email);
+                console.log('🔍 [USER-DEHIVE AUTH GUARD] userData.avatar_ipfs_hash:', userData.avatar_ipfs_hash);
 
-                 request['user'] = {
-                   _id: userId,
-                   userId: userId,
-                   email: realEmail,
-                   username: userProfile.username,
-                   display_name: userProfile.display_name,
-                   avatar: userProfile.avatar_ipfs_hash,
-                   role: 'user' as const,
-                 };
+                request['user'] = {
+                  _id: targetUserId,
+                  userId: targetUserId,
+                  email: userData.email || '',
+                  username: userData.username || '',
+                  display_name: userData.display_name || '',
+                  avatar: userData.avatar_ipfs_hash || '',
+                  role: userData.role || 'user',
+                };
                 console.log('✅ [USER-DEHIVE AUTH GUARD] Full user profile loaded:', request['user']);
               } else {
-                throw new Error('Failed to fetch user profile');
+                throw new UnauthorizedException({
+                  message: 'Failed to fetch user profile',
+                  error: 'PROFILE_FETCH_FAILED',
+                });
               }
             } catch (profileError) {
-              console.log('❌ [USER-DEHIVE AUTH GUARD] Failed to fetch profile, using basic info:', profileError.message);
-              request['user'] = {
-                _id: userId,
-                userId: userId,
-                email: 'user@example.com',
-                username: 'user',
-                display_name: 'user',
-                avatar: null,
-                role: 'user' as const,
-              };
+              console.error('❌ [USER-DEHIVE AUTH GUARD] Error fetching user profile:', profileError);
+              throw new UnauthorizedException({
+                message: 'Failed to fetch user profile',
+                error: 'PROFILE_FETCH_ERROR',
+              });
             }
 
             request['sessionId'] = sessionId;
@@ -251,5 +251,29 @@ export class AuthGuard implements CanActivate {
 
   private extractSessionIdFromHeader(request: Request): string | undefined {
     return request.headers['x-session-id'] as string | undefined;
+  }
+
+  private extractUserDehiveIdFromUrl(request: Request): string | undefined {
+    const url = request.url;
+    console.log('🚨 [USER-DEHIVE AUTH GUARD] Full URL:', url);
+
+    // Extract user_dehive_id from URL patterns like:
+    // /api/memberships/profile/target/{user_dehive_id}
+    // /api/memberships/profile/enriched/target/{user_dehive_id}
+    const targetMatch = url.match(/\/profile\/target\/([^\/\?]+)/);
+    const enrichedMatch = url.match(/\/profile\/enriched\/target\/([^\/\?]+)/);
+
+    if (targetMatch) {
+      console.log('🚨 [USER-DEHIVE AUTH GUARD] Found user_dehive_id from target route:', targetMatch[1]);
+      return targetMatch[1];
+    }
+
+    if (enrichedMatch) {
+      console.log('🚨 [USER-DEHIVE AUTH GUARD] Found user_dehive_id from enriched route:', enrichedMatch[1]);
+      return enrichedMatch[1];
+    }
+
+    console.log('🚨 [USER-DEHIVE AUTH GUARD] No user_dehive_id found in URL');
+    return undefined;
   }
 }

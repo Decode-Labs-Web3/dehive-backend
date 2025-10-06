@@ -47,6 +47,8 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
                 error: 'MISSING_SESSION_ID',
             });
         }
+        const userDehiveId = this.extractUserDehiveIdFromUrl(request);
+        console.log('🚨 [USER-DEHIVE AUTH GUARD] userDehiveId from URL:', userDehiveId);
         try {
             console.log('🔐 [USER-DEHIVE AUTH GUARD] Calling auth service for session validation');
             const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/session/check`, {
@@ -81,53 +83,49 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
                     console.log('🔍 [USER-DEHIVE AUTH GUARD] User ID:', userId);
                     console.log('🔍 [USER-DEHIVE AUTH GUARD] Available fields in JWT:', Object.keys(decodedPayload));
                     if (userId) {
-                        console.log('🔍 [USER-DEHIVE AUTH GUARD] Fetching full user profile from decode service');
+                        console.log('🔍 [USER-DEHIVE AUTH GUARD] Fetching full user profile from auth service');
+                        const targetUserId = userDehiveId || userId;
+                        console.log('🔍 [USER-DEHIVE AUTH GUARD] Using targetUserId:', targetUserId);
+                        console.log('🔍 [USER-DEHIVE AUTH GUARD] userDehiveId from URL:', userDehiveId);
+                        console.log('🔍 [USER-DEHIVE AUTH GUARD] userId from session:', userId);
                         try {
-                            const profileResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`http://localhost:4006/auth/profile/${userId}`, {
+                            const profileResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/profile/${targetUserId}`, {
                                 headers: {
                                     'x-session-id': sessionId,
                                     'Content-Type': 'application/json',
                                 },
                                 timeout: 5000,
                             }));
-                            console.log('🔍 [USER-DEHIVE AUTH GUARD] Profile response:', profileResponse.data);
-                            console.log('🔍 [USER-DEHIVE AUTH GUARD] Profile data structure:', JSON.stringify(profileResponse.data, null, 2));
                             if (profileResponse.data.success && profileResponse.data.data) {
-                                const userProfile = profileResponse.data.data;
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile fields:', Object.keys(userProfile));
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile values:', JSON.stringify(userProfile, null, 2));
-                                const realEmail = userProfile.email;
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.email:', realEmail);
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.username:', userProfile.username);
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userProfile.display_name:', userProfile.display_name);
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] All userProfile keys:', Object.keys(userProfile));
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] Full userProfile:', JSON.stringify(userProfile, null, 2));
+                                const userData = profileResponse.data.data;
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile from auth service:', userData);
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] Available fields in userData:', Object.keys(userData));
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userData.email:', userData.email);
+                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userData.avatar_ipfs_hash:', userData.avatar_ipfs_hash);
                                 request['user'] = {
-                                    _id: userId,
-                                    userId: userId,
-                                    email: realEmail,
-                                    username: userProfile.username,
-                                    display_name: userProfile.display_name,
-                                    avatar: userProfile.avatar_ipfs_hash,
-                                    role: 'user',
+                                    _id: targetUserId,
+                                    userId: targetUserId,
+                                    email: userData.email || '',
+                                    username: userData.username || '',
+                                    display_name: userData.display_name || '',
+                                    avatar: userData.avatar_ipfs_hash || '',
+                                    role: userData.role || 'user',
                                 };
                                 console.log('✅ [USER-DEHIVE AUTH GUARD] Full user profile loaded:', request['user']);
                             }
                             else {
-                                throw new Error('Failed to fetch user profile');
+                                throw new common_1.UnauthorizedException({
+                                    message: 'Failed to fetch user profile',
+                                    error: 'PROFILE_FETCH_FAILED',
+                                });
                             }
                         }
                         catch (profileError) {
-                            console.log('❌ [USER-DEHIVE AUTH GUARD] Failed to fetch profile, using basic info:', profileError.message);
-                            request['user'] = {
-                                _id: userId,
-                                userId: userId,
-                                email: 'user@example.com',
-                                username: 'user',
-                                display_name: 'user',
-                                avatar: null,
-                                role: 'user',
-                            };
+                            console.error('❌ [USER-DEHIVE AUTH GUARD] Error fetching user profile:', profileError);
+                            throw new common_1.UnauthorizedException({
+                                message: 'Failed to fetch user profile',
+                                error: 'PROFILE_FETCH_ERROR',
+                            });
                         }
                         request['sessionId'] = sessionId;
                         console.log('✅ [USER-DEHIVE AUTH GUARD] User attached to request:', request['user']);
@@ -174,6 +172,22 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
     }
     extractSessionIdFromHeader(request) {
         return request.headers['x-session-id'];
+    }
+    extractUserDehiveIdFromUrl(request) {
+        const url = request.url;
+        console.log('🚨 [USER-DEHIVE AUTH GUARD] Full URL:', url);
+        const targetMatch = url.match(/\/profile\/target\/([^\/\?]+)/);
+        const enrichedMatch = url.match(/\/profile\/enriched\/target\/([^\/\?]+)/);
+        if (targetMatch) {
+            console.log('🚨 [USER-DEHIVE AUTH GUARD] Found user_dehive_id from target route:', targetMatch[1]);
+            return targetMatch[1];
+        }
+        if (enrichedMatch) {
+            console.log('🚨 [USER-DEHIVE AUTH GUARD] Found user_dehive_id from enriched route:', enrichedMatch[1]);
+            return enrichedMatch[1];
+        }
+        console.log('🚨 [USER-DEHIVE AUTH GUARD] No user_dehive_id found in URL');
+        return undefined;
     }
 };
 exports.AuthGuard = AuthGuard;

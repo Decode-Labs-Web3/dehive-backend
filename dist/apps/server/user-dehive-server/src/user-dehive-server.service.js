@@ -416,6 +416,36 @@ let UserDehiveServerService = class UserDehiveServerService {
                 },
         };
     }
+    async getUserProfileByUserDehiveId(userDehiveId, currentUser) {
+        console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
+        console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
+        const isOwnProfile = userDehiveId === currentUser._id;
+        console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] isOwnProfile:', isOwnProfile);
+        const userDehive = await this.userDehiveModel
+            .findById(userDehiveId)
+            .select('bio status banner_color server_count last_login')
+            .lean();
+        return {
+            username: currentUser.username,
+            display_name: currentUser.display_name,
+            avatar: currentUser.avatar,
+            dehive_data: userDehive
+                ? {
+                    bio: userDehive.bio,
+                    status: userDehive.status,
+                    banner_color: userDehive.banner_color,
+                    server_count: userDehive.server_count,
+                    last_login: userDehive.last_login,
+                }
+                : {
+                    bio: '',
+                    status: 'offline',
+                    banner_color: null,
+                    server_count: 0,
+                    last_login: null,
+                },
+        };
+    }
     async getUserProfile(userId, currentUser) {
         console.log('🎯 [GET USER PROFILE] userId:', userId);
         console.log('🎯 [GET USER PROFILE] currentUser:', currentUser);
@@ -491,7 +521,7 @@ let UserDehiveServerService = class UserDehiveServerService {
         const targetUserId = await this.getUserDehiveIdFromSession(targetSessionId);
         console.log('🎯 [GET ENRICHED PROFILE] targetUserId from session:', targetUserId);
         console.log('🎯 [GET ENRICHED PROFILE] Using currentUser data for ALL profiles:', currentUser);
-        const targetAuthProfile = {
+        const authProfile = {
             username: currentUser.username,
             display_name: currentUser.display_name,
             avatar: currentUser.avatar,
@@ -508,7 +538,9 @@ let UserDehiveServerService = class UserDehiveServerService {
         const targetDehiveId = targetDehiveProfile?._id;
         if (!targetDehiveId) {
             return {
-                ...targetAuthProfile,
+                username: currentUser.username,
+                display_name: currentUser.display_name,
+                avatar: currentUser.avatar,
                 bio: '',
                 status: 'offline',
                 mutual_servers_count: 0,
@@ -578,10 +610,107 @@ let UserDehiveServerService = class UserDehiveServerService {
         console.log('🔍 [MUTUAL SERVERS] mutualServers count:', mutualServers.length);
         return {
             _id: targetUserId,
-            username: targetAuthProfile.username,
-            display_name: targetAuthProfile.display_name || targetAuthProfile.username,
-            email: targetAuthProfile.email,
-            avatar: targetAuthProfile.avatar,
+            username: currentUser.username,
+            display_name: currentUser.display_name,
+            avatar: currentUser.avatar,
+            bio: targetDehiveProfile?.bio || '',
+            status: targetDehiveProfile?.status || 'offline',
+            banner_color: targetDehiveProfile?.banner_color,
+            mutual_servers_count: mutualServers.length,
+            mutual_servers: mutualServers.map((s) => s.server_id),
+        };
+    }
+    async getEnrichedUserProfileByUserDehiveId(userDehiveId, viewerUserId, currentUser) {
+        console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] Starting enriched profile fetch...');
+        console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
+        console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] viewerUserId:', viewerUserId);
+        console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
+        const [targetDehiveProfile] = await Promise.all([
+            this.userDehiveModel.findById(userDehiveId).lean(),
+            this.userDehiveModel.findById(viewerUserId).lean(),
+        ]);
+        const finalViewerDehiveProfile = await this.findUserDehiveProfile(viewerUserId);
+        if (!finalViewerDehiveProfile) {
+            throw new common_1.NotFoundException('Viewer UserDehive profile not found.');
+        }
+        const targetDehiveId = targetDehiveProfile?._id;
+        if (!targetDehiveId) {
+            return {
+                username: currentUser.username,
+                display_name: currentUser.display_name,
+                avatar: currentUser.avatar,
+                bio: '',
+                status: 'offline',
+                mutual_servers_count: 0,
+                mutual_servers: [],
+            };
+        }
+        console.log('🔍 [MUTUAL SERVERS] Checking if users exist in user_dehive collection...');
+        const [targetUserExists, viewerUserExists] = await Promise.all([
+            this.userDehiveModel.findById(targetDehiveId).lean(),
+            this.userDehiveModel.findById(finalViewerDehiveProfile?._id).lean(),
+        ]);
+        console.log('🔍 [MUTUAL SERVERS] targetUserExists:', !!targetUserExists);
+        console.log('🔍 [MUTUAL SERVERS] viewerUserExists:', !!viewerUserExists);
+        const [targetServers, viewerServers] = await Promise.all([
+            this.userDehiveServerModel
+                .find({ user_dehive_id: targetDehiveId.toString() })
+                .select('server_id')
+                .populate('server_id', 'name icon')
+                .lean(),
+            this.userDehiveServerModel
+                .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
+                .select('server_id')
+                .lean(),
+        ]);
+        console.log('🔍 [MUTUAL SERVERS] targetDehiveId for query:', targetDehiveId);
+        console.log('🔍 [MUTUAL SERVERS] viewerDehiveId for query:', finalViewerDehiveProfile?._id);
+        console.log('🔍 [MUTUAL SERVERS] targetServers query result:', targetServers.length);
+        console.log('🔍 [MUTUAL SERVERS] viewerServers query result:', viewerServers.length);
+        console.log('🔍 [MUTUAL SERVERS] targetServers data:', JSON.stringify(targetServers, null, 2));
+        console.log('🔍 [MUTUAL SERVERS] viewerServers data:', JSON.stringify(viewerServers, null, 2));
+        console.log('🔍 [MUTUAL SERVERS] Trying alternative queries...');
+        const targetServersAlt = await this.userDehiveServerModel
+            .find({ user_dehive_id: targetDehiveId.toString() })
+            .select('server_id')
+            .lean();
+        const viewerServersAlt = await this.userDehiveServerModel
+            .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
+            .select('server_id')
+            .lean();
+        console.log('🔍 [MUTUAL SERVERS] targetServersAlt (string):', targetServersAlt.length);
+        console.log('🔍 [MUTUAL SERVERS] viewerServersAlt (string):', viewerServersAlt.length);
+        console.log('🔍 [MUTUAL SERVERS] targetServersAlt data:', JSON.stringify(targetServersAlt, null, 2));
+        console.log('🔍 [MUTUAL SERVERS] viewerServersAlt data:', JSON.stringify(viewerServersAlt, null, 2));
+        console.log('🔍 [MUTUAL SERVERS] targetServers:', targetServers.length);
+        console.log('🔍 [MUTUAL SERVERS] viewerServers:', viewerServers.length);
+        console.log('🔍 [MUTUAL SERVERS] targetDehiveId:', targetDehiveId);
+        console.log('🔍 [MUTUAL SERVERS] viewerDehiveId:', finalViewerDehiveProfile?._id);
+        console.log('🔍 [MUTUAL SERVERS] targetServers data:', targetServers);
+        console.log('🔍 [MUTUAL SERVERS] viewerServers data:', viewerServers);
+        const allMemberships = await this.userDehiveServerModel.find({}).lean();
+        console.log('🔍 [MUTUAL SERVERS] All memberships in database:', allMemberships.length);
+        console.log('🔍 [MUTUAL SERVERS] All user_dehive_ids in database:', allMemberships.map(m => m.user_dehive_id.toString()));
+        console.log('🔍 [MUTUAL SERVERS] All server_ids in database:', allMemberships.map(m => m.server_id.toString()));
+        const viewerServerIds = new Set(viewerServers.map((s) => s.server_id.toString()));
+        console.log('🔍 [MUTUAL SERVERS] viewerServerIds:', Array.from(viewerServerIds));
+        const mutualServers = targetServers.filter((s) => {
+            if (!s.server_id)
+                return false;
+            const serverId = typeof s.server_id === 'object'
+                ?
+                    s.server_id?._id?.toString()
+                : String(s.server_id);
+            const isMutual = serverId && viewerServerIds.has(serverId);
+            console.log('🔍 [MUTUAL SERVERS] Checking server:', serverId, 'isMutual:', isMutual);
+            return isMutual;
+        });
+        console.log('🔍 [MUTUAL SERVERS] mutualServers count:', mutualServers.length);
+        return {
+            _id: userDehiveId,
+            username: currentUser.username,
+            display_name: currentUser.display_name,
+            avatar: currentUser.avatar,
             bio: targetDehiveProfile?.bio || '',
             status: targetDehiveProfile?.status || 'offline',
             banner_color: targetDehiveProfile?.banner_color,

@@ -50,6 +50,7 @@ export class UserDehiveServerService {
     return await this.userDehiveModel.findById(userId).lean();
   }
 
+
   /**
    * Helper function to decode session_id and get user_dehive_id
    */
@@ -594,7 +595,7 @@ export class UserDehiveServerService {
     const isOwnProfile = targetUserId.toString() === currentUser._id;
     console.log('🎯 [GET USER PROFILE BY SESSION] isOwnProfile:', isOwnProfile);
 
-    // 3. Always use currentUser data for now (we'll fetch target user data later)
+    // 3. Use currentUser data directly
     const authProfile = {
       username: currentUser.username,
       display_name: currentUser.display_name,
@@ -629,6 +630,43 @@ export class UserDehiveServerService {
     };
   }
 
+  async getUserProfileByUserDehiveId(userDehiveId: string, currentUser: any) {
+    console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
+    console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
+
+    // 1. Check if viewing own profile or different user
+    const isOwnProfile = userDehiveId === currentUser._id;
+    console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] isOwnProfile:', isOwnProfile);
+
+    // 2. Get target user's Dehive profile
+    const userDehive = await this.userDehiveModel
+      .findById(userDehiveId)
+      .select('bio status banner_color server_count last_login')
+      .lean();
+
+    if (!userDehive) {
+      throw new NotFoundException('User profile not found');
+    }
+
+    // 3. Use currentUser data (which should contain target user's data from AuthGuard)
+    const username = currentUser.username;
+    const display_name = currentUser.display_name;
+    const avatar = currentUser.avatar;
+
+    return {
+      username,
+      display_name,
+      avatar,
+      dehive_data: {
+        bio: userDehive.bio || '',
+        status: userDehive.status || 'offline',
+        banner_color: userDehive.banner_color,
+        server_count: userDehive.server_count || 0,
+        last_login: userDehive.last_login,
+      },
+    };
+  }
+
   async getUserProfile(userId: string, currentUser: any) {
     console.log('🎯 [GET USER PROFILE] userId:', userId);
     console.log('🎯 [GET USER PROFILE] currentUser:', currentUser);
@@ -636,7 +674,19 @@ export class UserDehiveServerService {
     // 1. Use currentUser data for ALL profiles
     console.log('🎯 [GET USER PROFILE] Using currentUser data for ALL profiles:', currentUser);
 
-    // 2. Use currentUser data for ALL profiles
+    // 2. Get target user's auth data from decode service
+    let targetUserAuthData = null;
+    try {
+      const decodeServiceUrl = process.env.DECODE_SERVICE_URL || 'http://localhost:4006';
+      const response = await firstValueFrom(
+        this.httpService.get(`${decodeServiceUrl}/auth/profile/${userId}`)
+      );
+      targetUserAuthData = response.data.data;
+    } catch (error) {
+      console.error('Error getting target user auth data:', error);
+      targetUserAuthData = currentUser;
+    }
+
     const authProfile = {
       username: currentUser.username,
       display_name: currentUser.display_name,
@@ -700,7 +750,7 @@ export class UserDehiveServerService {
       const userId = m.user_dehive_id.toString();
       console.log('🔍 [GET MEMBERS] userId:', userId);
 
-      // Use currentUser data for ALL members
+      // Use currentUser data for ALL members (currentUser contains viewer's data)
       return {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
         membership_id: (m._id as any).toString(),
@@ -740,8 +790,8 @@ export class UserDehiveServerService {
     // 2. Use currentUser data for ALL profiles
     console.log('🎯 [GET ENRICHED PROFILE] Using currentUser data for ALL profiles:', currentUser);
 
-    // 3. Use currentUser data for ALL profiles
-    const targetAuthProfile = {
+    // 3. Use currentUser data directly
+    const authProfile = {
       username: currentUser.username,
       display_name: currentUser.display_name,
       avatar: currentUser.avatar,
@@ -767,7 +817,9 @@ export class UserDehiveServerService {
     if (!targetDehiveId) {
       // User exists in auth but not in Dehive yet
       return {
-        ...targetAuthProfile,
+        username: currentUser.username,
+        display_name: currentUser.display_name,
+        avatar: currentUser.avatar,
         bio: '',
         status: 'offline',
         mutual_servers_count: 0,
@@ -856,14 +908,134 @@ export class UserDehiveServerService {
     // 4. Merge all data
     return {
       _id: targetUserId,
-      username: targetAuthProfile.username,
-      display_name:
-        targetAuthProfile.display_name || targetAuthProfile.username,
-      email: targetAuthProfile.email,
-      avatar: targetAuthProfile.avatar,
+      username: currentUser.username,
+      display_name: currentUser.display_name,
+      avatar: currentUser.avatar,
       bio: targetDehiveProfile?.bio || '',
       status: targetDehiveProfile?.status || 'offline',
       banner_color: targetDehiveProfile?.banner_color,
+      mutual_servers_count: mutualServers.length,
+      mutual_servers: mutualServers.map((s) => s.server_id),
+    };
+  }
+
+  async getEnrichedUserProfileByUserDehiveId(userDehiveId: string, viewerUserId: string, currentUser: any) {
+    console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] Starting enriched profile fetch...');
+    console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
+    console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] viewerUserId:', viewerUserId);
+    console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
+
+    // 2. Get target user's Dehive profile
+    const targetDehiveProfile = await this.userDehiveModel
+      .findById(userDehiveId)
+      .select('bio status banner_color')
+      .lean();
+
+    if (!targetDehiveProfile) {
+      throw new NotFoundException('Target user profile not found');
+    }
+
+    // 3. Get viewer's Dehive profile for mutual servers calculation
+    const finalViewerDehiveProfile = await this.findUserDehiveProfile(viewerUserId);
+    if (!finalViewerDehiveProfile) {
+      throw new NotFoundException('Viewer UserDehive profile not found.');
+    }
+
+    // 4. Use currentUser data (which should contain target user's data from AuthGuard)
+    const username = currentUser.username;
+    const display_name = currentUser.display_name;
+    const avatar = currentUser.avatar;
+
+    // 5. Get mutual servers
+    const targetDehiveId = targetDehiveProfile._id;
+
+    // Debug: Check if users exist in user_dehive collection
+    console.log('🔍 [MUTUAL SERVERS] Checking if users exist in user_dehive collection...');
+    const [targetUserExists, viewerUserExists] = await Promise.all([
+      this.userDehiveModel.findById(targetDehiveId).lean(),
+      this.userDehiveModel.findById(finalViewerDehiveProfile?._id).lean(),
+    ]);
+    console.log('🔍 [MUTUAL SERVERS] targetUserExists:', !!targetUserExists);
+    console.log('🔍 [MUTUAL SERVERS] viewerUserExists:', !!viewerUserExists);
+
+    const [targetServers, viewerServers] = await Promise.all([
+      this.userDehiveServerModel
+        .find({ user_dehive_id: targetDehiveId.toString() })
+        .select('server_id')
+        .populate('server_id', 'name icon')
+        .lean(),
+      this.userDehiveServerModel
+        .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
+        .select('server_id')
+        .lean(),
+    ]);
+
+    console.log('🔍 [MUTUAL SERVERS] targetDehiveId for query:', targetDehiveId);
+    console.log('🔍 [MUTUAL SERVERS] viewerDehiveId for query:', finalViewerDehiveProfile?._id);
+    console.log('🔍 [MUTUAL SERVERS] targetServers query result:', targetServers.length);
+    console.log('🔍 [MUTUAL SERVERS] viewerServers query result:', viewerServers.length);
+    console.log('🔍 [MUTUAL SERVERS] targetServers data:', JSON.stringify(targetServers, null, 2));
+    console.log('🔍 [MUTUAL SERVERS] viewerServers data:', JSON.stringify(viewerServers, null, 2));
+
+    // Debug: Try different query approaches for mutual servers
+    console.log('🔍 [MUTUAL SERVERS] Trying alternative queries...');
+    const targetServersAlt = await this.userDehiveServerModel
+      .find({ user_dehive_id: targetDehiveId.toString() })
+      .select('server_id')
+      .lean();
+    const viewerServersAlt = await this.userDehiveServerModel
+      .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
+      .select('server_id')
+      .lean();
+    console.log('🔍 [MUTUAL SERVERS] targetServersAlt (string):', targetServersAlt.length);
+    console.log('🔍 [MUTUAL SERVERS] viewerServersAlt (string):', viewerServersAlt.length);
+    console.log('🔍 [MUTUAL SERVERS] targetServersAlt data:', JSON.stringify(targetServersAlt, null, 2));
+    console.log('🔍 [MUTUAL SERVERS] viewerServersAlt data:', JSON.stringify(viewerServersAlt, null, 2));
+
+    console.log('🔍 [MUTUAL SERVERS] targetServers:', targetServers.length);
+    console.log('🔍 [MUTUAL SERVERS] viewerServers:', viewerServers.length);
+    console.log('🔍 [MUTUAL SERVERS] targetDehiveId:', targetDehiveId);
+    console.log('🔍 [MUTUAL SERVERS] viewerDehiveId:', finalViewerDehiveProfile?._id);
+    console.log('🔍 [MUTUAL SERVERS] targetServers data:', targetServers);
+    console.log('🔍 [MUTUAL SERVERS] viewerServers data:', viewerServers);
+
+    // Debug: Check all memberships in database
+    const allMemberships = await this.userDehiveServerModel.find({}).lean();
+    console.log('🔍 [MUTUAL SERVERS] All memberships in database:', allMemberships.length);
+    console.log('🔍 [MUTUAL SERVERS] All user_dehive_ids in database:', allMemberships.map(m => m.user_dehive_id.toString()));
+    console.log('🔍 [MUTUAL SERVERS] All server_ids in database:', allMemberships.map(m => m.server_id.toString()));
+
+    const viewerServerIds = new Set(
+      viewerServers.map((s) => s.server_id.toString()),
+    );
+
+    console.log('🔍 [MUTUAL SERVERS] viewerServerIds:', Array.from(viewerServerIds));
+
+    const mutualServers = targetServers.filter((s) => {
+      if (!s.server_id) return false;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const serverId =
+        typeof s.server_id === 'object'
+          ? // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+            (s.server_id as any)?._id?.toString()
+          : String(s.server_id);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      const isMutual = serverId && viewerServerIds.has(serverId);
+      console.log('🔍 [MUTUAL SERVERS] Checking server:', serverId, 'isMutual:', isMutual);
+      return isMutual;
+    });
+
+    console.log('🔍 [MUTUAL SERVERS] mutualServers count:', mutualServers.length);
+
+    // 6. Merge all data
+    return {
+      _id: userDehiveId,
+      username,
+      display_name,
+      avatar,
+      bio: targetDehiveProfile.bio || '',
+      status: targetDehiveProfile.status || 'offline',
+      banner_color: targetDehiveProfile.banner_color,
       mutual_servers_count: mutualServers.length,
       mutual_servers: mutualServers.map((s) => s.server_id),
     };
