@@ -14,7 +14,7 @@ const class_validator_1 = require("class-validator");
 const swagger_1 = require("@nestjs/swagger");
 class KickBanDto {
     server_id;
-    target_session_id;
+    target_user_dehive_id;
     reason;
 }
 exports.KickBanDto = KickBanDto;
@@ -29,13 +29,13 @@ __decorate([
 ], KickBanDto.prototype, "server_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The session ID of the target user to kick/ban.',
-        example: 'c7b3ae91-ca16-4c53-bb61-21eac681457d',
+        description: 'The user_dehive_id of the target user to kick/ban.',
+        example: '68c5adb6ec465897d540c58',
     }),
     (0, class_validator_1.IsNotEmpty)(),
-    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
-], KickBanDto.prototype, "target_session_id", void 0);
+], KickBanDto.prototype, "target_user_dehive_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
         description: 'The reason for the action (optional).',

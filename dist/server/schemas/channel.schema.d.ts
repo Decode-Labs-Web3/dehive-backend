@@ -5,7 +5,6 @@ export declare class Channel {
     type: ChannelType;
     category_id: Types.ObjectId;
     topic: string;
-    position: number;
 }
 export type ChannelDocument = Channel & Document;
 export declare const ChannelSchema: import("mongoose").Schema<Channel, import("mongoose").Model<Channel, any, any, any, Document<unknown, any, Channel, any, {}> & Channel & {

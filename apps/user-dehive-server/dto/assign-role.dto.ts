@@ -12,12 +12,12 @@ export class AssignRoleDto {
   server_id: string;
 
   @ApiProperty({
-    description: 'The session ID of the target user to assign role.',
-    example: 'c7b3ae91-ca16-4c53-bb61-21eac681457d',
+    description: 'The user_dehive_id of the target user to assign role.',
+    example: '68c5adb6ec465897d540c58',
   })
   @IsNotEmpty()
-  @IsString()
-  target_session_id: string;
+  @IsMongoId()
+  target_user_dehive_id: string;
 
   @ApiProperty({
     description: 'The new role to assign.',

@@ -11,4 +11,5 @@ export declare class AuthGuard implements CanActivate {
     constructor(httpService: HttpService, reflector: Reflector);
     canActivate(context: ExecutionContext): Promise<boolean>;
     private extractSessionIdFromHeader;
+    private extractUserDehiveIdFromUrl;
 }

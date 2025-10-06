@@ -180,18 +180,13 @@ let ServerService = class ServerService {
                 },
             },
             {
-                $sort: {
-                    position: 1,
-                },
-            },
-            {
                 $lookup: {
-                    from: 'channels',
+                    from: 'channel',
                     localField: '_id',
                     foreignField: 'category_id',
                     as: 'channels',
                 },
-            },
+            }
         ]);
     }
     async updateCategory(categoryId, actorId, updateCategoryDto) {

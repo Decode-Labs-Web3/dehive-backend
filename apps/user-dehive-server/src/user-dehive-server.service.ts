@@ -316,11 +316,9 @@ export class UserDehiveServerService {
   ): Promise<{ message: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // Decode target session_id to get user_dehive_id
-    console.log('🎯 [KICK/BAN] target_session_id:', dto.target_session_id);
-    const targetDehiveId = await this.getUserDehiveIdFromSession(
-      dto.target_session_id,
-    );
+    // Use target_user_dehive_id directly
+    console.log('🎯 [KICK/BAN] target_user_dehive_id:', dto.target_user_dehive_id);
+    const targetDehiveId = new Types.ObjectId(dto.target_user_dehive_id);
     console.log('🎯 [KICK/BAN] targetDehiveId resolved:', targetDehiveId);
 
     const actorDehiveProfile = await this.userDehiveModel
@@ -351,15 +349,21 @@ export class UserDehiveServerService {
     console.log('🔍 [KICK/BAN] Looking for targetDehiveId:', targetDehiveId.toString());
     console.log('🔍 [KICK/BAN] Looking for actorDehiveId:', actorDehiveId.toString());
 
-          // Use ObjectId comparison directly (not string)
+          // Try both ObjectId and string comparison for user_dehive_id
           const [targetMembership, actorMembership] = await Promise.all([
             this.userDehiveServerModel.findOne({
               server_id: serverId,
-              user_dehive_id: targetDehiveId,
+              $or: [
+                { user_dehive_id: targetDehiveId },
+                { user_dehive_id: targetDehiveId.toString() }
+              ]
             }).lean(),
             this.userDehiveServerModel.findOne({
               server_id: serverId,
-              user_dehive_id: actorDehiveId,
+              $or: [
+                { user_dehive_id: actorDehiveId },
+                { user_dehive_id: actorDehiveId.toString() }
+              ]
             }).lean(),
           ]);
 
@@ -458,10 +462,8 @@ export class UserDehiveServerService {
   ): Promise<{ message: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // Decode target session_id to get user_dehive_id
-    const targetDehiveId = await this.getUserDehiveIdFromSession(
-      dto.target_session_id,
-    );
+    // Use target_user_dehive_id directly
+    const targetDehiveId = new Types.ObjectId(dto.target_user_dehive_id);
 
     const actorDehiveProfile = await this.userDehiveModel
       .findById(actorBaseId)
@@ -473,7 +475,10 @@ export class UserDehiveServerService {
 
     const hasPermission = await this.userDehiveServerModel.exists({
       server_id: serverId,
-      user_dehive_id: actorDehiveId,
+      $or: [
+        { user_dehive_id: actorDehiveId },
+        { user_dehive_id: actorDehiveId.toString() }
+      ],
       role: { $in: [ServerRole.OWNER, ServerRole.MODERATOR] },
     });
     if (!hasPermission)
@@ -516,10 +521,8 @@ export class UserDehiveServerService {
   ): Promise<UserDehiveServerDocument> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // Decode target session_id to get user_dehive_id
-    const targetDehiveId = await this.getUserDehiveIdFromSession(
-      dto.target_session_id,
-    );
+    // Use target_user_dehive_id directly
+    const targetDehiveId = new Types.ObjectId(dto.target_user_dehive_id);
 
     const actorDehiveProfile = await this.userDehiveModel
       .findById(actorBaseId)
@@ -532,11 +535,17 @@ export class UserDehiveServerService {
     const [targetMembership, actorMembership] = await Promise.all([
       this.userDehiveServerModel.findOne({
         server_id: serverId,
-        user_dehive_id: targetDehiveId,
+        $or: [
+          { user_dehive_id: targetDehiveId },
+          { user_dehive_id: targetDehiveId.toString() }
+        ]
       }),
       this.userDehiveServerModel.findOne({
         server_id: serverId,
-        user_dehive_id: actorDehiveId,
+        $or: [
+          { user_dehive_id: actorDehiveId },
+          { user_dehive_id: actorDehiveId.toString() }
+        ]
       }),
     ]);
     if (!targetMembership)
@@ -574,7 +583,10 @@ export class UserDehiveServerService {
     const result = await this.userDehiveServerModel.updateOne(
       {
         server_id: new Types.ObjectId(dto.server_id),
-        user_dehive_id: actorDehiveId,
+        $or: [
+          { user_dehive_id: actorDehiveId },
+          { user_dehive_id: actorDehiveId.toString() }
+        ]
       },
       { $set: { is_muted: dto.is_muted } },
     );

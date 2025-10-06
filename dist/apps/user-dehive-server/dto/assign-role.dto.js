@@ -15,7 +15,7 @@ const swagger_1 = require("@nestjs/swagger");
 const enum_1 = require("../enum/enum");
 class AssignRoleDto {
     server_id;
-    target_session_id;
+    target_user_dehive_id;
     role;
 }
 exports.AssignRoleDto = AssignRoleDto;
@@ -30,13 +30,13 @@ __decorate([
 ], AssignRoleDto.prototype, "server_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The session ID of the target user to assign role.',
-        example: 'c7b3ae91-ca16-4c53-bb61-21eac681457d',
+        description: 'The user_dehive_id of the target user to assign role.',
+        example: '68c5adb6ec465897d540c58',
     }),
     (0, class_validator_1.IsNotEmpty)(),
-    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
-], AssignRoleDto.prototype, "target_session_id", void 0);
+], AssignRoleDto.prototype, "target_user_dehive_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
         description: 'The new role to assign.',

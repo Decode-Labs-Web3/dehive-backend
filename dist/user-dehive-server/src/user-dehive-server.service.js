@@ -204,8 +204,8 @@ let UserDehiveServerService = class UserDehiveServerService {
     }
     async kickOrBan(dto, action, actorBaseId) {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
-        console.log('🎯 [KICK/BAN] target_session_id:', dto.target_session_id);
-        const targetDehiveId = await this.getUserDehiveIdFromSession(dto.target_session_id);
+        console.log('🎯 [KICK/BAN] target_user_dehive_id:', dto.target_user_dehive_id);
+        const targetDehiveId = new mongoose_2.Types.ObjectId(dto.target_user_dehive_id);
         console.log('🎯 [KICK/BAN] targetDehiveId resolved:', targetDehiveId);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
@@ -232,11 +232,17 @@ let UserDehiveServerService = class UserDehiveServerService {
         const [targetMembership, actorMembership] = await Promise.all([
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
-                user_dehive_id: targetDehiveId,
+                $or: [
+                    { user_dehive_id: targetDehiveId },
+                    { user_dehive_id: targetDehiveId.toString() }
+                ]
             }).lean(),
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
-                user_dehive_id: actorDehiveId,
+                $or: [
+                    { user_dehive_id: actorDehiveId },
+                    { user_dehive_id: actorDehiveId.toString() }
+                ]
             }).lean(),
         ]);
         console.log('🔍 [KICK/BAN] targetMembership found:', !!targetMembership);
@@ -298,7 +304,7 @@ let UserDehiveServerService = class UserDehiveServerService {
     }
     async unbanMember(dto, actorBaseId) {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
-        const targetDehiveId = await this.getUserDehiveIdFromSession(dto.target_session_id);
+        const targetDehiveId = new mongoose_2.Types.ObjectId(dto.target_user_dehive_id);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
             .select('_id')
@@ -308,7 +314,10 @@ let UserDehiveServerService = class UserDehiveServerService {
         const actorDehiveId = actorDehiveProfile._id;
         const hasPermission = await this.userDehiveServerModel.exists({
             server_id: serverId,
-            user_dehive_id: actorDehiveId,
+            $or: [
+                { user_dehive_id: actorDehiveId },
+                { user_dehive_id: actorDehiveId.toString() }
+            ],
             role: { $in: [enum_1.ServerRole.OWNER, enum_1.ServerRole.MODERATOR] },
         });
         if (!hasPermission)
@@ -333,7 +342,7 @@ let UserDehiveServerService = class UserDehiveServerService {
     }
     async assignRole(dto, actorBaseId) {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
-        const targetDehiveId = await this.getUserDehiveIdFromSession(dto.target_session_id);
+        const targetDehiveId = new mongoose_2.Types.ObjectId(dto.target_user_dehive_id);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
             .select('_id')
@@ -344,11 +353,17 @@ let UserDehiveServerService = class UserDehiveServerService {
         const [targetMembership, actorMembership] = await Promise.all([
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
-                user_dehive_id: targetDehiveId,
+                $or: [
+                    { user_dehive_id: targetDehiveId },
+                    { user_dehive_id: targetDehiveId.toString() }
+                ]
             }),
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
-                user_dehive_id: actorDehiveId,
+                $or: [
+                    { user_dehive_id: actorDehiveId },
+                    { user_dehive_id: actorDehiveId.toString() }
+                ]
             }),
         ]);
         if (!targetMembership)
@@ -374,7 +389,10 @@ let UserDehiveServerService = class UserDehiveServerService {
         const actorDehiveId = actorDehiveProfile._id;
         const result = await this.userDehiveServerModel.updateOne({
             server_id: new mongoose_2.Types.ObjectId(dto.server_id),
-            user_dehive_id: actorDehiveId,
+            $or: [
+                { user_dehive_id: actorDehiveId },
+                { user_dehive_id: actorDehiveId.toString() }
+            ]
         }, { $set: { is_muted: dto.is_muted } });
         if (result.matchedCount === 0)
             throw new common_1.NotFoundException('Membership not found.');
@@ -416,10 +434,48 @@ let UserDehiveServerService = class UserDehiveServerService {
                 },
         };
     }
+    async getUserProfileByUserDehiveId(userDehiveId, currentUser) {
+        console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
+        console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
+        const isOwnProfile = userDehiveId === currentUser._id;
+        console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] isOwnProfile:', isOwnProfile);
+        const userDehive = await this.userDehiveModel
+            .findById(userDehiveId)
+            .select('bio status banner_color server_count last_login')
+            .lean();
+        if (!userDehive) {
+            throw new common_1.NotFoundException('User profile not found');
+        }
+        const username = currentUser.username;
+        const display_name = currentUser.display_name;
+        const avatar = currentUser.avatar;
+        return {
+            username,
+            display_name,
+            avatar,
+            dehive_data: {
+                bio: userDehive.bio || '',
+                status: userDehive.status || 'offline',
+                banner_color: userDehive.banner_color,
+                server_count: userDehive.server_count || 0,
+                last_login: userDehive.last_login,
+            },
+        };
+    }
     async getUserProfile(userId, currentUser) {
         console.log('🎯 [GET USER PROFILE] userId:', userId);
         console.log('🎯 [GET USER PROFILE] currentUser:', currentUser);
         console.log('🎯 [GET USER PROFILE] Using currentUser data for ALL profiles:', currentUser);
+        let targetUserAuthData = null;
+        try {
+            const decodeServiceUrl = process.env.DECODE_SERVICE_URL || 'http://localhost:4006';
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${decodeServiceUrl}/auth/profile/${userId}`));
+            targetUserAuthData = response.data.data;
+        }
+        catch (error) {
+            console.error('Error getting target user auth data:', error);
+            targetUserAuthData = currentUser;
+        }
         const authProfile = {
             username: currentUser.username,
             display_name: currentUser.display_name,
@@ -491,7 +547,7 @@ let UserDehiveServerService = class UserDehiveServerService {
         const targetUserId = await this.getUserDehiveIdFromSession(targetSessionId);
         console.log('🎯 [GET ENRICHED PROFILE] targetUserId from session:', targetUserId);
         console.log('🎯 [GET ENRICHED PROFILE] Using currentUser data for ALL profiles:', currentUser);
-        const targetAuthProfile = {
+        const authProfile = {
             username: currentUser.username,
             display_name: currentUser.display_name,
             avatar: currentUser.avatar,
@@ -508,7 +564,9 @@ let UserDehiveServerService = class UserDehiveServerService {
         const targetDehiveId = targetDehiveProfile?._id;
         if (!targetDehiveId) {
             return {
-                ...targetAuthProfile,
+                username: currentUser.username,
+                display_name: currentUser.display_name,
+                avatar: currentUser.avatar,
                 bio: '',
                 status: 'offline',
                 mutual_servers_count: 0,
@@ -578,13 +636,105 @@ let UserDehiveServerService = class UserDehiveServerService {
         console.log('🔍 [MUTUAL SERVERS] mutualServers count:', mutualServers.length);
         return {
             _id: targetUserId,
-            username: targetAuthProfile.username,
-            display_name: targetAuthProfile.display_name || targetAuthProfile.username,
-            email: targetAuthProfile.email,
-            avatar: targetAuthProfile.avatar,
+            username: currentUser.username,
+            display_name: currentUser.display_name,
+            avatar: currentUser.avatar,
             bio: targetDehiveProfile?.bio || '',
             status: targetDehiveProfile?.status || 'offline',
             banner_color: targetDehiveProfile?.banner_color,
+            mutual_servers_count: mutualServers.length,
+            mutual_servers: mutualServers.map((s) => s.server_id),
+        };
+    }
+    async getEnrichedUserProfileByUserDehiveId(userDehiveId, viewerUserId, currentUser) {
+        console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] Starting enriched profile fetch...');
+        console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
+        console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] viewerUserId:', viewerUserId);
+        console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
+        const targetDehiveProfile = await this.userDehiveModel
+            .findById(userDehiveId)
+            .select('bio status banner_color')
+            .lean();
+        if (!targetDehiveProfile) {
+            throw new common_1.NotFoundException('Target user profile not found');
+        }
+        const finalViewerDehiveProfile = await this.findUserDehiveProfile(viewerUserId);
+        if (!finalViewerDehiveProfile) {
+            throw new common_1.NotFoundException('Viewer UserDehive profile not found.');
+        }
+        const username = currentUser.username;
+        const display_name = currentUser.display_name;
+        const avatar = currentUser.avatar;
+        const targetDehiveId = targetDehiveProfile._id;
+        console.log('🔍 [MUTUAL SERVERS] Checking if users exist in user_dehive collection...');
+        const [targetUserExists, viewerUserExists] = await Promise.all([
+            this.userDehiveModel.findById(targetDehiveId).lean(),
+            this.userDehiveModel.findById(finalViewerDehiveProfile?._id).lean(),
+        ]);
+        console.log('🔍 [MUTUAL SERVERS] targetUserExists:', !!targetUserExists);
+        console.log('🔍 [MUTUAL SERVERS] viewerUserExists:', !!viewerUserExists);
+        const [targetServers, viewerServers] = await Promise.all([
+            this.userDehiveServerModel
+                .find({ user_dehive_id: targetDehiveId.toString() })
+                .select('server_id')
+                .populate('server_id', 'name icon')
+                .lean(),
+            this.userDehiveServerModel
+                .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
+                .select('server_id')
+                .lean(),
+        ]);
+        console.log('🔍 [MUTUAL SERVERS] targetDehiveId for query:', targetDehiveId);
+        console.log('🔍 [MUTUAL SERVERS] viewerDehiveId for query:', finalViewerDehiveProfile?._id);
+        console.log('🔍 [MUTUAL SERVERS] targetServers query result:', targetServers.length);
+        console.log('🔍 [MUTUAL SERVERS] viewerServers query result:', viewerServers.length);
+        console.log('🔍 [MUTUAL SERVERS] targetServers data:', JSON.stringify(targetServers, null, 2));
+        console.log('🔍 [MUTUAL SERVERS] viewerServers data:', JSON.stringify(viewerServers, null, 2));
+        console.log('🔍 [MUTUAL SERVERS] Trying alternative queries...');
+        const targetServersAlt = await this.userDehiveServerModel
+            .find({ user_dehive_id: targetDehiveId.toString() })
+            .select('server_id')
+            .lean();
+        const viewerServersAlt = await this.userDehiveServerModel
+            .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
+            .select('server_id')
+            .lean();
+        console.log('🔍 [MUTUAL SERVERS] targetServersAlt (string):', targetServersAlt.length);
+        console.log('🔍 [MUTUAL SERVERS] viewerServersAlt (string):', viewerServersAlt.length);
+        console.log('🔍 [MUTUAL SERVERS] targetServersAlt data:', JSON.stringify(targetServersAlt, null, 2));
+        console.log('🔍 [MUTUAL SERVERS] viewerServersAlt data:', JSON.stringify(viewerServersAlt, null, 2));
+        console.log('🔍 [MUTUAL SERVERS] targetServers:', targetServers.length);
+        console.log('🔍 [MUTUAL SERVERS] viewerServers:', viewerServers.length);
+        console.log('🔍 [MUTUAL SERVERS] targetDehiveId:', targetDehiveId);
+        console.log('🔍 [MUTUAL SERVERS] viewerDehiveId:', finalViewerDehiveProfile?._id);
+        console.log('🔍 [MUTUAL SERVERS] targetServers data:', targetServers);
+        console.log('🔍 [MUTUAL SERVERS] viewerServers data:', viewerServers);
+        const allMemberships = await this.userDehiveServerModel.find({}).lean();
+        console.log('🔍 [MUTUAL SERVERS] All memberships in database:', allMemberships.length);
+        console.log('🔍 [MUTUAL SERVERS] All user_dehive_ids in database:', allMemberships.map(m => m.user_dehive_id.toString()));
+        console.log('🔍 [MUTUAL SERVERS] All server_ids in database:', allMemberships.map(m => m.server_id.toString()));
+        const viewerServerIds = new Set(viewerServers.map((s) => s.server_id.toString()));
+        console.log('🔍 [MUTUAL SERVERS] viewerServerIds:', Array.from(viewerServerIds));
+        const mutualServers = targetServers.filter((s) => {
+            if (!s.server_id)
+                return false;
+            const serverId = typeof s.server_id === 'object'
+                ?
+                    s.server_id?._id?.toString()
+                : String(s.server_id);
+            const isMutual = serverId && viewerServerIds.has(serverId);
+            console.log('🔍 [MUTUAL SERVERS] Checking server:', serverId, 'isMutual:', isMutual);
+            return isMutual;
+        });
+        console.log('🔍 [MUTUAL SERVERS] mutualServers count:', mutualServers.length);
+        return {
+            _id: userDehiveId,
+            username,
+            display_name,
+            avatar,
+            bio: targetDehiveProfile.bio || '',
+            status: targetDehiveProfile.status || 'offline',
+            banner_color: targetDehiveProfile.banner_color,
             mutual_servers_count: mutualServers.length,
             mutual_servers: mutualServers.map((s) => s.server_id),
         };

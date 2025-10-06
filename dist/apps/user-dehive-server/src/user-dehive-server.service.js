@@ -204,8 +204,8 @@ let UserDehiveServerService = class UserDehiveServerService {
     }
     async kickOrBan(dto, action, actorBaseId) {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
-        console.log('🎯 [KICK/BAN] target_session_id:', dto.target_session_id);
-        const targetDehiveId = await this.getUserDehiveIdFromSession(dto.target_session_id);
+        console.log('🎯 [KICK/BAN] target_user_dehive_id:', dto.target_user_dehive_id);
+        const targetDehiveId = new mongoose_2.Types.ObjectId(dto.target_user_dehive_id);
         console.log('🎯 [KICK/BAN] targetDehiveId resolved:', targetDehiveId);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
@@ -232,11 +232,17 @@ let UserDehiveServerService = class UserDehiveServerService {
         const [targetMembership, actorMembership] = await Promise.all([
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
-                user_dehive_id: targetDehiveId,
+                $or: [
+                    { user_dehive_id: targetDehiveId },
+                    { user_dehive_id: targetDehiveId.toString() }
+                ]
             }).lean(),
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
-                user_dehive_id: actorDehiveId,
+                $or: [
+                    { user_dehive_id: actorDehiveId },
+                    { user_dehive_id: actorDehiveId.toString() }
+                ]
             }).lean(),
         ]);
         console.log('🔍 [KICK/BAN] targetMembership found:', !!targetMembership);
@@ -298,7 +304,7 @@ let UserDehiveServerService = class UserDehiveServerService {
     }
     async unbanMember(dto, actorBaseId) {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
-        const targetDehiveId = await this.getUserDehiveIdFromSession(dto.target_session_id);
+        const targetDehiveId = new mongoose_2.Types.ObjectId(dto.target_user_dehive_id);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
             .select('_id')
@@ -308,7 +314,10 @@ let UserDehiveServerService = class UserDehiveServerService {
         const actorDehiveId = actorDehiveProfile._id;
         const hasPermission = await this.userDehiveServerModel.exists({
             server_id: serverId,
-            user_dehive_id: actorDehiveId,
+            $or: [
+                { user_dehive_id: actorDehiveId },
+                { user_dehive_id: actorDehiveId.toString() }
+            ],
             role: { $in: [enum_1.ServerRole.OWNER, enum_1.ServerRole.MODERATOR] },
         });
         if (!hasPermission)
@@ -333,7 +342,7 @@ let UserDehiveServerService = class UserDehiveServerService {
     }
     async assignRole(dto, actorBaseId) {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
-        const targetDehiveId = await this.getUserDehiveIdFromSession(dto.target_session_id);
+        const targetDehiveId = new mongoose_2.Types.ObjectId(dto.target_user_dehive_id);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
             .select('_id')
@@ -344,11 +353,17 @@ let UserDehiveServerService = class UserDehiveServerService {
         const [targetMembership, actorMembership] = await Promise.all([
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
-                user_dehive_id: targetDehiveId,
+                $or: [
+                    { user_dehive_id: targetDehiveId },
+                    { user_dehive_id: targetDehiveId.toString() }
+                ]
             }),
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
-                user_dehive_id: actorDehiveId,
+                $or: [
+                    { user_dehive_id: actorDehiveId },
+                    { user_dehive_id: actorDehiveId.toString() }
+                ]
             }),
         ]);
         if (!targetMembership)
@@ -374,7 +389,10 @@ let UserDehiveServerService = class UserDehiveServerService {
         const actorDehiveId = actorDehiveProfile._id;
         const result = await this.userDehiveServerModel.updateOne({
             server_id: new mongoose_2.Types.ObjectId(dto.server_id),
-            user_dehive_id: actorDehiveId,
+            $or: [
+                { user_dehive_id: actorDehiveId },
+                { user_dehive_id: actorDehiveId.toString() }
+            ]
         }, { $set: { is_muted: dto.is_muted } });
         if (result.matchedCount === 0)
             throw new common_1.NotFoundException('Membership not found.');

@@ -63,6 +63,18 @@ export declare class UserDehiveServerService {
         avatar: any;
         email: any;
     }>;
+    getUserProfileByUserDehiveId(userDehiveId: string, currentUser: any): Promise<{
+        username: any;
+        display_name: any;
+        avatar: any;
+        dehive_data: {
+            bio: string;
+            status: string;
+            banner_color: string;
+            server_count: number;
+            last_login: Date;
+        };
+    }>;
     getUserProfile(userId: string, currentUser: any): Promise<{
         dehive_data: {
             bio: string;
@@ -85,21 +97,30 @@ export declare class UserDehiveServerService {
     getMembersInServer(serverId: string, currentUser: any): Promise<any[]>;
     private invalidateMemberListCache;
     getEnrichedUserProfile(targetSessionId: string, viewerUserId: string, currentUser: any): Promise<{
+        username: any;
+        display_name: any;
+        avatar: any;
         bio: string;
         status: string;
         mutual_servers_count: number;
         mutual_servers: never[];
-        username: any;
-        display_name: any;
-        avatar: any;
-        email: any;
         _id?: undefined;
         banner_color?: undefined;
     } | {
         _id: Types.ObjectId;
         username: any;
         display_name: any;
-        email: any;
+        avatar: any;
+        bio: string;
+        status: string;
+        banner_color: string;
+        mutual_servers_count: number;
+        mutual_servers: Types.ObjectId[];
+    }>;
+    getEnrichedUserProfileByUserDehiveId(userDehiveId: string, viewerUserId: string, currentUser: any): Promise<{
+        _id: string;
+        username: any;
+        display_name: any;
         avatar: any;
         bio: string;
         status: string;

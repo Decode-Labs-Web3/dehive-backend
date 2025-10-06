@@ -32,41 +32,22 @@ export declare class UserDehiveServerController {
     updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{
         message: string;
     }>;
-    getUserProfile(targetSessionId: string, user: any): Promise<{
+    getUserProfile(userDehiveId: string, user: any): Promise<{
+        username: any;
+        display_name: any;
+        avatar: any;
         dehive_data: {
             bio: string;
             status: string;
             banner_color: string;
             server_count: number;
             last_login: Date;
-        } | {
-            bio: string;
-            status: string;
-            banner_color: null;
-            server_count: number;
-            last_login: null;
         };
-        username: any;
-        display_name: any;
-        avatar: any;
-        email: any;
     }>;
-    getEnrichedUserProfile(targetSessionId: string, viewerUserId: string, currentUser: any): Promise<{
-        bio: string;
-        status: string;
-        mutual_servers_count: number;
-        mutual_servers: never[];
+    getEnrichedUserProfile(userDehiveId: string, viewerUserId: string, currentUser: any): Promise<{
+        _id: string;
         username: any;
         display_name: any;
-        avatar: any;
-        email: any;
-        _id?: undefined;
-        banner_color?: undefined;
-    } | {
-        _id: import("mongoose").Types.ObjectId;
-        username: any;
-        display_name: any;
-        email: any;
         avatar: any;
         bio: string;
         status: string;

@@ -14,7 +14,7 @@ const class_validator_1 = require("class-validator");
 const swagger_1 = require("@nestjs/swagger");
 class UnbanDto {
     server_id;
-    target_session_id;
+    target_user_dehive_id;
 }
 exports.UnbanDto = UnbanDto;
 __decorate([
@@ -28,11 +28,11 @@ __decorate([
 ], UnbanDto.prototype, "server_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The session ID of the user to unban.',
-        example: 'c7b3ae91-ca16-4c53-bb61-21eac681457d',
+        description: 'The user_dehive_id of the user to unban.',
+        example: '68c5adb6ec465897d540c58',
     }),
     (0, class_validator_1.IsNotEmpty)(),
-    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
-], UnbanDto.prototype, "target_session_id", void 0);
+], UnbanDto.prototype, "target_user_dehive_id", void 0);
 //# sourceMappingURL=unban.dto.js.map
