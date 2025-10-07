@@ -6,12 +6,14 @@ import { ServerDocument } from '../schemas/server.schema';
 import { ServerBanDocument } from '../schemas/server-ban.schema';
 import { InviteLinkDocument } from '../schemas/invite-link.schema';
 import { AssignRoleDto } from '../dto/assign-role.dto';
+import { TransferOwnershipDto } from '../dto/transfer-ownership.dto';
 import { JoinServerDto } from '../dto/join-server.dto';
 import { LeaveServerDto } from '../dto/leave-server.dto';
 import { GenerateInviteDto } from '../dto/generate-invite.dto';
 import { KickBanDto } from '../dto/kick-ban.dto';
 import { UnbanDto } from '../dto/unban.dto';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';
+import { AuthServiceClient } from './auth-service.client';
 import { Redis } from 'ioredis';
 export declare class UserDehiveServerService {
     private userDehiveModel;
@@ -19,9 +21,10 @@ export declare class UserDehiveServerService {
     private serverModel;
     private serverBanModel;
     private inviteLinkModel;
+    private readonly authClient;
     private readonly redis;
     private readonly httpService;
-    constructor(userDehiveModel: Model<UserDehiveDocument>, userDehiveServerModel: Model<UserDehiveServerDocument>, serverModel: Model<ServerDocument>, serverBanModel: Model<ServerBanDocument>, inviteLinkModel: Model<InviteLinkDocument>, redis: Redis, httpService: HttpService);
+    constructor(userDehiveModel: Model<UserDehiveDocument>, userDehiveServerModel: Model<UserDehiveServerDocument>, serverModel: Model<ServerDocument>, serverBanModel: Model<ServerBanDocument>, inviteLinkModel: Model<InviteLinkDocument>, authClient: AuthServiceClient, redis: Redis, httpService: HttpService);
     private findUserDehiveProfile;
     private getUserDehiveIdFromSession;
     joinServer(dto: JoinServerDto, userId: string): Promise<{
@@ -41,6 +44,9 @@ export declare class UserDehiveServerService {
         message: string;
     }>;
     assignRole(dto: AssignRoleDto, actorBaseId: string): Promise<UserDehiveServerDocument>;
+    transferOwnership(dto: TransferOwnershipDto, currentOwnerId: string): Promise<{
+        message: string;
+    }>;
     updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{
         message: string;
     }>;
@@ -61,20 +67,8 @@ export declare class UserDehiveServerService {
         username: any;
         display_name: any;
         avatar: any;
-        email: any;
     }>;
-    getUserProfileByUserDehiveId(userDehiveId: string, currentUser: any): Promise<{
-        username: any;
-        display_name: any;
-        avatar: any;
-        dehive_data: {
-            bio: string;
-            status: string;
-            banner_color: string;
-            server_count: number;
-            last_login: Date;
-        };
-    }>;
+    getUserProfileByUserDehiveId(userDehiveId: string, currentUser: any): Promise<any>;
     getUserProfile(userId: string, currentUser: any): Promise<{
         dehive_data: {
             bio: string;
@@ -92,7 +86,6 @@ export declare class UserDehiveServerService {
         username: any;
         display_name: any;
         avatar: any;
-        email: any;
     }>;
     getMembersInServer(serverId: string, currentUser: any): Promise<any[]>;
     private invalidateMemberListCache;
@@ -117,15 +110,5 @@ export declare class UserDehiveServerService {
         mutual_servers_count: number;
         mutual_servers: Types.ObjectId[];
     }>;
-    getEnrichedUserProfileByUserDehiveId(userDehiveId: string, viewerUserId: string, currentUser: any): Promise<{
-        _id: string;
-        username: any;
-        display_name: any;
-        avatar: any;
-        bio: string;
-        status: string;
-        banner_color: string;
-        mutual_servers_count: number;
-        mutual_servers: Types.ObjectId[];
-    }>;
+    getEnrichedUserProfileByUserDehiveId(userDehiveId: string, viewerUserId: string, currentUser: any): Promise<any>;
 }

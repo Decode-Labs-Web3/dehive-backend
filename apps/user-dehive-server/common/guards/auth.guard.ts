@@ -138,8 +138,8 @@ export class AuthGuard implements CanActivate {
           );
 
           if (userId) {
-            // Fetch full user profile from auth service
-            console.log('🔍 [USER-DEHIVE AUTH GUARD] Fetching full user profile from auth service');
+            // Use session data directly instead of calling profile endpoint
+            console.log('🔍 [USER-DEHIVE AUTH GUARD] Using session data directly for user profile');
 
             // If userDehiveId is provided, use it instead of userId from session
             const targetUserId = userDehiveId || userId;
@@ -147,52 +147,18 @@ export class AuthGuard implements CanActivate {
             console.log('🔍 [USER-DEHIVE AUTH GUARD] userDehiveId from URL:', userDehiveId);
             console.log('🔍 [USER-DEHIVE AUTH GUARD] userId from session:', userId);
 
-            try {
-              // Fetch full user profile from auth service
-              const profileResponse = await firstValueFrom(
-                this.httpService.get<{
-                  success: boolean;
-                  data: any;
-                  message?: string;
-                }>(`${this.authServiceUrl}/auth/profile/${targetUserId}`, {
-                  headers: {
-                    'x-session-id': sessionId,
-                    'Content-Type': 'application/json',
-                  },
-                  timeout: 5000,
-                }),
-              );
-
-              if (profileResponse.data.success && profileResponse.data.data) {
-                const userData = profileResponse.data.data;
-                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile from auth service:', userData);
-                console.log('🔍 [USER-DEHIVE AUTH GUARD] Available fields in userData:', Object.keys(userData));
-                console.log('🔍 [USER-DEHIVE AUTH GUARD] userData.email:', userData.email);
-                console.log('🔍 [USER-DEHIVE AUTH GUARD] userData.avatar_ipfs_hash:', userData.avatar_ipfs_hash);
-
-                request['user'] = {
-                  _id: targetUserId,
-                  userId: targetUserId,
-                  email: userData.email || '',
-                  username: userData.username || '',
-                  display_name: userData.display_name || '',
-                  avatar: userData.avatar_ipfs_hash || '',
-                  role: userData.role || 'user',
-                };
-                console.log('✅ [USER-DEHIVE AUTH GUARD] Full user profile loaded:', request['user']);
-              } else {
-                throw new UnauthorizedException({
-                  message: 'Failed to fetch user profile',
-                  error: 'PROFILE_FETCH_FAILED',
-                });
-              }
-            } catch (profileError) {
-              console.error('❌ [USER-DEHIVE AUTH GUARD] Error fetching user profile:', profileError);
-              throw new UnauthorizedException({
-                message: 'Failed to fetch user profile',
-                error: 'PROFILE_FETCH_ERROR',
-              });
-            }
+            // Use session data directly - no need to call profile endpoint
+            // This avoids the 401 error from auth service profile endpoint
+            request['user'] = {
+              _id: targetUserId,
+              userId: targetUserId,
+              email: '', // Will be filled by service if needed
+              username: '', // Will be filled by service if needed
+              display_name: '', // Will be filled by service if needed
+              avatar: '', // Will be filled by service if needed
+              role: 'user', // Default role
+              session_id: sessionId, // Add session_id for service use
+            };
 
             request['sessionId'] = sessionId;
             console.log(

@@ -16,18 +16,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthServiceClient = void 0;
 const common_1 = require("@nestjs/common");
 const axios_1 = require("@nestjs/axios");
-const ioredis_1 = require("@nestjs-modules/ioredis");
-const ioredis_2 = require("ioredis");
 const rxjs_1 = require("rxjs");
 const config_1 = require("@nestjs/config");
+const ioredis_1 = require("@nestjs-modules/ioredis");
+const ioredis_2 = require("ioredis");
 let AuthServiceClient = AuthServiceClient_1 = class AuthServiceClient {
     httpService;
     redis;
     configService;
     logger = new common_1.Logger(AuthServiceClient_1.name);
     authServiceUrl;
-    PROFILE_CACHE_TTL = 900;
     PROFILE_CACHE_PREFIX = 'user_profile:';
+    PROFILE_CACHE_TTL = 300;
     constructor(httpService, redis, configService) {
         this.httpService = httpService;
         this.redis = redis;
@@ -36,100 +36,114 @@ let AuthServiceClient = AuthServiceClient_1 = class AuthServiceClient {
             this.configService.get('AUTH_SERVICE_URL') ||
                 'http://localhost:4006';
     }
-    async getUserProfile(userId) {
-        const cacheKey = `${this.PROFILE_CACHE_PREFIX}${userId}`;
+    async getUserProfile(userDehiveId, sessionId, fingerprintHashed) {
+        const cacheKey = `${this.PROFILE_CACHE_PREFIX}${userDehiveId}`;
         try {
             const cached = await this.redis.get(cacheKey);
             if (cached) {
-                this.logger.debug(`Cache hit for user profile: ${userId}`);
+                this.logger.debug(`Cache hit for user profile: ${userDehiveId}`);
                 return JSON.parse(cached);
             }
-            this.logger.debug(`Cache miss for user profile: ${userId}, fetching from auth service`);
-            console.log('🔍 [AUTH CLIENT] Fetching profile for userId:', userId);
+            this.logger.debug(`Cache miss for user profile: ${userDehiveId}, fetching from auth service`);
+            console.log('🔍 [AUTH CLIENT] Fetching profile for userDehiveId:', userDehiveId);
             console.log('🔍 [AUTH CLIENT] Auth service URL:', this.authServiceUrl);
-            console.log('🔍 [AUTH CLIENT] Full URL:', `${this.authServiceUrl}/auth/profile/${userId}`);
-            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/profile/${userId}`, {
+            console.log('🔍 [AUTH CLIENT] Full URL:', `${this.authServiceUrl}/auth/profile/${userDehiveId}`);
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/profile/${userDehiveId}`, {
+                headers: {
+                    'x-session-id': sessionId,
+                    'x-fingerprint-hashed': fingerprintHashed,
+                    'Content-Type': 'application/json',
+                },
                 timeout: 5000,
             }));
             console.log('🔍 [AUTH CLIENT] Response:', response.data);
             if (!response.data.success || !response.data.data) {
-                this.logger.warn(`User profile not found in auth service: ${userId}`);
+                this.logger.warn(`User profile not found in auth service: ${userDehiveId}`);
                 return null;
             }
             const profile = response.data.data;
             await this.redis.setex(cacheKey, this.PROFILE_CACHE_TTL, JSON.stringify(profile));
-            this.logger.debug(`Cached user profile: ${userId}`);
+            this.logger.debug(`Cached user profile: ${userDehiveId}`);
             return profile;
         }
         catch (error) {
-            this.logger.error(`Failed to fetch user profile: ${userId}`, error instanceof Error ? error.stack : error);
+            this.logger.error(`Failed to fetch user profile: ${userDehiveId}`, error instanceof Error ? error.stack : error);
             return null;
         }
     }
-    async batchGetProfiles(userIds) {
-        if (!userIds || userIds.length === 0) {
-            return {};
+    async getMyProfile(sessionId, fingerprintHashed) {
+        const cacheKey = `${this.PROFILE_CACHE_PREFIX}me:${sessionId}`;
+        try {
+            const cached = await this.redis.get(cacheKey);
+            if (cached) {
+                this.logger.debug(`Cache hit for my profile: ${sessionId}`);
+                return JSON.parse(cached);
+            }
+            this.logger.debug(`Cache miss for my profile: ${sessionId}, fetching from auth service`);
+            console.log('🔍 [AUTH CLIENT] Fetching my profile for sessionId:', sessionId);
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/profile`, {
+                headers: {
+                    'x-session-id': sessionId,
+                    'x-fingerprint-hashed': fingerprintHashed,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 5000,
+            }));
+            console.log('🔍 [AUTH CLIENT] My Profile Response:', response.data);
+            if (!response.data.success || !response.data.data) {
+                this.logger.warn(`My profile not found in auth service: ${sessionId}`);
+                return null;
+            }
+            const profile = response.data.data;
+            await this.redis.setex(cacheKey, this.PROFILE_CACHE_TTL, JSON.stringify(profile));
+            this.logger.debug(`Cached my profile: ${sessionId}`);
+            return profile;
         }
-        const uniqueIds = [...new Set(userIds)];
-        this.logger.debug(`Batch fetching ${uniqueIds.length} user profiles`);
-        const pipeline = this.redis.pipeline();
-        uniqueIds.forEach((id) => {
-            pipeline.get(`${this.PROFILE_CACHE_PREFIX}${id}`);
-        });
-        const cachedResults = await pipeline.exec();
-        const profiles = {};
-        const missingIds = [];
-        uniqueIds.forEach((id, idx) => {
-            if (cachedResults && cachedResults[idx]) {
-                const [err, data] = cachedResults[idx];
-                if (!err && data) {
-                    try {
-                        profiles[id] = JSON.parse(data);
-                    }
-                    catch (parseError) {
-                        this.logger.error(`Failed to parse cached profile for ${id}`);
-                        missingIds.push(id);
-                    }
-                }
-                else {
-                    missingIds.push(id);
-                }
+        catch (error) {
+            this.logger.error(`Failed to fetch my profile: ${sessionId}`, error instanceof Error ? error.stack : error);
+            return null;
+        }
+    }
+    async getBatchUserProfiles(userIds, sessionId, fingerprintHashed) {
+        const result = new Map();
+        const uncachedIds = [];
+        for (const userId of userIds) {
+            const cacheKey = `${this.PROFILE_CACHE_PREFIX}${userId}`;
+            const cached = await this.redis.get(cacheKey);
+            if (cached) {
+                result.set(userId, JSON.parse(cached));
             }
             else {
-                missingIds.push(id);
+                uncachedIds.push(userId);
             }
-        });
-        this.logger.debug(`Cache hits: ${Object.keys(profiles).length}, Cache misses: ${missingIds.length}`);
-        if (missingIds.length > 0) {
-            const fetchPromises = missingIds.map((id) => this.getUserProfile(id).then((profile) => ({ id, profile })));
-            const results = await Promise.all(fetchPromises);
-            results.forEach(({ id, profile }) => {
-                if (profile) {
-                    profiles[id] = profile;
+        }
+        if (uncachedIds.length > 0) {
+            this.logger.debug(`Fetching ${uncachedIds.length} uncached profiles from auth service`);
+            for (const userId of uncachedIds) {
+                try {
+                    const profile = await this.getUserProfile(userId, sessionId, fingerprintHashed);
+                    if (profile) {
+                        result.set(userId, profile);
+                    }
                 }
-            });
+                catch (error) {
+                    this.logger.warn(`Failed to fetch profile for user ${userId}:`, error);
+                }
+            }
         }
-        return profiles;
+        return result;
     }
-    async invalidateUserProfile(userId) {
-        const cacheKey = `${this.PROFILE_CACHE_PREFIX}${userId}`;
+    async clearUserCache(userDehiveId) {
+        const cacheKey = `${this.PROFILE_CACHE_PREFIX}${userDehiveId}`;
         await this.redis.del(cacheKey);
-        this.logger.debug(`Invalidated cache for user profile: ${userId}`);
+        this.logger.debug(`Cleared cache for user: ${userDehiveId}`);
     }
-    async invalidateUserProfiles(userIds) {
-        if (!userIds || userIds.length === 0) {
-            return;
-        }
-        const keys = userIds.map((id) => `${this.PROFILE_CACHE_PREFIX}${id}`);
-        await this.redis.del(...keys);
-        this.logger.debug(`Invalidated cache for ${userIds.length} user profiles`);
-    }
-    async getCacheStats() {
+    async clearAllProfileCaches() {
         const keys = await this.redis.keys(`${this.PROFILE_CACHE_PREFIX}*`);
-        return {
-            totalKeys: keys.length,
-            keys,
-        };
+        if (keys.length > 0) {
+            await this.redis.del(...keys);
+            this.logger.debug(`Cleared ${keys.length} profile caches`);
+        }
     }
 };
 exports.AuthServiceClient = AuthServiceClient;

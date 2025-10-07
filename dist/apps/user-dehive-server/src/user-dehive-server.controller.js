@@ -16,6 +16,7 @@ exports.UserDehiveServerController = void 0;
 const common_1 = require("@nestjs/common");
 const user_dehive_server_service_1 = require("./user-dehive-server.service");
 const assign_role_dto_1 = require("../dto/assign-role.dto");
+const transfer_ownership_dto_1 = require("../dto/transfer-ownership.dto");
 const generate_invite_dto_1 = require("../dto/generate-invite.dto");
 const join_server_dto_1 = require("../dto/join-server.dto");
 const kick_ban_dto_1 = require("../dto/kick-ban.dto");
@@ -59,6 +60,9 @@ let UserDehiveServerController = class UserDehiveServerController {
     }
     assignRole(dto, actorBaseId) {
         return this.service.assignRole(dto, actorBaseId);
+    }
+    transferOwnership(dto, currentOwnerId) {
+        return this.service.transferOwnership(dto, currentOwnerId);
     }
     updateNotification(dto, actorBaseId) {
         return this.service.updateNotification(dto, actorBaseId);
@@ -287,6 +291,36 @@ __decorate([
     __metadata("design:paramtypes", [assign_role_dto_1.AssignRoleDto, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "assignRole", null);
+__decorate([
+    (0, common_1.Patch)('transfer-ownership'),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Transfer server ownership',
+        description: 'Transfers ownership of server to another member. Only current owner can do this.',
+    }),
+    (0, swagger_1.ApiHeader)({
+        name: 'x-session-id',
+        description: 'Session ID of current owner',
+        required: true,
+    }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Ownership transferred successfully.' }),
+    (0, swagger_1.ApiResponse)({
+        status: 403,
+        description: 'Forbidden (only current owner can transfer ownership).',
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 404,
+        description: 'New owner is not a member of this server.',
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 400,
+        description: 'Bad Request (e.g., cannot transfer to yourself).',
+    }),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [transfer_ownership_dto_1.TransferOwnershipDto, String]),
+    __metadata("design:returntype", void 0)
+], UserDehiveServerController.prototype, "transferOwnership", null);
 __decorate([
     (0, common_1.Patch)('notification'),
     (0, swagger_1.ApiOperation)({

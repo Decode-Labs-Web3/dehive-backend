@@ -39,10 +39,10 @@ export class UserService {
         };
       }
       const user_decode_data = user_decode.data;
-      
+
       // Check if UserDehive exists, if not create it
       let user_dehive_data = await this.userDehiveModel.findById(user_dehive_id);
-      
+
       if (!user_dehive_data) {
         // Auto-create UserDehive record
         const newUserDehive = new this.userDehiveModel({
@@ -112,12 +112,12 @@ export class UserService {
         };
       }
       const user_decode_data = user_decode.data;
-      
+
       // Check if UserDehive exists, if not create it
       let user_dehive_data = await this.userDehiveModel.findById(
         user_decode_data._id,
       );
-      
+
       if (!user_dehive_data) {
         // Auto-create UserDehive record
         const newUserDehive = new this.userDehiveModel({

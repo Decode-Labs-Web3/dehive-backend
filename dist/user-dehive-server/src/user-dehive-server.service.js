@@ -24,6 +24,7 @@ const server_schema_1 = require("../schemas/server.schema");
 const server_ban_schema_1 = require("../schemas/server-ban.schema");
 const invite_link_schema_1 = require("../schemas/invite-link.schema");
 const enum_1 = require("../enum/enum");
+const auth_service_client_1 = require("./auth-service.client");
 const ioredis_1 = require("@nestjs-modules/ioredis");
 const ioredis_2 = require("ioredis");
 let UserDehiveServerService = class UserDehiveServerService {
@@ -32,14 +33,16 @@ let UserDehiveServerService = class UserDehiveServerService {
     serverModel;
     serverBanModel;
     inviteLinkModel;
+    authClient;
     redis;
     httpService;
-    constructor(userDehiveModel, userDehiveServerModel, serverModel, serverBanModel, inviteLinkModel, redis, httpService) {
+    constructor(userDehiveModel, userDehiveServerModel, serverModel, serverBanModel, inviteLinkModel, authClient, redis, httpService) {
         this.userDehiveModel = userDehiveModel;
         this.userDehiveServerModel = userDehiveServerModel;
         this.serverModel = serverModel;
         this.serverBanModel = serverBanModel;
         this.inviteLinkModel = inviteLinkModel;
+        this.authClient = authClient;
         this.redis = redis;
         this.httpService = httpService;
     }
@@ -379,6 +382,57 @@ let UserDehiveServerService = class UserDehiveServerService {
         targetMembership.role = dto.role;
         return targetMembership.save();
     }
+    async transferOwnership(dto, currentOwnerId) {
+        const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
+        const newOwnerDehiveId = new mongoose_2.Types.ObjectId(dto.user_dehive_id);
+        const currentOwnerProfile = await this.userDehiveModel
+            .findById(currentOwnerId)
+            .select('_id')
+            .lean();
+        if (!currentOwnerProfile)
+            throw new common_1.NotFoundException(`Dehive profile not found for current owner.`);
+        const currentOwnerDehiveId = currentOwnerProfile._id;
+        const [currentOwnerMembership, newOwnerMembership] = await Promise.all([
+            this.userDehiveServerModel.findOne({
+                server_id: serverId,
+                $or: [
+                    { user_dehive_id: currentOwnerDehiveId },
+                    { user_dehive_id: currentOwnerDehiveId.toString() }
+                ]
+            }),
+            this.userDehiveServerModel.findOne({
+                server_id: serverId,
+                $or: [
+                    { user_dehive_id: newOwnerDehiveId },
+                    { user_dehive_id: newOwnerDehiveId.toString() }
+                ]
+            }),
+        ]);
+        if (!currentOwnerMembership)
+            throw new common_1.ForbiddenException('You are not a member of this server.');
+        if (currentOwnerMembership.role !== enum_1.ServerRole.OWNER)
+            throw new common_1.ForbiddenException('Only the server owner can transfer ownership.');
+        if (!newOwnerMembership)
+            throw new common_1.NotFoundException('New owner is not a member of this server.');
+        if (currentOwnerDehiveId.toString() === newOwnerDehiveId.toString())
+            throw new common_1.BadRequestException('You cannot transfer ownership to yourself.');
+        const session = await this.userDehiveServerModel.db.startSession();
+        session.startTransaction();
+        try {
+            await this.userDehiveServerModel.updateOne({ _id: currentOwnerMembership._id }, { $set: { role: enum_1.ServerRole.MEMBER } }, { session });
+            await this.userDehiveServerModel.updateOne({ _id: newOwnerMembership._id }, { $set: { role: enum_1.ServerRole.OWNER } }, { session });
+            await session.commitTransaction();
+            await this.invalidateMemberListCache(dto.server_id);
+            return { message: 'Ownership transferred successfully.' };
+        }
+        catch (error) {
+            await session.abortTransaction();
+            throw new common_1.BadRequestException('Failed to transfer ownership.');
+        }
+        finally {
+            void session.endSession();
+        }
+    }
     async updateNotification(dto, actorBaseId) {
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
@@ -409,7 +463,6 @@ let UserDehiveServerService = class UserDehiveServerService {
             username: currentUser.username,
             display_name: currentUser.display_name,
             avatar: currentUser.avatar,
-            email: currentUser.email,
         };
         const userDehive = await this.userDehiveModel
             .findById(targetUserId)
@@ -437,8 +490,21 @@ let UserDehiveServerService = class UserDehiveServerService {
     async getUserProfileByUserDehiveId(userDehiveId, currentUser) {
         console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
         console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
-        const isOwnProfile = userDehiveId === currentUser._id;
-        console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] isOwnProfile:', isOwnProfile);
+        let targetUserAuthProfile = null;
+        if (currentUser._id === userDehiveId) {
+            targetUserAuthProfile = currentUser;
+        }
+        else {
+            try {
+                const sessionId = currentUser.session_id || 'test_session_' + userDehiveId;
+                const fingerprintHashed = currentUser.fingerprint_hashed || 'test_fingerprint';
+                targetUserAuthProfile = await this.authClient.getUserProfile(userDehiveId, sessionId, fingerprintHashed);
+            }
+            catch (error) {
+                console.error('Error getting target user auth profile:', error);
+                targetUserAuthProfile = currentUser;
+            }
+        }
         const userDehive = await this.userDehiveModel
             .findById(userDehiveId)
             .select('bio status banner_color server_count last_login')
@@ -446,26 +512,34 @@ let UserDehiveServerService = class UserDehiveServerService {
         if (!userDehive) {
             throw new common_1.NotFoundException('User profile not found');
         }
-        const username = currentUser.username;
-        const display_name = currentUser.display_name;
-        const avatar = currentUser.avatar;
-        return {
-            username,
-            display_name,
-            avatar,
-            dehive_data: {
-                bio: userDehive.bio || '',
-                status: userDehive.status || 'offline',
-                banner_color: userDehive.banner_color,
-                server_count: userDehive.server_count || 0,
-                last_login: userDehive.last_login,
-            },
-        };
+        if (targetUserAuthProfile) {
+            return {
+                ...targetUserAuthProfile,
+                dehive_data: {
+                    bio: userDehive.bio || '',
+                    status: userDehive.status || 'offline',
+                    banner_color: userDehive.banner_color,
+                    server_count: userDehive.server_count || 0,
+                    last_login: userDehive.last_login,
+                },
+            };
+        }
+        else {
+            return {
+                username: currentUser.username,
+                display_name: currentUser.display_name,
+                avatar: currentUser.avatar,
+                dehive_data: {
+                    bio: userDehive.bio || '',
+                    status: userDehive.status || 'offline',
+                    banner_color: userDehive.banner_color,
+                    server_count: userDehive.server_count || 0,
+                    last_login: userDehive.last_login,
+                },
+            };
+        }
     }
     async getUserProfile(userId, currentUser) {
-        console.log('🎯 [GET USER PROFILE] userId:', userId);
-        console.log('🎯 [GET USER PROFILE] currentUser:', currentUser);
-        console.log('🎯 [GET USER PROFILE] Using currentUser data for ALL profiles:', currentUser);
         let targetUserAuthData = null;
         try {
             const decodeServiceUrl = process.env.DECODE_SERVICE_URL || 'http://localhost:4006';
@@ -480,7 +554,6 @@ let UserDehiveServerService = class UserDehiveServerService {
             username: currentUser.username,
             display_name: currentUser.display_name,
             avatar: currentUser.avatar,
-            email: currentUser.email,
         };
         const userDehive = await this.userDehiveModel
             .findById(userId)
@@ -518,16 +591,30 @@ let UserDehiveServerService = class UserDehiveServerService {
             return [];
         }
         const userIds = memberships.map((m) => m.user_dehive_id.toString());
-        console.log('🔍 [GET MEMBERS] Using currentUser data from @CurrentUser() for ALL members:', currentUser);
+        let userProfiles = new Map();
+        try {
+            const sessionId = currentUser.session_id || 'test_session_' + serverId;
+            const fingerprintHashed = currentUser.fingerprint_hashed || 'test_fingerprint';
+            userProfiles = await this.authClient.getBatchUserProfiles(userIds, sessionId, fingerprintHashed);
+        }
+        catch (error) {
+            console.error('Error getting user profiles from auth service:', error);
+            userProfiles = new Map();
+        }
+        console.log('🔍 [GET MEMBERS] Using auth service profiles for members:', userProfiles.size);
         const result = memberships.map((m) => {
             const userId = m.user_dehive_id.toString();
-            console.log('🔍 [GET MEMBERS] userId:', userId);
-            return {
-                membership_id: m._id.toString(),
-                user_dehive_id: m.user_dehive_id.toString(),
+            const userProfile = userProfiles.get(userId);
+            console.log('🔍 [GET MEMBERS] userId:', userId, 'hasProfile:', !!userProfile);
+            const memberProfile = userProfile || {
                 username: currentUser.username,
                 display_name: currentUser.display_name,
                 avatar: currentUser.avatar,
+            };
+            return {
+                membership_id: m._id.toString(),
+                user_dehive_id: m.user_dehive_id.toString(),
+                ...memberProfile,
                 role: m.role,
                 is_muted: m.is_muted,
                 joined_at: m.joined_at,
@@ -540,10 +627,6 @@ let UserDehiveServerService = class UserDehiveServerService {
         await this.redis.del(`server_members:${serverId}`);
     }
     async getEnrichedUserProfile(targetSessionId, viewerUserId, currentUser) {
-        console.log('🎯 [GET ENRICHED PROFILE] Starting enriched profile fetch...');
-        console.log('🎯 [GET ENRICHED PROFILE] targetSessionId:', targetSessionId);
-        console.log('🎯 [GET ENRICHED PROFILE] viewerUserId:', viewerUserId);
-        console.log('🎯 [GET ENRICHED PROFILE] currentUser:', currentUser);
         const targetUserId = await this.getUserDehiveIdFromSession(targetSessionId);
         console.log('🎯 [GET ENRICHED PROFILE] targetUserId from session:', targetUserId);
         console.log('🎯 [GET ENRICHED PROFILE] Using currentUser data for ALL profiles:', currentUser);
@@ -551,7 +634,6 @@ let UserDehiveServerService = class UserDehiveServerService {
             username: currentUser.username,
             display_name: currentUser.display_name,
             avatar: currentUser.avatar,
-            email: currentUser.email,
         };
         const [targetDehiveProfile] = await Promise.all([
             this.userDehiveModel.findById(targetUserId).lean(),
@@ -578,8 +660,6 @@ let UserDehiveServerService = class UserDehiveServerService {
             this.userDehiveModel.findById(targetDehiveId).lean(),
             this.userDehiveModel.findById(finalViewerDehiveProfile?._id).lean(),
         ]);
-        console.log('🔍 [MUTUAL SERVERS] targetUserExists:', !!targetUserExists);
-        console.log('🔍 [MUTUAL SERVERS] viewerUserExists:', !!viewerUserExists);
         const [targetServers, viewerServers] = await Promise.all([
             this.userDehiveServerModel
                 .find({ user_dehive_id: targetDehiveId.toString() })
@@ -591,13 +671,6 @@ let UserDehiveServerService = class UserDehiveServerService {
                 .select('server_id')
                 .lean(),
         ]);
-        console.log('🔍 [MUTUAL SERVERS] targetDehiveId for query:', targetDehiveId);
-        console.log('🔍 [MUTUAL SERVERS] viewerDehiveId for query:', finalViewerDehiveProfile?._id);
-        console.log('🔍 [MUTUAL SERVERS] targetServers query result:', targetServers.length);
-        console.log('🔍 [MUTUAL SERVERS] viewerServers query result:', viewerServers.length);
-        console.log('🔍 [MUTUAL SERVERS] targetServers data:', JSON.stringify(targetServers, null, 2));
-        console.log('🔍 [MUTUAL SERVERS] viewerServers data:', JSON.stringify(viewerServers, null, 2));
-        console.log('🔍 [MUTUAL SERVERS] Trying alternative queries...');
         const targetServersAlt = await this.userDehiveServerModel
             .find({ user_dehive_id: targetDehiveId.toString() })
             .select('server_id')
@@ -606,20 +679,7 @@ let UserDehiveServerService = class UserDehiveServerService {
             .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
             .select('server_id')
             .lean();
-        console.log('🔍 [MUTUAL SERVERS] targetServersAlt (string):', targetServersAlt.length);
-        console.log('🔍 [MUTUAL SERVERS] viewerServersAlt (string):', viewerServersAlt.length);
-        console.log('🔍 [MUTUAL SERVERS] targetServersAlt data:', JSON.stringify(targetServersAlt, null, 2));
-        console.log('🔍 [MUTUAL SERVERS] viewerServersAlt data:', JSON.stringify(viewerServersAlt, null, 2));
-        console.log('🔍 [MUTUAL SERVERS] targetServers:', targetServers.length);
-        console.log('🔍 [MUTUAL SERVERS] viewerServers:', viewerServers.length);
-        console.log('🔍 [MUTUAL SERVERS] targetDehiveId:', targetDehiveId);
-        console.log('🔍 [MUTUAL SERVERS] viewerDehiveId:', finalViewerDehiveProfile?._id);
-        console.log('🔍 [MUTUAL SERVERS] targetServers data:', targetServers);
-        console.log('🔍 [MUTUAL SERVERS] viewerServers data:', viewerServers);
         const allMemberships = await this.userDehiveServerModel.find({}).lean();
-        console.log('🔍 [MUTUAL SERVERS] All memberships in database:', allMemberships.length);
-        console.log('🔍 [MUTUAL SERVERS] All user_dehive_ids in database:', allMemberships.map(m => m.user_dehive_id.toString()));
-        console.log('🔍 [MUTUAL SERVERS] All server_ids in database:', allMemberships.map(m => m.server_id.toString()));
         const viewerServerIds = new Set(viewerServers.map((s) => s.server_id.toString()));
         console.log('🔍 [MUTUAL SERVERS] viewerServerIds:', Array.from(viewerServerIds));
         const mutualServers = targetServers.filter((s) => {
@@ -651,6 +711,21 @@ let UserDehiveServerService = class UserDehiveServerService {
         console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
         console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] viewerUserId:', viewerUserId);
         console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
+        let targetUserAuthProfile = null;
+        if (currentUser._id === userDehiveId) {
+            targetUserAuthProfile = currentUser;
+        }
+        else {
+            try {
+                const sessionId = currentUser.session_id || 'test_session_' + userDehiveId;
+                const fingerprintHashed = currentUser.fingerprint_hashed || 'test_fingerprint';
+                targetUserAuthProfile = await this.authClient.getUserProfile(userDehiveId, sessionId, fingerprintHashed);
+            }
+            catch (error) {
+                console.error('Error getting target user auth profile:', error);
+                targetUserAuthProfile = currentUser;
+            }
+        }
         const targetDehiveProfile = await this.userDehiveModel
             .findById(userDehiveId)
             .select('bio status banner_color')
@@ -662,9 +737,11 @@ let UserDehiveServerService = class UserDehiveServerService {
         if (!finalViewerDehiveProfile) {
             throw new common_1.NotFoundException('Viewer UserDehive profile not found.');
         }
-        const username = currentUser.username;
-        const display_name = currentUser.display_name;
-        const avatar = currentUser.avatar;
+        const authProfile = targetUserAuthProfile || {
+            username: currentUser.username,
+            display_name: currentUser.display_name,
+            avatar: currentUser.avatar,
+        };
         const targetDehiveId = targetDehiveProfile._id;
         console.log('🔍 [MUTUAL SERVERS] Checking if users exist in user_dehive collection...');
         const [targetUserExists, viewerUserExists] = await Promise.all([
@@ -728,10 +805,8 @@ let UserDehiveServerService = class UserDehiveServerService {
         });
         console.log('🔍 [MUTUAL SERVERS] mutualServers count:', mutualServers.length);
         return {
+            ...authProfile,
             _id: userDehiveId,
-            username,
-            display_name,
-            avatar,
             bio: targetDehiveProfile.bio || '',
             status: targetDehiveProfile.status || 'offline',
             banner_color: targetDehiveProfile.banner_color,
@@ -748,12 +823,13 @@ exports.UserDehiveServerService = UserDehiveServerService = __decorate([
     __param(2, (0, mongoose_1.InjectModel)(server_schema_1.Server.name)),
     __param(3, (0, mongoose_1.InjectModel)(server_ban_schema_1.ServerBan.name)),
     __param(4, (0, mongoose_1.InjectModel)(invite_link_schema_1.InviteLink.name)),
-    __param(5, (0, ioredis_1.InjectRedis)()),
+    __param(6, (0, ioredis_1.InjectRedis)()),
     __metadata("design:paramtypes", [mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
+        auth_service_client_1.AuthServiceClient,
         ioredis_2.Redis,
         axios_1.HttpService])
 ], UserDehiveServerService);

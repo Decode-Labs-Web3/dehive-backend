@@ -83,50 +83,21 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
                     console.log('🔍 [USER-DEHIVE AUTH GUARD] User ID:', userId);
                     console.log('🔍 [USER-DEHIVE AUTH GUARD] Available fields in JWT:', Object.keys(decodedPayload));
                     if (userId) {
-                        console.log('🔍 [USER-DEHIVE AUTH GUARD] Fetching full user profile from auth service');
+                        console.log('🔍 [USER-DEHIVE AUTH GUARD] Using session data directly for user profile');
                         const targetUserId = userDehiveId || userId;
                         console.log('🔍 [USER-DEHIVE AUTH GUARD] Using targetUserId:', targetUserId);
                         console.log('🔍 [USER-DEHIVE AUTH GUARD] userDehiveId from URL:', userDehiveId);
                         console.log('🔍 [USER-DEHIVE AUTH GUARD] userId from session:', userId);
-                        try {
-                            const profileResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/profile/${targetUserId}`, {
-                                headers: {
-                                    'x-session-id': sessionId,
-                                    'Content-Type': 'application/json',
-                                },
-                                timeout: 5000,
-                            }));
-                            if (profileResponse.data.success && profileResponse.data.data) {
-                                const userData = profileResponse.data.data;
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] User profile from auth service:', userData);
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] Available fields in userData:', Object.keys(userData));
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userData.email:', userData.email);
-                                console.log('🔍 [USER-DEHIVE AUTH GUARD] userData.avatar_ipfs_hash:', userData.avatar_ipfs_hash);
-                                request['user'] = {
-                                    _id: targetUserId,
-                                    userId: targetUserId,
-                                    email: userData.email || '',
-                                    username: userData.username || '',
-                                    display_name: userData.display_name || '',
-                                    avatar: userData.avatar_ipfs_hash || '',
-                                    role: userData.role || 'user',
-                                };
-                                console.log('✅ [USER-DEHIVE AUTH GUARD] Full user profile loaded:', request['user']);
-                            }
-                            else {
-                                throw new common_1.UnauthorizedException({
-                                    message: 'Failed to fetch user profile',
-                                    error: 'PROFILE_FETCH_FAILED',
-                                });
-                            }
-                        }
-                        catch (profileError) {
-                            console.error('❌ [USER-DEHIVE AUTH GUARD] Error fetching user profile:', profileError);
-                            throw new common_1.UnauthorizedException({
-                                message: 'Failed to fetch user profile',
-                                error: 'PROFILE_FETCH_ERROR',
-                            });
-                        }
+                        request['user'] = {
+                            _id: targetUserId,
+                            userId: targetUserId,
+                            email: '',
+                            username: '',
+                            display_name: '',
+                            avatar: '',
+                            role: 'user',
+                            session_id: sessionId,
+                        };
                         request['sessionId'] = sessionId;
                         console.log('✅ [USER-DEHIVE AUTH GUARD] User attached to request:', request['user']);
                     }

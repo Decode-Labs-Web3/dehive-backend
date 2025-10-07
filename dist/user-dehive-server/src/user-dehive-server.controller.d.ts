@@ -1,5 +1,6 @@
 import { UserDehiveServerService } from './user-dehive-server.service';
 import { AssignRoleDto } from '../dto/assign-role.dto';
+import { TransferOwnershipDto } from '../dto/transfer-ownership.dto';
 import { GenerateInviteDto } from '../dto/generate-invite.dto';
 import { JoinServerDto } from '../dto/join-server.dto';
 import { KickBanDto } from '../dto/kick-ban.dto';
@@ -29,30 +30,12 @@ export declare class UserDehiveServerController {
         message: string;
     }>;
     assignRole(dto: AssignRoleDto, actorBaseId: string): Promise<import("../schemas/user-dehive-server.schema").UserDehiveServerDocument>;
+    transferOwnership(dto: TransferOwnershipDto, currentOwnerId: string): Promise<{
+        message: string;
+    }>;
     updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{
         message: string;
     }>;
-    getUserProfile(userDehiveId: string, user: any): Promise<{
-        username: any;
-        display_name: any;
-        avatar: any;
-        dehive_data: {
-            bio: string;
-            status: string;
-            banner_color: string;
-            server_count: number;
-            last_login: Date;
-        };
-    }>;
-    getEnrichedUserProfile(userDehiveId: string, viewerUserId: string, currentUser: any): Promise<{
-        _id: string;
-        username: any;
-        display_name: any;
-        avatar: any;
-        bio: string;
-        status: string;
-        banner_color: string;
-        mutual_servers_count: number;
-        mutual_servers: import("mongoose").Types.ObjectId[];
-    }>;
+    getUserProfile(userDehiveId: string, user: any): Promise<any>;
+    getEnrichedUserProfile(userDehiveId: string, viewerUserId: string, currentUser: any): Promise<any>;
 }

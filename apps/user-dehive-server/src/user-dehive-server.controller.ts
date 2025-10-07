@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { UserDehiveServerService } from './user-dehive-server.service';
 import { AssignRoleDto } from '../dto/assign-role.dto';
+import { TransferOwnershipDto } from '../dto/transfer-ownership.dto';
 import { GenerateInviteDto } from '../dto/generate-invite.dto';
 import { JoinServerDto } from '../dto/join-server.dto';
 import { KickBanDto } from '../dto/kick-ban.dto';
@@ -251,6 +252,36 @@ export class UserDehiveServerController {
     @CurrentUser('userId') actorBaseId: string,
   ) {
     return this.service.assignRole(dto, actorBaseId);
+  }
+
+  @Patch('transfer-ownership')
+  @ApiOperation({
+    summary: 'Transfer server ownership',
+    description: 'Transfers ownership of server to another member. Only current owner can do this.',
+  })
+  @ApiHeader({
+    name: 'x-session-id',
+    description: 'Session ID of current owner',
+    required: true,
+  })
+  @ApiResponse({ status: 200, description: 'Ownership transferred successfully.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden (only current owner can transfer ownership).',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'New owner is not a member of this server.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request (e.g., cannot transfer to yourself).',
+  })
+  transferOwnership(
+    @Body() dto: TransferOwnershipDto,
+    @CurrentUser('userId') currentOwnerId: string,
+  ) {
+    return this.service.transferOwnership(dto, currentOwnerId);
   }
 
   @Patch('notification')

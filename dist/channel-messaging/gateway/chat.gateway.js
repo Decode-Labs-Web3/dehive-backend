@@ -71,17 +71,30 @@ let ChatGateway = class ChatGateway {
                 message: 'Invalid userDehiveId format.',
             });
         }
+        console.log(`[WebSocket] Checking if user exists: ${userDehiveId}`);
         const exists = await this.userDehiveModel.exists({
             _id: new mongoose_2.Types.ObjectId(userDehiveId),
         });
+        console.log(`[WebSocket] User exists check result: ${exists}`);
         if (!exists) {
+            console.log(`[WebSocket] UserDehive not found: ${userDehiveId}`);
             return this.send(client, 'error', {
                 message: 'UserDehive not found.',
             });
         }
         console.log(`[WebSocket] Client is identifying as UserDehive ID: ${userDehiveId}`);
         meta.userDehiveId = userDehiveId;
-        this.send(client, 'identityConfirmed', `You are now identified as ${userDehiveId}`);
+        console.log(`[WebSocket] Sending identityConfirmed to client`);
+        try {
+            this.send(client, 'identityConfirmed', {
+                message: `You are now identified as ${userDehiveId}`,
+                userDehiveId: userDehiveId
+            });
+            console.log(`[WebSocket] identityConfirmed sent successfully`);
+        }
+        catch (error) {
+            console.error(`[WebSocket] Error sending identityConfirmed:`, error);
+        }
     }
     async handleJoinChannel(data, client) {
         const meta = this.meta.get(client);
