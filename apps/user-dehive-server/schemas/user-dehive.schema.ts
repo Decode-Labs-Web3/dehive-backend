@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, ObjectId } from 'mongoose';
-
+import { Document, ObjectId, HydratedDocument } from 'mongoose';
+import { enumUserRole } from '../enum/enum';
 @Schema({
   collection: 'user_dehive',
   timestamps: true,
@@ -8,7 +8,7 @@ import { Document, ObjectId } from 'mongoose';
 export class UserDehive extends Document {
   @Prop({
     type: String,
-    enum: ['ADMIN', 'MODERATOR', 'USER'],
+    enum: enumUserRole,
     default: 'USER',
   })
   dehive_role: string;
@@ -45,4 +45,6 @@ export class UserDehive extends Document {
 }
 
 export const UserDehiveSchema = SchemaFactory.createForClass(UserDehive);
-export type UserDehiveDocument = UserDehive & Document;
+// export type UserDehiveDocument = UserDehive & Document;
+export type UserDehiveDocument = HydratedDocument<UserDehive>;
+export type UserDehiveLean = UserDehive & { _id: ObjectId };

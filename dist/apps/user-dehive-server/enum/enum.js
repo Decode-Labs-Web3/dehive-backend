@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AuditLogAction = exports.ServerRole = exports.Status = void 0;
+exports.AuditLogAction = exports.enumUserRole = exports.ServerRole = exports.Status = void 0;
 var Status;
 (function (Status) {
     Status["Online"] = "online";
@@ -14,6 +14,12 @@ var ServerRole;
     ServerRole["MODERATOR"] = "moderator";
     ServerRole["MEMBER"] = "member";
 })(ServerRole || (exports.ServerRole = ServerRole = {}));
+var enumUserRole;
+(function (enumUserRole) {
+    enumUserRole["ADMIN"] = "admin";
+    enumUserRole["MODERATOR"] = "moderator";
+    enumUserRole["USER"] = "user";
+})(enumUserRole || (exports.enumUserRole = enumUserRole = {}));
 var AuditLogAction;
 (function (AuditLogAction) {
     AuditLogAction["MEMBER_JOIN"] = "member_join";

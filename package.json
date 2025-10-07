@@ -28,10 +28,9 @@
     "test:e2e": "jest --config ./apps/dehive-backend/test/jest-e2e.json",
     "kill:all": "pkill -f 'nest start' || true",
     "restart:all": "npm run kill:all && sleep 2 && npm run start:all",
-    "setup": "node setup-safe.js",
+    "setup": "npm install && npm run build",
     "setup:manual": "npm install && npm run build",
-    "start:all:setup": "npm run setup && npm run start:all",
-    "postinstall": "node setup-safe.js"
+    "start:all:setup": "npm run setup && npm run start:all"
   },
   "dependencies": {
     "@nestjs-modules/ioredis": "^2.0.2",

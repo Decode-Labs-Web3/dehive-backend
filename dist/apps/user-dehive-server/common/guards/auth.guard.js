@@ -8,163 +8,102 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 var AuthGuard_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthGuard = exports.Public = exports.PUBLIC_KEY = void 0;
 const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
 const axios_1 = require("@nestjs/axios");
-const axios_2 = require("axios");
 const rxjs_1 = require("rxjs");
+const ioredis_1 = require("@nestjs-modules/ioredis");
+const ioredis_2 = require("ioredis");
+const config_1 = require("@nestjs/config");
 exports.PUBLIC_KEY = 'public';
 const Public = () => (0, common_1.SetMetadata)(exports.PUBLIC_KEY, true);
 exports.Public = Public;
 let AuthGuard = AuthGuard_1 = class AuthGuard {
     httpService;
     reflector;
+    configService;
+    redis;
     logger = new common_1.Logger(AuthGuard_1.name);
-    authServiceUrl = 'http://localhost:4006';
-    constructor(httpService, reflector) {
+    authServiceUrl;
+    constructor(httpService, reflector, configService, redis) {
         this.httpService = httpService;
         this.reflector = reflector;
-        console.log('🔥 [USER-DEHIVE AUTH GUARD] Constructor called - This is the user-dehive-server AuthGuard!');
+        this.configService = configService;
+        this.redis = redis;
+        const host = this.configService.get('DECODE_API_GATEWAY_HOST');
+        const port = this.configService.get('DECODE_API_GATEWAY_PORT');
+        if (!host || !port) {
+            throw new Error('DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!');
+        }
+        this.authServiceUrl = `http://${host}:${port}`;
     }
     async canActivate(context) {
-        console.log('🚨 [USER-DEHIVE AUTH GUARD] canActivate called - This is the user-dehive-server AuthGuard!');
-        const request = context.switchToHttp().getRequest();
         const isPublic = this.reflector.get(exports.PUBLIC_KEY, context.getHandler());
-        console.log('🚨 [USER-DEHIVE AUTH GUARD] isPublic:', isPublic);
-        if (isPublic) {
-            console.log('🚨 [USER-DEHIVE AUTH GUARD] Route is public, skipping auth');
+        if (isPublic)
             return true;
-        }
-        const sessionId = this.extractSessionIdFromHeader(request);
-        console.log('🚨 [USER-DEHIVE AUTH GUARD] sessionId:', sessionId);
+        const request = context.switchToHttp().getRequest();
+        const sessionId = request.headers['x-session-id'];
         if (!sessionId) {
-            console.log('❌ [USER-DEHIVE AUTH GUARD] No session ID found!');
-            throw new common_1.UnauthorizedException({
-                message: 'Session ID is required',
-                error: 'MISSING_SESSION_ID',
-            });
+            throw new common_1.UnauthorizedException('Session ID is required');
         }
-        const userDehiveId = this.extractUserDehiveIdFromUrl(request);
-        console.log('🚨 [USER-DEHIVE AUTH GUARD] userDehiveId from URL:', userDehiveId);
         try {
-            console.log('🔐 [USER-DEHIVE AUTH GUARD] Calling auth service for session validation');
-            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/session/check`, {
-                headers: {
-                    'x-session-id': sessionId,
-                    'Content-Type': 'application/json',
-                },
-                timeout: 5000,
+            const sessionKey = `session:${sessionId}`;
+            const cachedSessionRaw = await this.redis.get(sessionKey);
+            if (cachedSessionRaw) {
+                const cachedSession = JSON.parse(cachedSessionRaw);
+                if (cachedSession.user) {
+                    const authenticatedUser = { ...cachedSession.user, session_id: sessionId };
+                    request['user'] = authenticatedUser;
+                    return true;
+                }
+            }
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/sso/validate`, {
+                headers: { 'x-session-id': sessionId },
             }));
-            if (!response.data.success || !response.data.data) {
-                throw new common_1.UnauthorizedException({
-                    message: response.data.message || 'Invalid session',
-                    error: 'INVALID_SESSION',
-                });
+            const sessionData = response.data.data;
+            if (!sessionData || !sessionData.access_token) {
+                throw new common_1.UnauthorizedException('Invalid session data from auth service');
             }
-            const session_check_response = response.data;
-            console.log('🔍 [USER-DEHIVE AUTH GUARD] Session check response:', session_check_response);
-            if (session_check_response.success && session_check_response.data) {
-                console.log('🔐 [USER-DEHIVE AUTH GUARD] Using session data directly');
-                const sessionData = session_check_response.data;
-                const sessionToken = sessionData.session_token;
-                if (sessionToken) {
-                    console.log('🔍 [USER-DEHIVE AUTH GUARD] Session token:', sessionToken);
-                    const payload = sessionToken.split('.')[1];
-                    console.log('🔍 [USER-DEHIVE AUTH GUARD] JWT payload:', payload);
-                    const decodedPayload = JSON.parse(Buffer.from(payload, 'base64').toString());
-                    console.log('🔍 [USER-DEHIVE AUTH GUARD] Decoded payload:', decodedPayload);
-                    const userId = decodedPayload._id ||
-                        decodedPayload.user_id ||
-                        decodedPayload.sub ||
-                        decodedPayload.id;
-                    console.log('🔍 [USER-DEHIVE AUTH GUARD] User ID:', userId);
-                    console.log('🔍 [USER-DEHIVE AUTH GUARD] Available fields in JWT:', Object.keys(decodedPayload));
-                    if (userId) {
-                        console.log('🔍 [USER-DEHIVE AUTH GUARD] Using session data directly for user profile');
-                        const targetUserId = userDehiveId || userId;
-                        console.log('🔍 [USER-DEHIVE AUTH GUARD] Using targetUserId:', targetUserId);
-                        console.log('🔍 [USER-DEHIVE AUTH GUARD] userDehiveId from URL:', userDehiveId);
-                        console.log('🔍 [USER-DEHIVE AUTH GUARD] userId from session:', userId);
-                        request['user'] = {
-                            _id: targetUserId,
-                            userId: targetUserId,
-                            email: '',
-                            username: '',
-                            display_name: '',
-                            avatar: '',
-                            role: 'user',
-                            session_id: sessionId,
-                        };
-                        request['sessionId'] = sessionId;
-                        console.log('✅ [USER-DEHIVE AUTH GUARD] User attached to request:', request['user']);
-                    }
-                    else {
-                        throw new common_1.UnauthorizedException({
-                            message: 'No _id in JWT token',
-                            error: 'NO_ID_IN_JWT',
-                        });
-                    }
-                }
-                else {
-                    throw new common_1.UnauthorizedException({
-                        message: 'No session token available',
-                        error: 'NO_SESSION_TOKEN',
-                    });
-                }
+            const profileResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/users/profile/me`, {
+                headers: { 'Authorization': `Bearer ${sessionData.access_token}` },
+            }));
+            const userProfile = profileResponse.data.data;
+            if (!userProfile) {
+                throw new common_1.UnauthorizedException('Could not retrieve user profile');
             }
+            const cacheData = {
+                session_token: sessionData.session_token,
+                access_token: sessionData.access_token,
+                user: userProfile,
+                expires_at: sessionData.expires_at,
+            };
+            const ttl = Math.ceil((new Date(sessionData.expires_at).getTime() - Date.now()) / 1000);
+            if (ttl > 0) {
+                await this.redis.set(sessionKey, JSON.stringify(cacheData), 'EX', ttl);
+            }
+            const authenticatedUser = { ...userProfile, session_id: sessionId };
+            request['user'] = authenticatedUser;
             return true;
         }
         catch (error) {
-            if (error instanceof axios_2.AxiosError) {
-                if (error.response?.status === 401) {
-                    throw new common_1.UnauthorizedException({
-                        message: 'Invalid or expired session',
-                        error: 'SESSION_EXPIRED',
-                    });
-                }
-                this.logger.error('Auth service is unavailable');
-                throw new common_1.UnauthorizedException({
-                    message: 'Authentication service unavailable',
-                    error: 'SERVICE_UNAVAILABLE',
-                });
-            }
-            if (error instanceof common_1.UnauthorizedException) {
-                throw error;
-            }
-            this.logger.error(`Authentication failed: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
-            throw new common_1.UnauthorizedException({
-                message: 'Authentication failed',
-                error: 'AUTHENTICATION_ERROR',
-            });
+            this.logger.error(`Authentication failed for session ${sessionId}:`, error.stack);
+            throw new common_1.UnauthorizedException('Authentication failed or invalid session');
         }
-    }
-    extractSessionIdFromHeader(request) {
-        return request.headers['x-session-id'];
-    }
-    extractUserDehiveIdFromUrl(request) {
-        const url = request.url;
-        console.log('🚨 [USER-DEHIVE AUTH GUARD] Full URL:', url);
-        const targetMatch = url.match(/\/profile\/target\/([^\/\?]+)/);
-        const enrichedMatch = url.match(/\/profile\/enriched\/target\/([^\/\?]+)/);
-        if (targetMatch) {
-            console.log('🚨 [USER-DEHIVE AUTH GUARD] Found user_dehive_id from target route:', targetMatch[1]);
-            return targetMatch[1];
-        }
-        if (enrichedMatch) {
-            console.log('🚨 [USER-DEHIVE AUTH GUARD] Found user_dehive_id from enriched route:', enrichedMatch[1]);
-            return enrichedMatch[1];
-        }
-        console.log('🚨 [USER-DEHIVE AUTH GUARD] No user_dehive_id found in URL');
-        return undefined;
     }
 };
 exports.AuthGuard = AuthGuard;
 exports.AuthGuard = AuthGuard = AuthGuard_1 = __decorate([
     (0, common_1.Injectable)(),
+    __param(3, (0, ioredis_1.InjectRedis)()),
     __metadata("design:paramtypes", [axios_1.HttpService,
-        core_1.Reflector])
+        core_1.Reflector,
+        config_1.ConfigService,
+        ioredis_2.Redis])
 ], AuthGuard);
 //# sourceMappingURL=auth.guard.js.map

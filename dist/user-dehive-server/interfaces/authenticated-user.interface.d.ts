@@ -1,9 +1,4 @@
-export interface AuthenticatedUser {
-    _id: string;
-    userId: string;
-    email: string;
-    username: string;
-    display_name?: string;
-    avatar?: string | null;
-    role: 'user' | 'admin' | 'moderator';
+import { UserProfile } from './user-profile.interface';
+export interface AuthenticatedUser extends UserProfile {
+    session_id: string;
 }

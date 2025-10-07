@@ -11,6 +11,12 @@ export enum ServerRole {
   MEMBER = 'member',
 }
 
+export enum enumUserRole {
+  ADMIN = 'admin',
+  MODERATOR = 'moderator',
+  USER = 'user',
+}
+
 export enum AuditLogAction {
   MEMBER_JOIN = 'member_join',
   MEMBER_LEAVE = 'member_leave',

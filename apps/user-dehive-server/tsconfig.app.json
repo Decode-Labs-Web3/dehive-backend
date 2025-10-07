@@ -4,6 +4,24 @@
     "declaration": false,
     "outDir": "../../dist/apps/user-dehive-server"
   },
-  "include": ["src/**/*", "common/**/*", "dto/**/*", "interfaces/**/*", "schemas/**/*", "enum/**/*"],
-  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
+  "include": [
+    "src/**/*",
+    "clients/**/*",
+    "common/**/*",
+    "dto/**/*",
+    "entities/**/*",
+    "enum/**/*",
+    "interfaces/**/*",
+    "kafka/**/*",
+    "redis/**/*",
+    "schemas/**/*",
+    "strategies/**/*",
+    "types/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "**/*spec.ts"
+  ]
 }

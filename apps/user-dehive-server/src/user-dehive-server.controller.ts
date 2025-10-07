@@ -17,8 +17,10 @@ import { KickBanDto } from '../dto/kick-ban.dto';
 import { LeaveServerDto } from '../dto/leave-server.dto';
 import { UnbanDto } from '../dto/unban.dto';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';
-import { AuthGuard, Public } from '../common/guards/auth.guard';
+import { GetServerMembersDto } from '../dto/get-server-members.dto';
+import { AuthGuard } from '../common/guards/auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
 import {
   ApiTags,
   ApiOperation,
@@ -61,9 +63,9 @@ export class UserDehiveServerController {
   })
   joinServer(
     @Body() dto: JoinServerDto,
-    @CurrentUser('userId') userId: string,
+    @CurrentUser('_id') _id: string,
   ) {
-    return this.service.joinServer(dto, userId);
+    return this.service.joinServer(dto, _id);
   }
 
   @Delete('server/:serverId/leave')
@@ -84,35 +86,12 @@ export class UserDehiveServerController {
   })
   leaveServer(
     @Param('serverId') serverId: string,
-    @CurrentUser('userId') userId: string,
+    @CurrentUser('_id') _id: string,
   ) {
     const dto: LeaveServerDto = {
       server_id: serverId,
     };
-    return this.service.leaveServer(dto, userId);
-  }
-
-  @Get('server/:serverId/members')
-  @ApiOperation({
-    summary: 'Get all members in a server',
-    description: 'Retrieves a list of all members for a specific server.',
-  })
-  @ApiHeader({
-    name: 'x-session-id',
-    description: 'Session ID of authenticated user',
-    required: true,
-  })
-  @ApiParam({ name: 'serverId', description: 'The ID of the server' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns a list of members.',
-  })
-  getMembersInServer(
-    @Param('serverId') serverId: string,
-    @CurrentUser() user: any,
-  ) {
-    console.log('🎯 [GET MEMBERS CONTROLLER] User from CurrentUser:', user);
-    return this.service.getMembersInServer(serverId, user);
+    return this.service.leaveServer(dto, _id);
   }
 
   @Post('invite/generate')
@@ -135,7 +114,7 @@ export class UserDehiveServerController {
   })
   generateInvite(
     @Body() dto: GenerateInviteDto,
-    @CurrentUser('userId') actorBaseId: string,
+    @CurrentUser('_id') actorBaseId: string,
   ) {
     return this.service.generateInvite(dto, actorBaseId);
   }
@@ -161,7 +140,7 @@ export class UserDehiveServerController {
   })
   useInvite(
     @Param('code') code: string,
-    @CurrentUser('userId') actorBaseId: string,
+    @CurrentUser('_id') actorBaseId: string,
   ) {
     return this.service.useInvite(code, actorBaseId);
   }
@@ -184,7 +163,7 @@ export class UserDehiveServerController {
   })
   kickMember(
     @Body() dto: KickBanDto,
-    @CurrentUser('userId') actorBaseId: string,
+    @CurrentUser('_id') actorBaseId: string,
   ) {
     return this.service.kickOrBan(dto, 'kick', actorBaseId);
   }
@@ -207,7 +186,7 @@ export class UserDehiveServerController {
   })
   banMember(
     @Body() dto: KickBanDto,
-    @CurrentUser('userId') actorBaseId: string,
+    @CurrentUser('_id') actorBaseId: string,
   ) {
     return this.service.kickOrBan(dto, 'ban', actorBaseId);
   }
@@ -227,7 +206,7 @@ export class UserDehiveServerController {
   @ApiResponse({ status: 404, description: 'Ban record not found.' })
   unbanMember(
     @Body() dto: UnbanDto,
-    @CurrentUser('userId') actorBaseId: string,
+    @CurrentUser('_id') actorBaseId: string,
   ) {
     return this.service.unbanMember(dto, actorBaseId);
   }
@@ -249,7 +228,7 @@ export class UserDehiveServerController {
   })
   assignRole(
     @Body() dto: AssignRoleDto,
-    @CurrentUser('userId') actorBaseId: string,
+    @CurrentUser('_id') actorBaseId: string,
   ) {
     return this.service.assignRole(dto, actorBaseId);
   }
@@ -279,7 +258,7 @@ export class UserDehiveServerController {
   })
   transferOwnership(
     @Body() dto: TransferOwnershipDto,
-    @CurrentUser('userId') currentOwnerId: string,
+    @CurrentUser('_id') currentOwnerId: string,
   ) {
     return this.service.transferOwnership(dto, currentOwnerId);
   }
@@ -299,60 +278,39 @@ export class UserDehiveServerController {
   @ApiResponse({ status: 404, description: 'Membership not found.' })
   updateNotification(
     @Body() dto: UpdateNotificationDto,
-    @CurrentUser('userId') actorBaseId: string,
+    @CurrentUser('_id') actorBaseId: string,
   ) {
     return this.service.updateNotification(dto, actorBaseId);
   }
 
-  @Get('profile/target/:user_dehive_id')
+  @Get('server/:serverId/members')
   @ApiOperation({
-    summary: 'Get a base user profile',
-    description: 'Retrieves the basic, public profile of a user using user_dehive_id.',
+    summary: 'Get all members in a server',
+    description: 'Retrieves a list of all members for a specific server.',
   })
-  @ApiHeader({
-    name: 'x-session-id',
-    description: 'Session ID of authenticated user (viewer)',
-    required: true,
-  })
-  @ApiParam({
-    name: 'user_dehive_id',
-    description: 'User Dehive ID of the target user to view',
-  })
-  @ApiResponse({ status: 200, description: 'Returns the base user profile.' })
-  getUserProfile(
-    @Param('user_dehive_id') userDehiveId: string,
-    @CurrentUser() user: any,
+  @ApiHeader({ name: 'x-session-id', required: true })
+  @ApiParam({ name: 'serverId', description: 'The ID of the server' })
+  @ApiResponse({ status: 200, description: 'Returns a list of members.' })
+  getMembersInServer(
+    @Param() params: GetServerMembersDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    console.log('🎯 [GET USER PROFILE CONTROLLER] User from CurrentUser:', user);
-    return this.service.getUserProfileByUserDehiveId(userDehiveId, user);
+    return this.service.getMembersInServer(params.serverId, user);
   }
 
-  @Get('profile/enriched/target/:user_dehive_id')
+  @Get('profile/:userId')
   @ApiOperation({
-    summary: 'Get an enriched user profile',
-    description:
-      'Retrieves a social user profile, including mutual servers, from the perspective of the viewer.',
+    summary: 'Get enriched user profile',
+    description: 'Retrieves a full user profile, including mutual servers, from the perspective of the current user.',
   })
-  @ApiHeader({
-    name: 'x-session-id',
-    description: 'Session ID of authenticated user',
-    required: true,
-  })
-  @ApiParam({
-    name: 'user_dehive_id',
-    description: 'User Dehive ID of the target user',
-  })
-  @ApiResponse({ status: 200, description: 'Returns the enriched profile.' })
-  @ApiResponse({
-    status: 404,
-    description: 'Profile for target or viewer not found.',
-  })
+  @ApiHeader({ name: 'x-session-id', required: true })
+  @ApiParam({ name: '_id', description: 'The ID of the user profile to view' })
+  @ApiResponse({ status: 200, description: 'Returns the enriched user profile.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
   getEnrichedUserProfile(
-    @Param('user_dehive_id') userDehiveId: string,
-    @CurrentUser('userId') viewerUserId: string,
-    @CurrentUser() currentUser: any,
+    @Param('userId') targetUserId: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
   ) {
-    console.log('🎯 [GET ENRICHED PROFILE CONTROLLER] User from CurrentUser:', currentUser);
-    return this.service.getEnrichedUserProfileByUserDehiveId(userDehiveId, viewerUserId, currentUser);
+    return this.service.getEnrichedUserProfile(targetUserId, currentUser);
   }
 }

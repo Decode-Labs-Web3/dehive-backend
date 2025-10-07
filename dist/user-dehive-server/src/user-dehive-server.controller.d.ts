@@ -6,16 +6,17 @@ import { JoinServerDto } from '../dto/join-server.dto';
 import { KickBanDto } from '../dto/kick-ban.dto';
 import { UnbanDto } from '../dto/unban.dto';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';
+import { GetServerMembersDto } from '../dto/get-server-members.dto';
+import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
 export declare class UserDehiveServerController {
     private readonly service;
     constructor(service: UserDehiveServerService);
-    joinServer(dto: JoinServerDto, userId: string): Promise<{
+    joinServer(dto: JoinServerDto, _id: string): Promise<{
         message: string;
     }>;
-    leaveServer(serverId: string, userId: string): Promise<{
+    leaveServer(serverId: string, _id: string): Promise<{
         message: string;
     }>;
-    getMembersInServer(serverId: string, user: any): Promise<any[]>;
     generateInvite(dto: GenerateInviteDto, actorBaseId: string): Promise<import("../schemas/invite-link.schema").InviteLinkDocument>;
     useInvite(code: string, actorBaseId: string): Promise<{
         message: string;
@@ -36,6 +37,6 @@ export declare class UserDehiveServerController {
     updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{
         message: string;
     }>;
-    getUserProfile(userDehiveId: string, user: any): Promise<any>;
-    getEnrichedUserProfile(userDehiveId: string, viewerUserId: string, currentUser: any): Promise<any>;
+    getMembersInServer(params: GetServerMembersDto, user: AuthenticatedUser): Promise<any[]>;
+    getEnrichedUserProfile(targetUserId: string, currentUser: AuthenticatedUser): Promise<any>;
 }

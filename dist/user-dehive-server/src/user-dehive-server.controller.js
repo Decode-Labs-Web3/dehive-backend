@@ -22,6 +22,7 @@ const join_server_dto_1 = require("../dto/join-server.dto");
 const kick_ban_dto_1 = require("../dto/kick-ban.dto");
 const unban_dto_1 = require("../dto/unban.dto");
 const update_notification_dto_1 = require("../dto/update-notification.dto");
+const get_server_members_dto_1 = require("../dto/get-server-members.dto");
 const auth_guard_1 = require("../common/guards/auth.guard");
 const current_user_decorator_1 = require("../common/decorators/current-user.decorator");
 const swagger_1 = require("@nestjs/swagger");
@@ -30,18 +31,14 @@ let UserDehiveServerController = class UserDehiveServerController {
     constructor(service) {
         this.service = service;
     }
-    joinServer(dto, userId) {
-        return this.service.joinServer(dto, userId);
+    joinServer(dto, _id) {
+        return this.service.joinServer(dto, _id);
     }
-    leaveServer(serverId, userId) {
+    leaveServer(serverId, _id) {
         const dto = {
             server_id: serverId,
         };
-        return this.service.leaveServer(dto, userId);
-    }
-    getMembersInServer(serverId, user) {
-        console.log('🎯 [GET MEMBERS CONTROLLER] User from CurrentUser:', user);
-        return this.service.getMembersInServer(serverId, user);
+        return this.service.leaveServer(dto, _id);
     }
     generateInvite(dto, actorBaseId) {
         return this.service.generateInvite(dto, actorBaseId);
@@ -67,13 +64,11 @@ let UserDehiveServerController = class UserDehiveServerController {
     updateNotification(dto, actorBaseId) {
         return this.service.updateNotification(dto, actorBaseId);
     }
-    getUserProfile(userDehiveId, user) {
-        console.log('🎯 [GET USER PROFILE CONTROLLER] User from CurrentUser:', user);
-        return this.service.getUserProfileByUserDehiveId(userDehiveId, user);
+    getMembersInServer(params, user) {
+        return this.service.getMembersInServer(params.serverId, user);
     }
-    getEnrichedUserProfile(userDehiveId, viewerUserId, currentUser) {
-        console.log('🎯 [GET ENRICHED PROFILE CONTROLLER] User from CurrentUser:', currentUser);
-        return this.service.getEnrichedUserProfileByUserDehiveId(userDehiveId, viewerUserId, currentUser);
+    getEnrichedUserProfile(targetUserId, currentUser) {
+        return this.service.getEnrichedUserProfile(targetUserId, currentUser);
     }
 };
 exports.UserDehiveServerController = UserDehiveServerController;
@@ -105,7 +100,7 @@ __decorate([
         description: 'Server or Dehive Profile not found.',
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [join_server_dto_1.JoinServerDto, String]),
     __metadata("design:returntype", void 0)
@@ -128,33 +123,11 @@ __decorate([
         description: 'Forbidden (e.g., owner cannot leave).',
     }),
     __param(0, (0, common_1.Param)('serverId')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "leaveServer", null);
-__decorate([
-    (0, common_1.Get)('server/:serverId/members'),
-    (0, swagger_1.ApiOperation)({
-        summary: 'Get all members in a server',
-        description: 'Retrieves a list of all members for a specific server.',
-    }),
-    (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
-        required: true,
-    }),
-    (0, swagger_1.ApiParam)({ name: 'serverId', description: 'The ID of the server' }),
-    (0, swagger_1.ApiResponse)({
-        status: 200,
-        description: 'Returns a list of members.',
-    }),
-    __param(0, (0, common_1.Param)('serverId')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
-    __metadata("design:returntype", void 0)
-], UserDehiveServerController.prototype, "getMembersInServer", null);
 __decorate([
     (0, common_1.Post)('invite/generate'),
     (0, swagger_1.ApiOperation)({
@@ -175,7 +148,7 @@ __decorate([
         description: 'Forbidden (e.g., user is not a member).',
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [generate_invite_dto_1.GenerateInviteDto, String]),
     __metadata("design:returntype", void 0)
@@ -201,7 +174,7 @@ __decorate([
         description: 'Invite link is invalid or has expired.',
     }),
     __param(0, (0, common_1.Param)('code')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
@@ -223,7 +196,7 @@ __decorate([
         description: 'Forbidden (insufficient permissions).',
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [kick_ban_dto_1.KickBanDto, String]),
     __metadata("design:returntype", void 0)
@@ -245,7 +218,7 @@ __decorate([
         description: 'Forbidden (insufficient permissions).',
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [kick_ban_dto_1.KickBanDto, String]),
     __metadata("design:returntype", void 0)
@@ -264,7 +237,7 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 201, description: 'User successfully unbanned.' }),
     (0, swagger_1.ApiResponse)({ status: 404, description: 'Ban record not found.' }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [unban_dto_1.UnbanDto, String]),
     __metadata("design:returntype", void 0)
@@ -286,7 +259,7 @@ __decorate([
         description: 'Forbidden (only owner can assign roles).',
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [assign_role_dto_1.AssignRoleDto, String]),
     __metadata("design:returntype", void 0)
@@ -316,7 +289,7 @@ __decorate([
         description: 'Bad Request (e.g., cannot transfer to yourself).',
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [transfer_ownership_dto_1.TransferOwnershipDto, String]),
     __metadata("design:returntype", void 0)
@@ -335,58 +308,40 @@ __decorate([
     (0, swagger_1.ApiResponse)({ status: 200, description: 'Notification settings updated.' }),
     (0, swagger_1.ApiResponse)({ status: 404, description: 'Membership not found.' }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [update_notification_dto_1.UpdateNotificationDto, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "updateNotification", null);
 __decorate([
-    (0, common_1.Get)('profile/target/:user_dehive_id'),
+    (0, common_1.Get)('server/:serverId/members'),
     (0, swagger_1.ApiOperation)({
-        summary: 'Get a base user profile',
-        description: 'Retrieves the basic, public profile of a user using user_dehive_id.',
+        summary: 'Get all members in a server',
+        description: 'Retrieves a list of all members for a specific server.',
     }),
-    (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user (viewer)',
-        required: true,
+    (0, swagger_1.ApiHeader)({ name: 'x-session-id', required: true }),
+    (0, swagger_1.ApiParam)({ name: 'serverId', description: 'The ID of the server' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns a list of members.' }),
+    __param(0, (0, common_1.Param)()),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [get_server_members_dto_1.GetServerMembersDto, Object]),
+    __metadata("design:returntype", void 0)
+], UserDehiveServerController.prototype, "getMembersInServer", null);
+__decorate([
+    (0, common_1.Get)('profile/:userId'),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Get enriched user profile',
+        description: 'Retrieves a full user profile, including mutual servers, from the perspective of the current user.',
     }),
-    (0, swagger_1.ApiParam)({
-        name: 'user_dehive_id',
-        description: 'User Dehive ID of the target user to view',
-    }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns the base user profile.' }),
-    __param(0, (0, common_1.Param)('user_dehive_id')),
+    (0, swagger_1.ApiHeader)({ name: 'x-session-id', required: true }),
+    (0, swagger_1.ApiParam)({ name: '_id', description: 'The ID of the user profile to view' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns the enriched user profile.' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: 'User not found.' }),
+    __param(0, (0, common_1.Param)('userId')),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, Object]),
-    __metadata("design:returntype", void 0)
-], UserDehiveServerController.prototype, "getUserProfile", null);
-__decorate([
-    (0, common_1.Get)('profile/enriched/target/:user_dehive_id'),
-    (0, swagger_1.ApiOperation)({
-        summary: 'Get an enriched user profile',
-        description: 'Retrieves a social user profile, including mutual servers, from the perspective of the viewer.',
-    }),
-    (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
-        required: true,
-    }),
-    (0, swagger_1.ApiParam)({
-        name: 'user_dehive_id',
-        description: 'User Dehive ID of the target user',
-    }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns the enriched profile.' }),
-    (0, swagger_1.ApiResponse)({
-        status: 404,
-        description: 'Profile for target or viewer not found.',
-    }),
-    __param(0, (0, common_1.Param)('user_dehive_id')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
-    __param(2, (0, current_user_decorator_1.CurrentUser)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, Object]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "getEnrichedUserProfile", null);
 exports.UserDehiveServerController = UserDehiveServerController = __decorate([

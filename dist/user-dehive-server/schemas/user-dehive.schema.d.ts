@@ -1,4 +1,4 @@
-import { Document, ObjectId } from 'mongoose';
+import { Document, ObjectId, HydratedDocument } from 'mongoose';
 export declare class UserDehive extends Document {
     dehive_role: string;
     role_subscription: ObjectId;
@@ -19,4 +19,7 @@ export declare const UserDehiveSchema: import("mongoose").Schema<UserDehive, imp
 }> & {
     __v: number;
 }>;
-export type UserDehiveDocument = UserDehive & Document;
+export type UserDehiveDocument = HydratedDocument<UserDehive>;
+export type UserDehiveLean = UserDehive & {
+    _id: ObjectId;
+};

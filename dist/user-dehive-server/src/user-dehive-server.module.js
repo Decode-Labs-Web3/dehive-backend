@@ -14,7 +14,7 @@ const axios_1 = require("@nestjs/axios");
 const ioredis_1 = require("@nestjs-modules/ioredis");
 const user_dehive_server_controller_1 = require("./user-dehive-server.controller");
 const user_dehive_server_service_1 = require("./user-dehive-server.service");
-const auth_service_client_1 = require("./auth-service.client");
+const decode_api_client_1 = require("../clients/decode-api.client");
 const user_dehive_schema_1 = require("../schemas/user-dehive.schema");
 const server_schema_1 = require("../schemas/server.schema");
 const invite_link_schema_1 = require("../schemas/invite-link.schema");
@@ -70,8 +70,12 @@ exports.UserDehiveServerModule = UserDehiveServerModule = __decorate([
             ]),
         ],
         controllers: [user_dehive_server_controller_1.UserDehiveServerController],
-        providers: [user_dehive_server_service_1.UserDehiveServerService, auth_service_client_1.AuthServiceClient, auth_guard_1.AuthGuard],
-        exports: [user_dehive_server_service_1.UserDehiveServerService, auth_service_client_1.AuthServiceClient, MONGOOSE_MODELS],
+        providers: [
+            user_dehive_server_service_1.UserDehiveServerService,
+            decode_api_client_1.DecodeApiClient,
+            auth_guard_1.AuthGuard,
+        ],
+        exports: [user_dehive_server_service_1.UserDehiveServerService, MONGOOSE_MODELS],
     })
 ], UserDehiveServerModule);
 //# sourceMappingURL=user-dehive-server.module.js.map

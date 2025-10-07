@@ -4,11 +4,9 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { UserDehive, UserDehiveDocument } from '../schemas/user-dehive.schema';
+import { UserDehive, UserDehiveDocument, UserDehiveLean } from '../schemas/user-dehive.schema';
 import {
   UserDehiveServer,
   UserDehiveServerDocument,
@@ -25,9 +23,12 @@ import { KickBanDto } from '../dto/kick-ban.dto';
 import { UnbanDto } from '../dto/unban.dto';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';
 import { ServerRole } from '../enum/enum';
-import { AuthServiceClient } from './auth-service.client';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import { Redis } from 'ioredis';
+import { DecodeApiClient } from '../clients/decode-api.client';
+import { UserProfile } from '../interfaces/user-profile.interface';
+import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
+
 
 @Injectable()
 export class UserDehiveServerService {
@@ -41,9 +42,8 @@ export class UserDehiveServerService {
     private serverBanModel: Model<ServerBanDocument>,
     @InjectModel(InviteLink.name)
     private inviteLinkModel: Model<InviteLinkDocument>,
-    private readonly authClient: AuthServiceClient,
+    private readonly decodeApiClient: DecodeApiClient,
     @InjectRedis() private readonly redis: Redis,
-    private readonly httpService: HttpService,
   ) {}
 
   // Helper method to find UserDehive profile (without auto-create)
@@ -51,88 +51,6 @@ export class UserDehiveServerService {
     return await this.userDehiveModel.findById(userId).lean();
   }
 
-
-  /**
-   * Helper function to decode session_id and get user_dehive_id
-   */
-  private async getUserDehiveIdFromSession(
-    sessionId: string,
-  ): Promise<Types.ObjectId> {
-    try {
-      console.log(
-        '🔍 [GET USER DEHIVE ID] Calling auth service for session:',
-        sessionId,
-      );
-      // Call auth service to validate session and get user_dehive_id
-      const response = await firstValueFrom(
-        this.httpService.get<{
-          success: boolean;
-          data: any;
-          message?: string;
-        }>(`http://localhost:4006/auth/session/check`, {
-          headers: {
-            'x-session-id': sessionId,
-            'Content-Type': 'application/json',
-          },
-          timeout: 5000,
-        }),
-      );
-
-      console.log(
-        '🔍 [GET USER DEHIVE ID] Auth service response:',
-        response.data,
-      );
-
-      if (!response.data.success || !response.data.data) {
-        throw new NotFoundException('Invalid session for target user');
-      }
-
-      // Extract user_dehive_id from session data
-      const sessionData = response.data.data;
-      const sessionToken = sessionData.session_token;
-
-      if (!sessionToken) {
-        throw new NotFoundException('No session token for target user');
-      }
-
-      // Decode JWT to get _id (user_dehive_id)
-      const payload = sessionToken.split('.')[1];
-      const decodedPayload = JSON.parse(
-        Buffer.from(payload, 'base64').toString(),
-      );
-
-      console.log('🔍 [GET USER DEHIVE ID] JWT payload:', decodedPayload);
-      console.log(
-        '🔍 [GET USER DEHIVE ID] Available fields:',
-        Object.keys(decodedPayload),
-      );
-      console.log('🔍 [GET USER DEHIVE ID] Full JWT payload values:', JSON.stringify(decodedPayload, null, 2));
-
-      // Try different possible field names
-      const userDehiveId =
-        decodedPayload._id ||
-        decodedPayload.user_id ||
-        decodedPayload.sub ||
-        decodedPayload.id ||
-        decodedPayload.user_dehive_id;
-      console.log(
-        '🔍 [GET USER DEHIVE ID] Found user_dehive_id:',
-        userDehiveId,
-      );
-
-      if (!userDehiveId) {
-        console.log('❌ [GET USER DEHIVE ID] No user_dehive_id found in JWT payload');
-        throw new NotFoundException('No user_dehive_id in target session');
-      }
-
-      console.log('✅ [GET USER DEHIVE ID] Successfully resolved session to user_dehive_id:', userDehiveId);
-      return new Types.ObjectId(userDehiveId);
-    } catch (error) {
-      throw new NotFoundException(
-        `Failed to get user_dehive_id from session: ${error.message}`,
-      );
-    }
-  }
 
   async joinServer(
     dto: JoinServerDto,
@@ -626,7 +544,6 @@ export class UserDehiveServerService {
         { session }
       );
 
-      // Change new owner role to OWNER
       await this.userDehiveServerModel.updateOne(
         { _id: newOwnerMembership._id },
         { $set: { role: ServerRole.OWNER } },
@@ -635,7 +552,6 @@ export class UserDehiveServerService {
 
       await session.commitTransaction();
 
-      // Invalidate member list cache
       await this.invalidateMemberListCache(dto.server_id);
 
       return { message: 'Ownership transferred successfully.' };
@@ -674,505 +590,92 @@ export class UserDehiveServerService {
     return { message: 'Notification settings updated successfully.' };
   }
 
-  async getUserProfileBySession(targetSessionId: string, currentUser: any) {
-    console.log('🎯 [GET USER PROFILE BY SESSION] targetSessionId:', targetSessionId);
-    console.log('🎯 [GET USER PROFILE BY SESSION] currentUser:', currentUser);
 
-    // 1. Decode target session_id to get user_dehive_id
-    const targetUserId = await this.getUserDehiveIdFromSession(targetSessionId);
-    console.log('🎯 [GET USER PROFILE BY SESSION] targetUserId from session:', targetUserId);
+  private async _getEnrichedUser(userId: string, sessionIdOfRequester: string): Promise<any> {
+    const userDecodeData = await this.decodeApiClient.getUserById(userId, sessionIdOfRequester);
+    if (!userDecodeData) {
+      throw new NotFoundException(`User with ID ${userId} not found in Decode service`);
+    }
 
-    // 2. Check if viewing own profile or different user
-    const isOwnProfile = targetUserId.toString() === currentUser._id;
-    console.log('🎯 [GET USER PROFILE BY SESSION] isOwnProfile:', isOwnProfile);
+    let userDehiveData: UserDehiveLean | null = await this.userDehiveModel.findById(userId).lean<UserDehiveLean>();
+    if (!userDehiveData) {
+      const newUser = new this.userDehiveModel({ _id: userId, status: 'ACTIVE' });
+      const savedDocument = await newUser.save();
+      userDehiveData = savedDocument.toObject<UserDehiveLean>();
+    }
 
-    // 3. Use currentUser data directly
-    const authProfile = {
-      username: currentUser.username,
-      display_name: currentUser.display_name,
-      avatar: currentUser.avatar,
-    };
+    return this._mergeUserData(userDehiveData, userDecodeData);
+  }
 
-    // 4. Get Dehive-specific data
-    const userDehive = await this.userDehiveModel
-      .findById(targetUserId)
-      .select('bio status banner_color server_count last_login')
-      .lean();
-
-    // 5. Merge auth profile with Dehive data
+  private _mergeUserData(dehiveData: UserDehiveLean, decodeData: UserProfile): any {
     return {
-      ...authProfile,
-      dehive_data: userDehive
-        ? {
-            bio: userDehive.bio,
-            status: userDehive.status,
-            banner_color: userDehive.banner_color,
-            server_count: userDehive.server_count,
-            last_login: userDehive.last_login,
-          }
-        : {
-            bio: '',
-            status: 'offline',
-            banner_color: null,
-            server_count: 0,
-            last_login: null,
-          },
+      _id: decodeData._id.toString(),
+      username: decodeData.username,
+      display_name: decodeData.display_name,
+      avatar: decodeData.avatar_ipfs_hash,
+      status: dehiveData.status,
+      server_count: dehiveData.server_count,
+      bio: dehiveData.bio,
+      banner_color: dehiveData.banner_color,
+      is_banned: dehiveData.is_banned
     };
   }
 
-  async getUserProfileByUserDehiveId(userDehiveId: string, currentUser: any) {
-    console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
-    console.log('🎯 [GET USER PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
 
-    // 1. Use currentUser data directly (already contains full data from AuthGuard)
-    // AuthGuard đã lấy được full data từ auth service, không cần gọi lại
-    let targetUserAuthProfile: any = null;
-
-    // Check if we're viewing the same user (currentUser is the target user)
-    if (currentUser._id === userDehiveId) {
-      // Use currentUser data directly (already has full data from AuthGuard)
-      targetUserAuthProfile = currentUser;
-    } else {
-      // For different user, try to get from auth service
-      try {
-        const sessionId = currentUser.session_id || 'test_session_' + userDehiveId;
-        const fingerprintHashed = currentUser.fingerprint_hashed || 'test_fingerprint';
-
-        targetUserAuthProfile = await this.authClient.getUserProfile(
-          userDehiveId,
-          sessionId,
-          fingerprintHashed
-        );
-      } catch (error) {
-        console.error('Error getting target user auth profile:', error);
-        // Fallback to currentUser data if auth service fails
-        targetUserAuthProfile = currentUser;
-      }
-    }
-
-    // 2. Get target user's Dehive profile
-    const userDehive = await this.userDehiveModel
-      .findById(userDehiveId)
-      .select('bio status banner_color server_count last_login')
-      .lean();
-
-    if (!userDehive) {
-      throw new NotFoundException('User profile not found');
-    }
-
-    // 3. Return full auth profile data + dehive data
-    if (targetUserAuthProfile) {
-      // Return full auth data from getUser + dehive data
-      return {
-        ...targetUserAuthProfile,
-        dehive_data: {
-          bio: userDehive.bio || '',
-          status: userDehive.status || 'offline',
-          banner_color: userDehive.banner_color,
-          server_count: userDehive.server_count || 0,
-          last_login: userDehive.last_login,
-        },
-      };
-    } else {
-      // Fallback to currentUser data + dehive data
-      return {
-        username: currentUser.username,
-        display_name: currentUser.display_name,
-        avatar: currentUser.avatar,
-        dehive_data: {
-          bio: userDehive.bio || '',
-          status: userDehive.status || 'offline',
-          banner_color: userDehive.banner_color,
-          server_count: userDehive.server_count || 0,
-          last_login: userDehive.last_login,
-        },
-      };
-    }
-  }
-
-  async getUserProfile(userId: string, currentUser: any) {
-
-    let targetUserAuthData = null;
-    try {
-      const decodeServiceUrl = process.env.DECODE_SERVICE_URL || 'http://localhost:4006';
-      const response = await firstValueFrom(
-        this.httpService.get(`${decodeServiceUrl}/auth/profile/${userId}`)
-      );
-      targetUserAuthData = response.data.data;
-    } catch (error) {
-      console.error('Error getting target user auth data:', error);
-      targetUserAuthData = currentUser;
-    }
-
-    const authProfile = {
-      username: currentUser.username,
-      display_name: currentUser.display_name,
-      avatar: currentUser.avatar,
-    };
-
-    const userDehive = await this.userDehiveModel
-      .findById(userId)
-      .select('bio status banner_color server_count last_login')
-      .lean();
-
-    // 3. Merge auth profile with Dehive data
-    return {
-      ...authProfile,
-      dehive_data: userDehive
-        ? {
-            bio: userDehive.bio,
-            status: userDehive.status,
-            banner_color: userDehive.banner_color,
-            server_count: userDehive.server_count,
-            last_login: userDehive.last_login,
-          }
-        : {
-            bio: '',
-            status: 'offline',
-            banner_color: null,
-            server_count: 0,
-            last_login: null,
-          },
-    };
-  }
-
-  async getMembersInServer(serverId: string, currentUser: any): Promise<any[]> {
+  async getMembersInServer(serverId: string, currentUser: AuthenticatedUser): Promise<any[]> {
     const cacheKey = `server_members:${serverId}`;
-
-    // 1. Check cache for whole member list
     const cached = await this.redis.get(cacheKey);
-    if (cached) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return JSON.parse(cached);
-    }
+    if (cached) return JSON.parse(cached);
 
-    // 2. Cache miss - fetch from DB
     const memberships = await this.userDehiveServerModel
       .find({ server_id: new Types.ObjectId(serverId) })
       .lean();
+    if (!memberships.length) return [];
 
-    if (memberships.length === 0) {
-      return [];
-    }
-
-    // 3. Extract user IDs
-    const userIds = memberships.map((m) => m.user_dehive_id.toString());
-
-    // 4. Get user profiles from auth service
-    let userProfiles = new Map<string, any>();
-    try {
-      const sessionId = currentUser.session_id || 'test_session_' + serverId;
-      const fingerprintHashed = currentUser.fingerprint_hashed || 'test_fingerprint';
-
-      userProfiles = await this.authClient.getBatchUserProfiles(
-        userIds,
-        sessionId,
-        fingerprintHashed
-      );
-    } catch (error) {
-      console.error('Error getting user profiles from auth service:', error);
-      // Fallback to currentUser data for all members
-      userProfiles = new Map();
-    }
-
-    console.log('🔍 [GET MEMBERS] Using auth service profiles for members:', userProfiles.size);
-
-    const result = memberships.map((m) => {
-      const userId = m.user_dehive_id.toString();
-      const userProfile = userProfiles.get(userId);
-
-      console.log('🔍 [GET MEMBERS] userId:', userId, 'hasProfile:', !!userProfile);
-
-      // Use full auth service profile if available, otherwise fallback to currentUser
-      const memberProfile = userProfile || {
-        username: currentUser.username,
-        display_name: currentUser.display_name,
-        avatar: currentUser.avatar,
-      };
-
-      return {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
-        membership_id: (m._id as any).toString(),
-        user_dehive_id: m.user_dehive_id.toString(),
-        ...memberProfile, // Spread full auth profile data
-        role: m.role,
-        is_muted: m.is_muted,
-        joined_at: m.joined_at,
-      };
+    const enrichedMembersPromises = memberships.map(async (m) => {
+      try {
+        const userProfile = await this._getEnrichedUser(m.user_dehive_id.toString(), currentUser.session_id);
+        return {
+          membership_id: m._id.toString(),
+          ...userProfile,
+          role: m.role,
+          is_muted: m.is_muted,
+          joined_at: m.joined_at,
+        };
+      } catch (error) {
+        console.error(`Could not enrich member ${m.user_dehive_id}:`, error);
+        return null;
+      }
     });
 
-    // 6. Cache whole list for 5 minutes
-    await this.redis.setex(cacheKey, 300, JSON.stringify(result));
-
-    return result;
+    const finalResult = (await Promise.all(enrichedMembersPromises)).filter(Boolean);
+    await this.redis.setex(cacheKey, 300, JSON.stringify(finalResult));
+    return finalResult;
   }
 
-  /**
-   * Helper: Invalidate member list cache
-   */
+
+  async getEnrichedUserProfile(targetUserId: string, currentUser: AuthenticatedUser): Promise<any> {
+    const targetUserProfile = await this._getEnrichedUser(targetUserId, currentUser.session_id);
+    console.log(`[SERVICE] getEnrichedUserProfile called with targetUserId: ${targetUserId}`);
+
+    const [targetServers, viewerServers] = await Promise.all([
+      this.userDehiveServerModel.find({ user_dehive_id: targetUserId }).select('server_id').lean(),
+      this.userDehiveServerModel.find({ user_dehive_id: currentUser._id }).select('server_id').lean(),
+    ]);
+
+    const viewerServerIds = new Set(viewerServers.map(s => s.server_id.toString()));
+    const mutualServers = targetServers
+      .filter(s => viewerServerIds.has(s.server_id.toString()))
+      .map(s => s.server_id);
+
+    return {
+      ...targetUserProfile,
+      mutual_servers_count: mutualServers.length,
+      mutual_servers: mutualServers,
+    };
+  }
+
   private async invalidateMemberListCache(serverId: string): Promise<void> {
     await this.redis.del(`server_members:${serverId}`);
-  }
-
-  async getEnrichedUserProfile(targetSessionId: string, viewerUserId: string, currentUser: any) {
-
-    // 1. Decode target session_id to get user_dehive_id
-    const targetUserId = await this.getUserDehiveIdFromSession(targetSessionId);
-    console.log('🎯 [GET ENRICHED PROFILE] targetUserId from session:', targetUserId);
-
-    // 2. Use currentUser data for ALL profiles
-    console.log('🎯 [GET ENRICHED PROFILE] Using currentUser data for ALL profiles:', currentUser);
-
-    // 3. Use currentUser data directly
-    const authProfile = {
-      username: currentUser.username,
-      display_name: currentUser.display_name,
-      avatar: currentUser.avatar,
-    };
-
-    // 3. Get Dehive profiles
-    const [targetDehiveProfile] = await Promise.all([
-      this.userDehiveModel.findById(targetUserId).lean(),
-      this.userDehiveModel.findById(viewerUserId).lean(),
-    ]);
-
-    // Find UserDehive for viewer
-    const finalViewerDehiveProfile =
-      await this.findUserDehiveProfile(viewerUserId);
-
-    if (!finalViewerDehiveProfile) {
-      throw new NotFoundException('Viewer UserDehive profile not found.');
-    }
-
-    // 3. Get mutual servers
-    const targetDehiveId = targetDehiveProfile?._id;
-    if (!targetDehiveId) {
-      // User exists in auth but not in Dehive yet
-      return {
-        username: currentUser.username,
-        display_name: currentUser.display_name,
-        avatar: currentUser.avatar,
-        bio: '',
-        status: 'offline',
-        mutual_servers_count: 0,
-        mutual_servers: [],
-      };
-    }
-
-    // Debug: Check if users exist in user_dehive collection
-    console.log('🔍 [MUTUAL SERVERS] Checking if users exist in user_dehive collection...');
-    const [targetUserExists, viewerUserExists] = await Promise.all([
-      this.userDehiveModel.findById(targetDehiveId).lean(),
-      this.userDehiveModel.findById(finalViewerDehiveProfile?._id).lean(),
-    ]);
-
-
-    const [targetServers, viewerServers] = await Promise.all([
-      this.userDehiveServerModel
-        .find({ user_dehive_id: targetDehiveId.toString() })
-        .select('server_id')
-        .populate('server_id', 'name icon')
-        .lean(),
-      this.userDehiveServerModel
-        .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
-        .select('server_id')
-        .lean(),
-    ]);
-
-
-    const targetServersAlt = await this.userDehiveServerModel
-      .find({ user_dehive_id: targetDehiveId.toString() })
-      .select('server_id')
-      .lean();
-    const viewerServersAlt = await this.userDehiveServerModel
-      .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
-      .select('server_id')
-      .lean();
-
-
-    // Debug: Check all memberships in database
-    const allMemberships = await this.userDehiveServerModel.find({}).lean();
-
-    const viewerServerIds = new Set(
-      viewerServers.map((s) => s.server_id.toString()),
-    );
-
-    console.log('🔍 [MUTUAL SERVERS] viewerServerIds:', Array.from(viewerServerIds));
-
-    const mutualServers = targetServers.filter((s) => {
-      if (!s.server_id) return false;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const serverId =
-        typeof s.server_id === 'object'
-          ? // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            (s.server_id as any)?._id?.toString()
-          : String(s.server_id);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      const isMutual = serverId && viewerServerIds.has(serverId);
-      console.log('🔍 [MUTUAL SERVERS] Checking server:', serverId, 'isMutual:', isMutual);
-      return isMutual;
-    });
-
-    console.log('🔍 [MUTUAL SERVERS] mutualServers count:', mutualServers.length);
-
-    // 4. Merge all data
-    return {
-      _id: targetUserId,
-      username: currentUser.username,
-      display_name: currentUser.display_name,
-      avatar: currentUser.avatar,
-      bio: targetDehiveProfile?.bio || '',
-      status: targetDehiveProfile?.status || 'offline',
-      banner_color: targetDehiveProfile?.banner_color,
-      mutual_servers_count: mutualServers.length,
-      mutual_servers: mutualServers.map((s) => s.server_id),
-    };
-  }
-
-  async getEnrichedUserProfileByUserDehiveId(userDehiveId: string, viewerUserId: string, currentUser: any) {
-    console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] Starting enriched profile fetch...');
-    console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] userDehiveId:', userDehiveId);
-    console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] viewerUserId:', viewerUserId);
-    console.log('🎯 [GET ENRICHED PROFILE BY USER DEHIVE ID] currentUser:', currentUser);
-
-    // 1. Use currentUser data directly (already contains full data from AuthGuard)
-    // AuthGuard đã lấy được full data từ auth service, không cần gọi lại
-    let targetUserAuthProfile: any = null;
-
-    // Check if we're viewing the same user (currentUser is the target user)
-    if (currentUser._id === userDehiveId) {
-      // Use currentUser data directly (already has full data from AuthGuard)
-      targetUserAuthProfile = currentUser;
-    } else {
-      // For different user, try to get from auth service
-      try {
-        const sessionId = currentUser.session_id || 'test_session_' + userDehiveId;
-        const fingerprintHashed = currentUser.fingerprint_hashed || 'test_fingerprint';
-
-        targetUserAuthProfile = await this.authClient.getUserProfile(
-          userDehiveId,
-          sessionId,
-          fingerprintHashed
-        );
-      } catch (error) {
-        console.error('Error getting target user auth profile:', error);
-        targetUserAuthProfile = currentUser;
-      }
-    }
-
-    // 2. Get target user's Dehive profile
-    const targetDehiveProfile = await this.userDehiveModel
-      .findById(userDehiveId)
-      .select('bio status banner_color')
-      .lean();
-
-    if (!targetDehiveProfile) {
-      throw new NotFoundException('Target user profile not found');
-    }
-
-    // 3. Get viewer's Dehive profile for mutual servers calculation
-    const finalViewerDehiveProfile = await this.findUserDehiveProfile(viewerUserId);
-    if (!finalViewerDehiveProfile) {
-      throw new NotFoundException('Viewer UserDehive profile not found.');
-    }
-
-    // 4. Prepare auth profile data (full data from getUser)
-    const authProfile = targetUserAuthProfile || {
-      username: currentUser.username,
-      display_name: currentUser.display_name,
-      avatar: currentUser.avatar,
-    };
-
-    // 5. Get mutual servers
-    const targetDehiveId = targetDehiveProfile._id;
-
-    // Debug: Check if users exist in user_dehive collection
-    console.log('🔍 [MUTUAL SERVERS] Checking if users exist in user_dehive collection...');
-    const [targetUserExists, viewerUserExists] = await Promise.all([
-      this.userDehiveModel.findById(targetDehiveId).lean(),
-      this.userDehiveModel.findById(finalViewerDehiveProfile?._id).lean(),
-    ]);
-    console.log('🔍 [MUTUAL SERVERS] targetUserExists:', !!targetUserExists);
-    console.log('🔍 [MUTUAL SERVERS] viewerUserExists:', !!viewerUserExists);
-
-    const [targetServers, viewerServers] = await Promise.all([
-      this.userDehiveServerModel
-        .find({ user_dehive_id: targetDehiveId.toString() })
-        .select('server_id')
-        .populate('server_id', 'name icon')
-        .lean(),
-      this.userDehiveServerModel
-        .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
-        .select('server_id')
-        .lean(),
-    ]);
-
-    console.log('🔍 [MUTUAL SERVERS] targetDehiveId for query:', targetDehiveId);
-    console.log('🔍 [MUTUAL SERVERS] viewerDehiveId for query:', finalViewerDehiveProfile?._id);
-    console.log('🔍 [MUTUAL SERVERS] targetServers query result:', targetServers.length);
-    console.log('🔍 [MUTUAL SERVERS] viewerServers query result:', viewerServers.length);
-    console.log('🔍 [MUTUAL SERVERS] targetServers data:', JSON.stringify(targetServers, null, 2));
-    console.log('🔍 [MUTUAL SERVERS] viewerServers data:', JSON.stringify(viewerServers, null, 2));
-
-    // Debug: Try different query approaches for mutual servers
-    console.log('🔍 [MUTUAL SERVERS] Trying alternative queries...');
-    const targetServersAlt = await this.userDehiveServerModel
-      .find({ user_dehive_id: targetDehiveId.toString() })
-      .select('server_id')
-      .lean();
-    const viewerServersAlt = await this.userDehiveServerModel
-      .find({ user_dehive_id: finalViewerDehiveProfile?._id.toString() })
-      .select('server_id')
-      .lean();
-    console.log('🔍 [MUTUAL SERVERS] targetServersAlt (string):', targetServersAlt.length);
-    console.log('🔍 [MUTUAL SERVERS] viewerServersAlt (string):', viewerServersAlt.length);
-    console.log('🔍 [MUTUAL SERVERS] targetServersAlt data:', JSON.stringify(targetServersAlt, null, 2));
-    console.log('🔍 [MUTUAL SERVERS] viewerServersAlt data:', JSON.stringify(viewerServersAlt, null, 2));
-
-    console.log('🔍 [MUTUAL SERVERS] targetServers:', targetServers.length);
-    console.log('🔍 [MUTUAL SERVERS] viewerServers:', viewerServers.length);
-    console.log('🔍 [MUTUAL SERVERS] targetDehiveId:', targetDehiveId);
-    console.log('🔍 [MUTUAL SERVERS] viewerDehiveId:', finalViewerDehiveProfile?._id);
-    console.log('🔍 [MUTUAL SERVERS] targetServers data:', targetServers);
-    console.log('🔍 [MUTUAL SERVERS] viewerServers data:', viewerServers);
-
-    // Debug: Check all memberships in database
-    const allMemberships = await this.userDehiveServerModel.find({}).lean();
-    console.log('🔍 [MUTUAL SERVERS] All memberships in database:', allMemberships.length);
-    console.log('🔍 [MUTUAL SERVERS] All user_dehive_ids in database:', allMemberships.map(m => m.user_dehive_id.toString()));
-    console.log('🔍 [MUTUAL SERVERS] All server_ids in database:', allMemberships.map(m => m.server_id.toString()));
-
-    const viewerServerIds = new Set(
-      viewerServers.map((s) => s.server_id.toString()),
-    );
-
-    console.log('🔍 [MUTUAL SERVERS] viewerServerIds:', Array.from(viewerServerIds));
-
-    const mutualServers = targetServers.filter((s) => {
-      if (!s.server_id) return false;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const serverId =
-        typeof s.server_id === 'object'
-          ? // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            (s.server_id as any)?._id?.toString()
-          : String(s.server_id);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      const isMutual = serverId && viewerServerIds.has(serverId);
-      console.log('🔍 [MUTUAL SERVERS] Checking server:', serverId, 'isMutual:', isMutual);
-      return isMutual;
-    });
-
-    console.log('🔍 [MUTUAL SERVERS] mutualServers count:', mutualServers.length);
-
-    // 6. Merge all data - return full auth data + mutual servers
-    return {
-      ...authProfile,
-      _id: userDehiveId,
-      bio: targetDehiveProfile.bio || '',
-      status: targetDehiveProfile.status || 'offline',
-      banner_color: targetDehiveProfile.banner_color,
-      mutual_servers_count: mutualServers.length,
-      mutual_servers: mutualServers.map((s) => s.server_id),
-    };
   }
 }

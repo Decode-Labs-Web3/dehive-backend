@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserDehiveSchema = exports.UserDehive = void 0;
 const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
+const enum_1 = require("../enum/enum");
 let UserDehive = class UserDehive extends mongoose_2.Document {
     dehive_role;
     role_subscription;
@@ -27,7 +28,7 @@ exports.UserDehive = UserDehive;
 __decorate([
     (0, mongoose_1.Prop)({
         type: String,
-        enum: ['ADMIN', 'MODERATOR', 'USER'],
+        enum: enum_1.enumUserRole,
         default: 'USER',
     }),
     __metadata("design:type", String)

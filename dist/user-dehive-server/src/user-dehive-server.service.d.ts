@@ -1,5 +1,4 @@
-import { HttpService } from '@nestjs/axios';
-import { Model, Types } from 'mongoose';
+import { Model } from 'mongoose';
 import { UserDehiveDocument } from '../schemas/user-dehive.schema';
 import { UserDehiveServerDocument } from '../schemas/user-dehive-server.schema';
 import { ServerDocument } from '../schemas/server.schema';
@@ -13,20 +12,19 @@ import { GenerateInviteDto } from '../dto/generate-invite.dto';
 import { KickBanDto } from '../dto/kick-ban.dto';
 import { UnbanDto } from '../dto/unban.dto';
 import { UpdateNotificationDto } from '../dto/update-notification.dto';
-import { AuthServiceClient } from './auth-service.client';
 import { Redis } from 'ioredis';
+import { DecodeApiClient } from '../clients/decode-api.client';
+import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
 export declare class UserDehiveServerService {
     private userDehiveModel;
     private userDehiveServerModel;
     private serverModel;
     private serverBanModel;
     private inviteLinkModel;
-    private readonly authClient;
+    private readonly decodeApiClient;
     private readonly redis;
-    private readonly httpService;
-    constructor(userDehiveModel: Model<UserDehiveDocument>, userDehiveServerModel: Model<UserDehiveServerDocument>, serverModel: Model<ServerDocument>, serverBanModel: Model<ServerBanDocument>, inviteLinkModel: Model<InviteLinkDocument>, authClient: AuthServiceClient, redis: Redis, httpService: HttpService);
+    constructor(userDehiveModel: Model<UserDehiveDocument>, userDehiveServerModel: Model<UserDehiveServerDocument>, serverModel: Model<ServerDocument>, serverBanModel: Model<ServerBanDocument>, inviteLinkModel: Model<InviteLinkDocument>, decodeApiClient: DecodeApiClient, redis: Redis);
     private findUserDehiveProfile;
-    private getUserDehiveIdFromSession;
     joinServer(dto: JoinServerDto, userId: string): Promise<{
         message: string;
     }>;
@@ -50,65 +48,9 @@ export declare class UserDehiveServerService {
     updateNotification(dto: UpdateNotificationDto, actorBaseId: string): Promise<{
         message: string;
     }>;
-    getUserProfileBySession(targetSessionId: string, currentUser: any): Promise<{
-        dehive_data: {
-            bio: string;
-            status: string;
-            banner_color: string;
-            server_count: number;
-            last_login: Date;
-        } | {
-            bio: string;
-            status: string;
-            banner_color: null;
-            server_count: number;
-            last_login: null;
-        };
-        username: any;
-        display_name: any;
-        avatar: any;
-    }>;
-    getUserProfileByUserDehiveId(userDehiveId: string, currentUser: any): Promise<any>;
-    getUserProfile(userId: string, currentUser: any): Promise<{
-        dehive_data: {
-            bio: string;
-            status: string;
-            banner_color: string;
-            server_count: number;
-            last_login: Date;
-        } | {
-            bio: string;
-            status: string;
-            banner_color: null;
-            server_count: number;
-            last_login: null;
-        };
-        username: any;
-        display_name: any;
-        avatar: any;
-    }>;
-    getMembersInServer(serverId: string, currentUser: any): Promise<any[]>;
+    private _getEnrichedUser;
+    private _mergeUserData;
+    getMembersInServer(serverId: string, currentUser: AuthenticatedUser): Promise<any[]>;
+    getEnrichedUserProfile(targetUserId: string, currentUser: AuthenticatedUser): Promise<any>;
     private invalidateMemberListCache;
-    getEnrichedUserProfile(targetSessionId: string, viewerUserId: string, currentUser: any): Promise<{
-        username: any;
-        display_name: any;
-        avatar: any;
-        bio: string;
-        status: string;
-        mutual_servers_count: number;
-        mutual_servers: never[];
-        _id?: undefined;
-        banner_color?: undefined;
-    } | {
-        _id: Types.ObjectId;
-        username: any;
-        display_name: any;
-        avatar: any;
-        bio: string;
-        status: string;
-        banner_color: string;
-        mutual_servers_count: number;
-        mutual_servers: Types.ObjectId[];
-    }>;
-    getEnrichedUserProfileByUserDehiveId(userDehiveId: string, viewerUserId: string, currentUser: any): Promise<any>;
 }

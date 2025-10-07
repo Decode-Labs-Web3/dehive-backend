@@ -9,6 +9,11 @@ export declare enum ServerRole {
     MODERATOR = "moderator",
     MEMBER = "member"
 }
+export declare enum enumUserRole {
+    ADMIN = "admin",
+    MODERATOR = "moderator",
+    USER = "user"
+}
 export declare enum AuditLogAction {
     MEMBER_JOIN = "member_join",
     MEMBER_LEAVE = "member_leave",
