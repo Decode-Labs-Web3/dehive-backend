@@ -1,1 +1,0 @@
-{"version":3,"file":"generate-invite.dto.js","sourceRoot":"","sources":["../../../apps/user-dehive-server/dto/generate-invite.dto.ts"],"names":[],"mappings":";;;;;;;;;;;;AAAA,qDAAwD;AACxD,6CAA8C;AAE9C,MAAa,iBAAiB;IAO5B,SAAS,CAAS;CACnB;AARD,8CAQC;AADC;IANC,IAAA,qBAAW,EAAC;QACX,WAAW,EAAE,+CAA+C;QAC5D,OAAO,EAAE,yBAAyB;KACnC,CAAC;IACD,IAAA,4BAAU,GAAE;IACZ,IAAA,2BAAS,GAAE;;oDACM"}
