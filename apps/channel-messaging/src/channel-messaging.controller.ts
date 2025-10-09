@@ -26,6 +26,7 @@ import { GetMessagesDto } from '../dto/get-messages.dto';
 import { UploadInitDto, UploadResponseDto } from '../dto/channel-upload.dto';
 import { ListUploadsDto } from '../dto/list-channel-upload.dto';
 import { CreateMessageDto } from '../dto/create-message.dto';
+import { GetConversationDto } from '../dto/get-conversation.dto';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UseGuards } from '@nestjs/common';
@@ -172,6 +173,56 @@ export class MessagingController {
       statusCode: 200,
       message: 'Fetched uploads successfully',
       data: result,
+    };
+  }
+
+  @Get('conversation/by-channel/:channelId')
+  @ApiOperation({ summary: 'Get or create conversation ID for a channel' })
+  @ApiHeader({
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
+    required: true,
+  })
+  @ApiParam({
+    name: 'channelId',
+    description: 'The ID of the channel to get conversation for',
+    example: '68c5adb6ec465897d540c58',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns conversation ID for the channel',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        statusCode: { type: 'number' },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            conversationId: { type: 'string' },
+            channelId: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid channelId.' })
+  @ApiResponse({ status: 404, description: 'Channel not found.' })
+  async getConversationByChannelId(
+    @Param('channelId') channelId: string,
+  ) {
+    const conversation = await this.messagingService.getOrCreateConversationByChannelId(channelId);
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Conversation ID retrieved successfully',
+      data: {
+        conversationId: String(conversation._id),
+        channelId: String(conversation.channelId),
+        createdAt: (conversation as any).createdAt,
+      },
     };
   }
 }

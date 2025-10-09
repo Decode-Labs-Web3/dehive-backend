@@ -2,6 +2,79 @@
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
+/***/ "./apps/direct-messaging/clients/decode-api.client.ts":
+/*!************************************************************!*\
+  !*** ./apps/direct-messaging/clients/decode-api.client.ts ***!
+  \************************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var DecodeApiClient_1;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DecodeApiClient = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
+const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
+const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
+let DecodeApiClient = DecodeApiClient_1 = class DecodeApiClient {
+    httpService;
+    configService;
+    logger = new common_1.Logger(DecodeApiClient_1.name);
+    decodeApiUrl;
+    constructor(httpService, configService) {
+        this.httpService = httpService;
+        this.configService = configService;
+        const host = this.configService.get('DECODE_API_GATEWAY_HOST');
+        const port = this.configService.get('DECODE_API_GATEWAY_PORT');
+        if (!host || !port) {
+            throw new Error('DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!');
+        }
+        this.decodeApiUrl = `http://${host}:${port}`;
+    }
+    async getFollowing(accessToken, fingerprintHash, page = 0, limit = 10) {
+        try {
+            this.logger.log(`Calling Decode API: GET ${this.decodeApiUrl}/relationship/follow/followings/me`);
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.decodeApiUrl}/relationship/follow/followings/me`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'x-fingerprint-hashed': fingerprintHash,
+                },
+                params: {
+                    page,
+                    limit,
+                },
+            }));
+            console.log(response);
+            this.logger.log(`Decode API response: ${JSON.stringify(response.data, null, 2)}`);
+            this.logger.log(`Successfully retrieved following list from Decode API.`);
+            return response.data;
+        }
+        catch (error) {
+            this.logger.error(`Error Response Status: ${error.response.status}`);
+            this.logger.error(`Error Response Data: ${JSON.stringify(error.response.data)}`);
+            return null;
+        }
+    }
+};
+exports.DecodeApiClient = DecodeApiClient;
+exports.DecodeApiClient = DecodeApiClient = DecodeApiClient_1 = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [axios_1.HttpService,
+        config_1.ConfigService])
+], DecodeApiClient);
+
+
+/***/ }),
+
 /***/ "./apps/direct-messaging/common/decorators/current-user.decorator.ts":
 /*!***************************************************************************!*\
   !*** ./apps/direct-messaging/common/decorators/current-user.decorator.ts ***!
@@ -56,102 +129,111 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 var AuthGuard_1;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AuthGuard = exports.Public = exports.PUBLIC_KEY = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const core_1 = __webpack_require__(/*! @nestjs/core */ "@nestjs/core");
 const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
-const axios_2 = __webpack_require__(/*! axios */ "axios");
 const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
+const ioredis_1 = __webpack_require__(/*! @nestjs-modules/ioredis */ "@nestjs-modules/ioredis");
+const ioredis_2 = __webpack_require__(/*! ioredis */ "ioredis");
+const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
 exports.PUBLIC_KEY = 'public';
 const Public = () => (0, common_1.SetMetadata)(exports.PUBLIC_KEY, true);
 exports.Public = Public;
 let AuthGuard = AuthGuard_1 = class AuthGuard {
     httpService;
+    reflector;
+    configService;
+    redis;
     logger = new common_1.Logger(AuthGuard_1.name);
-    authServiceUrl = 'http://localhost:4006';
-    constructor(httpService) {
+    authServiceUrl;
+    constructor(httpService, reflector, configService, redis) {
         this.httpService = httpService;
-        console.log('🔥 [DIRECT-MESSAGING AUTH GUARD] Constructor called - This is the direct-messaging AuthGuard!');
+        this.reflector = reflector;
+        this.configService = configService;
+        this.redis = redis;
+        const host = this.configService.get('DECODE_API_GATEWAY_HOST');
+        const port = this.configService.get('DECODE_API_GATEWAY_PORT');
+        if (!host || !port) {
+            throw new Error('DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!');
+        }
+        this.authServiceUrl = `http://${host}:${port}`;
     }
     async canActivate(context) {
-        console.log('🚨 [DIRECT-MESSAGING AUTH GUARD] canActivate called - This is the direct-messaging AuthGuard!');
-        const request = context.switchToHttp().getRequest();
-        const isPublic = new core_1.Reflector().get(exports.PUBLIC_KEY, context.getHandler());
-        console.log('🚨 [DIRECT-MESSAGING AUTH GUARD] isPublic:', isPublic);
-        if (isPublic) {
-            console.log('🚨 [DIRECT-MESSAGING AUTH GUARD] Route is public, skipping auth');
+        const isPublic = this.reflector.get(exports.PUBLIC_KEY, context.getHandler());
+        if (isPublic)
             return true;
-        }
-        const sessionId = this.extractSessionIdFromHeader(request);
-        console.log('🚨 [DIRECT-MESSAGING AUTH GUARD] sessionId:', sessionId);
+        const request = context.switchToHttp().getRequest();
+        const sessionId = request.headers['x-session-id'];
+        const fingerprintHash = request.headers['x-fingerprint-hashed'];
         if (!sessionId) {
-            console.log('❌ [DIRECT-MESSAGING AUTH GUARD] No session ID found!');
-            throw new common_1.UnauthorizedException({
-                message: 'Session ID is required',
-                error: 'MISSING_SESSION_ID',
-            });
+            throw new common_1.UnauthorizedException('Session ID is required');
+        }
+        if (!fingerprintHash) {
+            throw new common_1.UnauthorizedException('Fingerprint hash is required in headers (x-fingerprint-hashed)');
         }
         try {
-            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/session/check`, {
-                headers: {
-                    'x-session-id': sessionId,
-                    'Content-Type': 'application/json',
-                },
-                timeout: 5000,
+            const sessionKey = `session:${sessionId}`;
+            const cachedSessionRaw = await this.redis.get(sessionKey);
+            if (cachedSessionRaw) {
+                const cachedSession = JSON.parse(cachedSessionRaw);
+                if (cachedSession.user) {
+                    const authenticatedUser = {
+                        ...cachedSession.user,
+                        session_id: sessionId,
+                        fingerprint_hash: fingerprintHash,
+                    };
+                    request['user'] = authenticatedUser;
+                    return true;
+                }
+            }
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/sso/validate`, {
+                headers: { 'x-session-id': sessionId },
             }));
-            if (!response.data.success || !response.data.data) {
-                throw new common_1.UnauthorizedException({
-                    message: response.data.message || 'Invalid session',
-                    error: 'INVALID_SESSION',
-                });
+            const sessionData = response.data.data;
+            if (!sessionData || !sessionData.access_token) {
+                throw new common_1.UnauthorizedException('Invalid session data from auth service');
             }
-            const session_check_response = response.data;
-            if (session_check_response.success && session_check_response.data) {
-                request['user'] = {
-                    userId: session_check_response.data.user._id,
-                    email: session_check_response.data.user.email || '',
-                    username: session_check_response.data.user.username || '',
-                    role: 'user',
-                };
-                request['sessionId'] = sessionId;
-                console.log('✅ [DIRECT-MESSAGING AUTH GUARD] User attached to request:', request['user']);
+            const profileResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/users/profile/me`, {
+                headers: { 'Authorization': `Bearer ${sessionData.access_token}` },
+            }));
+            const userProfile = profileResponse.data.data;
+            if (!userProfile) {
+                throw new common_1.UnauthorizedException('Could not retrieve user profile');
             }
+            const cacheData = {
+                session_token: sessionData.session_token,
+                access_token: sessionData.access_token,
+                user: userProfile,
+                expires_at: sessionData.expires_at,
+            };
+            const ttl = Math.ceil((new Date(sessionData.expires_at).getTime() - Date.now()) / 1000);
+            if (ttl > 0) {
+                await this.redis.set(sessionKey, JSON.stringify(cacheData), 'EX', ttl);
+            }
+            const authenticatedUser = { ...userProfile, session_id: sessionId, fingerprint_hash: fingerprintHash };
+            request['user'] = authenticatedUser;
             return true;
         }
         catch (error) {
-            if (error instanceof axios_2.AxiosError) {
-                if (error.response?.status === 401) {
-                    throw new common_1.UnauthorizedException({
-                        message: 'Invalid or expired session',
-                        error: 'SESSION_EXPIRED',
-                    });
-                }
-                this.logger.error('Auth service is unavailable');
-                throw new common_1.UnauthorizedException({
-                    message: 'Authentication service unavailable',
-                    error: 'SERVICE_UNAVAILABLE',
-                });
-            }
-            if (error instanceof common_1.UnauthorizedException) {
-                throw error;
-            }
-            this.logger.error(`Authentication failed: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
-            throw new common_1.UnauthorizedException({
-                message: 'Authentication failed',
-                error: 'AUTHENTICATION_ERROR',
-            });
+            this.logger.error(`Authentication failed for session ${sessionId}:`, error.stack);
+            throw new common_1.UnauthorizedException('Authentication failed or invalid session');
         }
-    }
-    extractSessionIdFromHeader(request) {
-        return request.headers['x-session-id'];
     }
 };
 exports.AuthGuard = AuthGuard;
 exports.AuthGuard = AuthGuard = AuthGuard_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [axios_1.HttpService])
+    __param(3, (0, ioredis_1.InjectRedis)()),
+    __metadata("design:paramtypes", [axios_1.HttpService,
+        core_1.Reflector,
+        config_1.ConfigService,
+        ioredis_2.Redis])
 ], AuthGuard);
 
 
@@ -336,6 +418,70 @@ __decorate([
     (0, class_validator_1.IsUrl)(),
     __metadata("design:type", String)
 ], DirectUploadResponseDto.prototype, "thumbnailUrl", void 0);
+
+
+/***/ }),
+
+/***/ "./apps/direct-messaging/dto/get-following.dto.ts":
+/*!********************************************************!*\
+  !*** ./apps/direct-messaging/dto/get-following.dto.ts ***!
+  \********************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GetFollowingDto = void 0;
+const openapi = __webpack_require__(/*! @nestjs/swagger */ "@nestjs/swagger");
+const swagger_1 = __webpack_require__(/*! @nestjs/swagger */ "@nestjs/swagger");
+const class_validator_1 = __webpack_require__(/*! class-validator */ "class-validator");
+const class_transformer_1 = __webpack_require__(/*! class-transformer */ "class-transformer");
+class GetFollowingDto {
+    page = 0;
+    limit = 10;
+    static _OPENAPI_METADATA_FACTORY() {
+        return { page: { required: false, type: () => Number, default: 0, minimum: 0 }, limit: { required: false, type: () => Number, default: 10, minimum: 1, maximum: 100 } };
+    }
+}
+exports.GetFollowingDto = GetFollowingDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        description: 'Page number for pagination',
+        example: 0,
+        default: 0,
+        minimum: 0,
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(0),
+    __metadata("design:type", Number)
+], GetFollowingDto.prototype, "page", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        description: 'Number of items per page',
+        example: 10,
+        default: 10,
+        minimum: 1,
+        maximum: 100,
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsNumber)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(100),
+    __metadata("design:type", Number)
+], GetFollowingDto.prototype, "limit", void 0);
 
 
 /***/ }),
@@ -1074,6 +1220,7 @@ const direct_upload_dto_1 = __webpack_require__(/*! ../dto/direct-upload.dto */ 
 const list_direct_messages_dto_1 = __webpack_require__(/*! ../dto/list-direct-messages.dto */ "./apps/direct-messaging/dto/list-direct-messages.dto.ts");
 const list_direct_upload_dto_1 = __webpack_require__(/*! ../dto/list-direct-upload.dto */ "./apps/direct-messaging/dto/list-direct-upload.dto.ts");
 const send_direct_message_dto_1 = __webpack_require__(/*! ../dto/send-direct-message.dto */ "./apps/direct-messaging/dto/send-direct-message.dto.ts");
+const get_following_dto_1 = __webpack_require__(/*! ../dto/get-following.dto */ "./apps/direct-messaging/dto/get-following.dto.ts");
 const auth_guard_1 = __webpack_require__(/*! ../common/guards/auth.guard */ "./apps/direct-messaging/common/guards/auth.guard.ts");
 const current_user_decorator_1 = __webpack_require__(/*! ../common/decorators/current-user.decorator */ "./apps/direct-messaging/common/decorators/current-user.decorator.ts");
 let DirectMessagingController = class DirectMessagingController {
@@ -1111,6 +1258,10 @@ let DirectMessagingController = class DirectMessagingController {
         const data = await this.service.listUploads(selfId, query);
         return { success: true, statusCode: 200, message: 'OK', data };
     }
+    async getFollowing(currentUser, query) {
+        const data = await this.service.getFollowing(currentUser, query);
+        return { success: true, statusCode: 200, message: 'OK', data };
+    }
 };
 exports.DirectMessagingController = DirectMessagingController;
 __decorate([
@@ -1130,7 +1281,7 @@ __decorate([
     }),
     (0, swagger_1.ApiResponse)({ status: 404, description: 'Conversation not found.' }),
     openapi.ApiResponse({ status: 201 }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, send_direct_message_dto_1.SendDirectMessageDto]),
@@ -1145,7 +1296,7 @@ __decorate([
         required: true,
     }),
     openapi.ApiResponse({ status: 201 }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, create_or_get_conversation_dto_ts_1.CreateOrGetConversationDto]),
@@ -1161,7 +1312,7 @@ __decorate([
     }),
     (0, swagger_1.ApiParam)({ name: 'conversationId' }),
     openapi.ApiResponse({ status: 200 }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
     __param(1, (0, common_1.Param)('conversationId')),
     __param(2, (0, common_1.Query)()),
     __metadata("design:type", Function),
@@ -1212,7 +1363,7 @@ __decorate([
     openapi.ApiResponse({ status: 201 }),
     __param(0, (0, common_1.UploadedFile)()),
     __param(1, (0, common_1.Body)()),
-    __param(2, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)('_id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, direct_upload_dto_1.DirectUploadInitDto, String]),
     __metadata("design:returntype", Promise)
@@ -1234,12 +1385,38 @@ __decorate([
         description: 'Invalid user ID or pagination parameters.',
     }),
     openapi.ApiResponse({ status: 200 }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, list_direct_upload_dto_1.ListDirectUploadsDto]),
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "listUploads", null);
+__decorate([
+    (0, common_1.Get)('following'),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Get following list',
+        description: 'Retrieves the list of users that the current user is following from Decode service'
+    }),
+    (0, swagger_1.ApiHeader)({
+        name: 'x-session-id',
+        description: 'Session ID of authenticated user',
+        required: true,
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 200,
+        description: 'Successfully returned following list.',
+    }),
+    (0, swagger_1.ApiResponse)({
+        status: 404,
+        description: 'Could not retrieve following list from Decode service.',
+    }),
+    openapi.ApiResponse({ status: 200 }),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Query)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, get_following_dto_1.GetFollowingDto]),
+    __metadata("design:returntype", Promise)
+], DirectMessagingController.prototype, "getFollowing", null);
 exports.DirectMessagingController = DirectMessagingController = __decorate([
     (0, swagger_1.ApiTags)('Direct Messages'),
     (0, common_1.Controller)('dm'),
@@ -1269,8 +1446,10 @@ const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
 const mongoose_1 = __webpack_require__(/*! @nestjs/mongoose */ "@nestjs/mongoose");
 const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
+const ioredis_1 = __webpack_require__(/*! @nestjs-modules/ioredis */ "@nestjs-modules/ioredis");
 const direct_messaging_controller_1 = __webpack_require__(/*! ./direct-messaging.controller */ "./apps/direct-messaging/src/direct-messaging.controller.ts");
 const direct_messaging_service_1 = __webpack_require__(/*! ./direct-messaging.service */ "./apps/direct-messaging/src/direct-messaging.service.ts");
+const decode_api_client_1 = __webpack_require__(/*! ../clients/decode-api.client */ "./apps/direct-messaging/clients/decode-api.client.ts");
 const direct_conversation_schema_1 = __webpack_require__(/*! ../schemas/direct-conversation.schema */ "./apps/direct-messaging/schemas/direct-conversation.schema.ts");
 const direct_message_schema_1 = __webpack_require__(/*! ../schemas/direct-message.schema */ "./apps/direct-messaging/schemas/direct-message.schema.ts");
 const direct_upload_schema_1 = __webpack_require__(/*! ../schemas/direct-upload.schema */ "./apps/direct-messaging/schemas/direct-upload.schema.ts");
@@ -1288,6 +1467,14 @@ exports.DirectMessagingModule = DirectMessagingModule = __decorate([
                 timeout: 5000,
                 maxRedirects: 5,
             }),
+            ioredis_1.RedisModule.forRootAsync({
+                imports: [config_1.ConfigModule],
+                inject: [config_1.ConfigService],
+                useFactory: (config) => ({
+                    type: 'single',
+                    url: config.get('REDIS_URI'),
+                }),
+            }),
             mongoose_1.MongooseModule.forRootAsync({
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],
@@ -1304,7 +1491,7 @@ exports.DirectMessagingModule = DirectMessagingModule = __decorate([
             ]),
         ],
         controllers: [direct_messaging_controller_1.DirectMessagingController],
-        providers: [direct_messaging_service_1.DirectMessagingService, direct_message_gateway_1.DmGateway, auth_guard_1.AuthGuard],
+        providers: [direct_messaging_service_1.DirectMessagingService, direct_message_gateway_1.DmGateway, auth_guard_1.AuthGuard, decode_api_client_1.DecodeApiClient],
     })
 ], DirectMessagingModule);
 
@@ -1330,6 +1517,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var DirectMessagingService_1;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DirectMessagingService = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
@@ -1347,16 +1535,24 @@ const childProcess = __webpack_require__(/*! child_process */ "child_process");
 const ffmpeg_static_1 = __webpack_require__(/*! ffmpeg-static */ "ffmpeg-static");
 const ffprobe_static_1 = __webpack_require__(/*! ffprobe-static */ "ffprobe-static");
 const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
-let DirectMessagingService = class DirectMessagingService {
+const decode_api_client_1 = __webpack_require__(/*! ../clients/decode-api.client */ "./apps/direct-messaging/clients/decode-api.client.ts");
+const ioredis_1 = __webpack_require__(/*! @nestjs-modules/ioredis */ "@nestjs-modules/ioredis");
+const ioredis_2 = __webpack_require__(/*! ioredis */ "ioredis");
+let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingService {
     conversationModel;
     messageModel;
     directuploadModel;
     configService;
-    constructor(conversationModel, messageModel, directuploadModel, configService) {
+    decodeApiClient;
+    redis;
+    logger = new common_1.Logger(DirectMessagingService_1.name);
+    constructor(conversationModel, messageModel, directuploadModel, configService, decodeApiClient, redis) {
         this.conversationModel = conversationModel;
         this.messageModel = messageModel;
         this.directuploadModel = directuploadModel;
         this.configService = configService;
+        this.decodeApiClient = decodeApiClient;
+        this.redis = redis;
     }
     detectAttachmentType(mime) {
         if (mime.startsWith('image/'))
@@ -1386,14 +1582,6 @@ let DirectMessagingService = class DirectMessagingService {
             type !== enum_1.AttachmentType.VIDEO &&
             size > limits.file)
             throw new common_1.BadRequestException(`File exceeds size limit (${limits.file / 1024 / 1024}MB)`);
-    }
-    participantsFilter(a, b) {
-        return {
-            $or: [
-                { userA: new mongoose_2.Types.ObjectId(a), userB: new mongoose_2.Types.ObjectId(b) },
-                { userA: new mongoose_2.Types.ObjectId(b), userB: new mongoose_2.Types.ObjectId(a) },
-            ],
-        };
     }
     async createOrGetConversation(selfId, dto) {
         if (!mongoose_2.Types.ObjectId.isValid(selfId) ||
@@ -1707,17 +1895,47 @@ let DirectMessagingService = class DirectMessagingService {
         ]);
         return { page, limit, total, items };
     }
+    async getFollowing(currentUser, dto) {
+        const page = 0;
+        const limit = 10;
+        const sessionId = currentUser.session_id;
+        if (!sessionId) {
+            throw new common_1.UnauthorizedException('Session ID not found in user session.');
+        }
+        const sessionKey = `session:${sessionId}`;
+        const sessionDataRaw = await this.redis.get(sessionKey);
+        if (!sessionDataRaw) {
+            throw new common_1.UnauthorizedException('Session not found in cache.');
+        }
+        const sessionData = JSON.parse(sessionDataRaw);
+        const accessToken = sessionData.access_token;
+        const fingerprintHash = currentUser.fingerprint_hash;
+        if (!accessToken) {
+            throw new common_1.UnauthorizedException('Access token not found in user session.');
+        }
+        if (!fingerprintHash) {
+            throw new common_1.UnauthorizedException('Fingerprint hash not found in user session.');
+        }
+        const result = await this.decodeApiClient.getFollowing(accessToken, fingerprintHash, page, limit);
+        if (!result || !result.success) {
+            throw new common_1.NotFoundException('Could not retrieve following list from Decode service');
+        }
+        return result;
+    }
 };
 exports.DirectMessagingService = DirectMessagingService;
-exports.DirectMessagingService = DirectMessagingService = __decorate([
+exports.DirectMessagingService = DirectMessagingService = DirectMessagingService_1 = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, mongoose_1.InjectModel)(direct_conversation_schema_1.DirectConversation.name)),
     __param(1, (0, mongoose_1.InjectModel)(direct_message_schema_1.DirectMessage.name)),
     __param(2, (0, mongoose_1.InjectModel)(direct_upload_schema_1.DirectUpload.name)),
+    __param(5, (0, ioredis_1.InjectRedis)()),
     __metadata("design:paramtypes", [mongoose_2.Model,
         mongoose_2.Model,
         mongoose_2.Model,
-        config_1.ConfigService])
+        config_1.ConfigService,
+        decode_api_client_1.DecodeApiClient,
+        ioredis_2.Redis])
 ], DirectMessagingService);
 
 
@@ -1855,6 +2073,16 @@ exports.UserDehiveSchema = mongoose_1.SchemaFactory.createForClass(UserDehive);
 
 /***/ }),
 
+/***/ "@nestjs-modules/ioredis":
+/*!******************************************!*\
+  !*** external "@nestjs-modules/ioredis" ***!
+  \******************************************/
+/***/ ((module) => {
+
+module.exports = require("@nestjs-modules/ioredis");
+
+/***/ }),
+
 /***/ "@nestjs/axios":
 /*!********************************!*\
   !*** external "@nestjs/axios" ***!
@@ -1945,16 +2173,6 @@ module.exports = require("@nestjs/websockets");
 
 /***/ }),
 
-/***/ "axios":
-/*!************************!*\
-  !*** external "axios" ***!
-  \************************/
-/***/ ((module) => {
-
-module.exports = require("axios");
-
-/***/ }),
-
 /***/ "child_process":
 /*!********************************!*\
   !*** external "child_process" ***!
@@ -2032,6 +2250,16 @@ module.exports = require("ffprobe-static");
 /***/ ((module) => {
 
 module.exports = require("fs");
+
+/***/ }),
+
+/***/ "ioredis":
+/*!**************************!*\
+  !*** external "ioredis" ***!
+  \**************************/
+/***/ ((module) => {
+
+module.exports = require("ioredis");
 
 /***/ }),
 

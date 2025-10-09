@@ -29,8 +29,10 @@ import { ListDirectMessagesDto } from '../dto/list-direct-messages.dto';
 import { Express } from 'express';
 import { ListDirectUploadsDto } from '../dto/list-direct-upload.dto';
 import { SendDirectMessageDto } from '../dto/send-direct-message.dto';
+import { GetFollowingDto } from '../dto/get-following.dto';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
 
 @ApiTags('Direct Messages')
 @Controller('dm')
@@ -54,7 +56,7 @@ export class DirectMessagingController {
   })
   @ApiResponse({ status: 404, description: 'Conversation not found.' })
   async sendMessage(
-    @CurrentUser('userId') selfId: string,
+    @CurrentUser('_id') selfId: string,
     @Body() body: SendDirectMessageDto,
   ) {
     const newMessage = await this.service.sendMessage(selfId, body);
@@ -74,7 +76,7 @@ export class DirectMessagingController {
     required: true,
   })
   async createOrGet(
-    @CurrentUser('userId') selfId: string,
+    @CurrentUser('_id') selfId: string,
     @Body() body: CreateOrGetConversationDto,
   ) {
     const conv = await this.service.createOrGetConversation(selfId, body);
@@ -90,7 +92,7 @@ export class DirectMessagingController {
   })
   @ApiParam({ name: 'conversationId' })
   async list(
-    @CurrentUser('userId') selfId: string,
+    @CurrentUser('_id') selfId: string,
     @Param('conversationId') conversationId: string,
     @Query() query: ListDirectMessagesDto,
   ) {
@@ -142,7 +144,7 @@ export class DirectMessagingController {
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: DirectUploadInitDto,
-    @CurrentUser('userId') selfId: string,
+    @CurrentUser('_id') selfId: string,
   ) {
     const result = await this.service.handleUpload(selfId, file, body);
     return {
@@ -169,10 +171,36 @@ export class DirectMessagingController {
     description: 'Invalid user ID or pagination parameters.',
   })
   async listUploads(
-    @CurrentUser('userId') selfId: string,
+    @CurrentUser('_id') selfId: string,
     @Query() query: ListDirectUploadsDto,
   ) {
     const data = await this.service.listUploads(selfId, query);
+    return { success: true, statusCode: 200, message: 'OK', data };
+  }
+
+  @Get('following')
+  @ApiOperation({
+    summary: 'Get following list',
+    description: 'Retrieves the list of users that the current user is following from Decode service'
+  })
+  @ApiHeader({
+    name: 'x-session-id',
+    description: 'Session ID of authenticated user',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully returned following list.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Could not retrieve following list from Decode service.',
+  })
+  async getFollowing(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Query() query: GetFollowingDto,
+  ) {
+    const data = await this.service.getFollowing(currentUser, query);
     return { success: true, statusCode: 200, message: 'OK', data };
   }
 }

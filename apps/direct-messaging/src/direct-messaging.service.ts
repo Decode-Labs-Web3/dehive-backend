@@ -2,7 +2,9 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -35,9 +37,17 @@ import ffmpegPath from 'ffmpeg-static';
 import ffprobePath from 'ffprobe-static';
 import { ConfigService } from '@nestjs/config';
 import { ListDirectUploadsDto } from '../dto/list-direct-upload.dto';
+import { DecodeApiClient } from '../clients/decode-api.client';
+import { GetFollowingDto } from '../dto/get-following.dto';
+import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import { Redis } from 'ioredis';
+import { SessionCacheDoc } from '../interfaces/session-doc.interface';
 
 @Injectable()
 export class DirectMessagingService {
+  private readonly logger = new Logger(DirectMessagingService.name);
+
   constructor(
     @InjectModel(DirectConversation.name)
     private readonly conversationModel: Model<DirectConversationDocument>,
@@ -46,6 +56,8 @@ export class DirectMessagingService {
     @InjectModel(DirectUpload.name)
     private readonly directuploadModel: Model<DirectUploadDocument>,
     private readonly configService: ConfigService,
+    private readonly decodeApiClient: DecodeApiClient,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   private detectAttachmentType(mime: string): AttachmentType {
@@ -92,14 +104,6 @@ export class DirectMessagingService {
       );
   }
 
-  private participantsFilter(a: string, b: string) {
-    return {
-      $or: [
-        { userA: new Types.ObjectId(a), userB: new Types.ObjectId(b) },
-        { userA: new Types.ObjectId(b), userB: new Types.ObjectId(a) },
-      ],
-    } as const;
-  }
 
   async createOrGetConversation(
     selfId: string,
@@ -501,5 +505,40 @@ export class DirectMessagingService {
     ]);
 
     return { page, limit, total, items };
+  }
+
+  async getFollowing(currentUser: AuthenticatedUser, dto: GetFollowingDto) {
+    const page = 0;
+    const limit = 10;
+
+    const sessionId = currentUser.session_id;
+    if (!sessionId) {
+      throw new UnauthorizedException('Session ID not found in user session.');
+    }
+    const sessionKey = `session:${sessionId}`;
+    const sessionDataRaw = await this.redis.get(sessionKey);
+    if (!sessionDataRaw) {
+      throw new UnauthorizedException('Session not found in cache.');
+    }
+
+    const sessionData: SessionCacheDoc = JSON.parse(sessionDataRaw);
+    const accessToken = sessionData.access_token;
+    const fingerprintHash = currentUser.fingerprint_hash;
+
+    if (!accessToken) {
+      throw new UnauthorizedException('Access token not found in user session.');
+    }
+
+    if (!fingerprintHash) {
+      throw new UnauthorizedException('Fingerprint hash not found in user session.');
+    }
+
+    const result = await this.decodeApiClient.getFollowing(accessToken, fingerprintHash, page, limit);
+
+    if (!result || !result.success) {
+      throw new NotFoundException('Could not retrieve following list from Decode service');
+    }
+
+    return result;
   }
 }

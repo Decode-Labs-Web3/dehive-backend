@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { HttpModule } from '@nestjs/axios';
+import { RedisModule } from '@nestjs-modules/ioredis';
 import { DirectMessagingController } from './direct-messaging.controller';
 import { DirectMessagingService } from './direct-messaging.service';
+import { DecodeApiClient } from '../clients/decode-api.client';
 import {
   DirectConversation,
   DirectConversationSchema,
@@ -30,6 +32,14 @@ import { AuthGuard } from '../common/guards/auth.guard';
       timeout: 5000,
       maxRedirects: 5,
     }),
+    RedisModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'single',
+        url: config.get<string>('REDIS_URI'),
+      }),
+    }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -46,6 +56,6 @@ import { AuthGuard } from '../common/guards/auth.guard';
     ]),
   ],
   controllers: [DirectMessagingController],
-  providers: [DirectMessagingService, DmGateway, AuthGuard],
+  providers: [DirectMessagingService, DmGateway, AuthGuard, DecodeApiClient],
 })
 export class DirectMessagingModule {}

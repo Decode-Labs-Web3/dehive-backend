@@ -1,4 +1,3 @@
-// THAY THẾ TOÀN BỘ FILE: src/guards/auth.guard.ts
 import {
   Injectable,
   CanActivate,
