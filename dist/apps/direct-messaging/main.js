@@ -825,6 +825,20 @@ let DmGateway = class DmGateway {
         const serializedData = JSON.parse(JSON.stringify(data));
         client.emit(event, serializedData);
     }
+    formatMessageData(message) {
+        return {
+            _id: message._id,
+            conversationId: message.conversationId,
+            senderId: message.senderId,
+            content: message.content,
+            attachments: message.attachments || [],
+            isEdited: message.isEdited || false,
+            editedAt: message.editedAt || null,
+            isDeleted: message.isDeleted || false,
+            createdAt: message.createdAt,
+            updatedAt: message.updatedAt,
+        };
+    }
     handleConnection(client) {
         console.log('[DM-WS] Client connected. Awaiting identity.');
         this.meta.set(client, {});
@@ -961,14 +975,7 @@ let DmGateway = class DmGateway {
                 });
             }
             const recipientId = String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
-            const messageToBroadcast = {
-                _id: savedMessage._id,
-                conversationId: savedMessage.conversationId,
-                senderId: savedMessage.senderId,
-                content: savedMessage.content,
-                attachments: savedMessage.attachments,
-                createdAt: savedMessage.get('createdAt'),
-            };
+            const messageToBroadcast = this.formatMessageData(savedMessage);
             const serializedMessage = JSON.parse(JSON.stringify(messageToBroadcast));
             this.server
                 .to(`user:${recipientId}`)
@@ -998,12 +1005,8 @@ let DmGateway = class DmGateway {
                 return;
             const recipientId = String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
             const payload = {
-                _id: updated._id,
+                ...this.formatMessageData(updated),
                 messageId: updated._id,
-                conversationId: updated.conversationId,
-                content: updated.content,
-                isEdited: true,
-                editedAt: updated.editedAt,
             };
             const serializedPayload = JSON.parse(JSON.stringify(payload));
             this.server
@@ -1032,9 +1035,8 @@ let DmGateway = class DmGateway {
                 return;
             const recipientId = String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
             const payload = {
-                _id: updated._id,
+                ...this.formatMessageData(updated),
                 messageId: updated._id,
-                conversationId: updated.conversationId,
                 isDeleted: true,
             };
             const serializedPayload = JSON.parse(JSON.stringify(payload));
@@ -1614,7 +1616,7 @@ __decorate([
         status: 404,
         description: 'Could not retrieve following list from Decode service.',
     }),
-    openapi.ApiResponse({ status: 200, type: Object }),
+    openapi.ApiResponse({ status: 200 }),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Query)()),
     __param(2, (0, common_1.Req)()),

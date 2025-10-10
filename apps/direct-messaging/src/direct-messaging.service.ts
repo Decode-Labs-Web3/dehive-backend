@@ -561,7 +561,6 @@ export class DirectMessagingService {
       throw new NotFoundException('Could not retrieve following list from Decode service');
     }
 
-    // Use metadata directly from Decode API response
     const items = result.data?.users || [];
     const metadata = result.data?.meta;
 

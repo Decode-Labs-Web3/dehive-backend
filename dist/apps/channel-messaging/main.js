@@ -681,27 +681,34 @@ let ChatGateway = class ChatGateway {
             });
         }
         const meta = this.meta.get(client);
-        if (!meta)
-            return;
+        if (!meta) {
+            return this.send(client, 'error', {
+                message: 'Internal server error: No client metadata found.',
+            });
+        }
         if (!mongoose_2.Types.ObjectId.isValid(userDehiveId)) {
             return this.send(client, 'error', {
                 message: 'Invalid userDehiveId format.',
             });
         }
-        console.log(`[WebSocket] Checking if user exists: ${userDehiveId}`);
-        const exists = await this.userDehiveModel.exists({
-            _id: new mongoose_2.Types.ObjectId(userDehiveId),
-        });
-        console.log(`[WebSocket] User exists check result: ${exists}`);
-        if (!exists) {
-            console.log(`[WebSocket] UserDehive not found: ${userDehiveId}`);
+        try {
+            const exists = await this.userDehiveModel.exists({
+                _id: new mongoose_2.Types.ObjectId(userDehiveId),
+            });
+            if (!exists) {
+                console.log(`[WebSocket] UserDehive not found: ${userDehiveId}`);
+                return this.send(client, 'error', {
+                    message: 'UserDehive not found.',
+                });
+            }
+        }
+        catch (error) {
             return this.send(client, 'error', {
-                message: 'UserDehive not found.',
+                message: 'Database error while checking user existence.',
             });
         }
         console.log(`[WebSocket] Client is identifying as UserDehive ID: ${userDehiveId}`);
         meta.userDehiveId = userDehiveId;
-        console.log(`[WebSocket] Sending identityConfirmed to client`);
         try {
             this.send(client, 'identityConfirmed', {
                 message: `You are now identified as ${userDehiveId}`,

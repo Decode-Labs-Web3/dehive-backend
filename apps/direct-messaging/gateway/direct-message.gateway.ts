@@ -48,6 +48,25 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.emit(event, serializedData);
   }
 
+  /**
+   * Helper function to format message data consistently for WebSocket responses
+   * This ensures WebSocket responses match API response format
+   */
+  private formatMessageData(message: any) {
+    return {
+      _id: message._id,
+      conversationId: message.conversationId,
+      senderId: message.senderId,
+      content: message.content,
+      attachments: message.attachments || [],
+      isEdited: message.isEdited || false,
+      editedAt: message.editedAt || null,
+      isDeleted: message.isDeleted || false,
+      createdAt: (message as any).createdAt,
+      updatedAt: (message as any).updatedAt,
+    };
+  }
+
   handleConnection(client: Socket) {
     console.log('[DM-WS] Client connected. Awaiting identity.');
     this.meta.set(client, {});
@@ -215,14 +234,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const recipientId =
         String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
 
-      const messageToBroadcast = {
-        _id: savedMessage._id,
-        conversationId: savedMessage.conversationId,
-        senderId: savedMessage.senderId,
-        content: savedMessage.content,
-        attachments: savedMessage.attachments,
-        createdAt: savedMessage.get('createdAt'),
-      };
+      const messageToBroadcast = this.formatMessageData(savedMessage);
 
       // Ensure messageToBroadcast is properly serialized
       const serializedMessage = JSON.parse(JSON.stringify(messageToBroadcast));
@@ -263,12 +275,8 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const recipientId =
         String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
       const payload = {
-        _id: updated._id,
-        messageId: updated._id,
-        conversationId: updated.conversationId,
-        content: updated.content,
-        isEdited: true,
-        editedAt: (updated as unknown as { editedAt?: Date }).editedAt,
+        ...this.formatMessageData(updated),
+        messageId: updated._id, // Keep messageId for backward compatibility
       };
       // Ensure payload is properly serialized
       const serializedPayload = JSON.parse(JSON.stringify(payload));
@@ -302,10 +310,9 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const recipientId =
         String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
       const payload = {
-        _id: updated._id,
-        messageId: updated._id,
-        conversationId: updated.conversationId,
-        isDeleted: true,
+        ...this.formatMessageData(updated),
+        messageId: updated._id, // Keep messageId for backward compatibility
+        isDeleted: true, // Override isDeleted for delete events
       };
       // Ensure payload is properly serialized
       const serializedPayload = JSON.parse(JSON.stringify(payload));
