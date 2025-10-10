@@ -39,7 +39,7 @@ let AuthController = class AuthController {
         this.userService = userService;
     }
     async createSession(body) {
-        return await this.sessionService.createDecodeSession(body.sso_token);
+        return await this.sessionService.createDecodeSession(body.sso_token, body.fingerprint_hashed);
     }
     async createDehiveAccount(body) {
         return await this.registerService.register(body.user_id);
@@ -1123,11 +1123,13 @@ let SessionService = class SessionService {
         this.userService = userService;
         this.registerService = registerService;
     }
-    async createDecodeSession(sso_token) {
+    async createDecodeSession(sso_token, fingerprint_hashed) {
         const create_decode_session_response = await this.decodeApiClient.createDecodeSession(sso_token);
-        if (!create_decode_session_response.success ||
-            !create_decode_session_response.data) {
-            throw new common_1.BadRequestException('Failed to create decode session', create_decode_session_response.message);
+        if (!create_decode_session_response ||
+            !create_decode_session_response.success ||
+            !create_decode_session_response.data ||
+            !create_decode_session_response.data.access_token) {
+            throw new common_1.BadRequestException('Failed to create decode session', create_decode_session_response?.message || 'Invalid response from decode API');
         }
         const user_exists = await this.userService.userExists(create_decode_session_response.data.user_id.toString());
         if (!user_exists.success) {
@@ -1140,7 +1142,17 @@ let SessionService = class SessionService {
                 };
             }
         }
-        const session_id = await this.storeSession(create_decode_session_response.data);
+        const session_id = await this.storeSession(create_decode_session_response.data, null);
+        const user_profile_response = await this.decodeApiClient.getMyProfile(session_id, fingerprint_hashed);
+        if (!user_profile_response || !user_profile_response.success || !user_profile_response.data) {
+            throw new common_1.BadRequestException('Failed to get user profile after creating session', user_profile_response?.message || 'Invalid user profile response');
+        }
+        const user_profile_data = user_profile_response.data;
+        let user_dehive_data = await this.userService.userExists(user_profile_data._id);
+        if (!user_dehive_data.success) {
+            await this.registerService.register(user_profile_data._id);
+        }
+        await this.updateSessionWithUserProfile(session_id, user_profile_data);
         return {
             success: true,
             statusCode: common_1.HttpStatus.OK,
@@ -1167,17 +1179,30 @@ let SessionService = class SessionService {
             data: session_data,
         };
     }
-    async storeSession(session_data) {
+    async storeSession(session_data, user_profile_data) {
         const session_id = (0, uuid_1.v4)();
         const session_key = `session:${session_id}`;
         const session_value = {
             session_token: session_data.session_token,
             access_token: session_data.access_token,
             expires_at: session_data.expires_at,
+            user: user_profile_data ? user_profile_data : null,
         };
         const expires_countdown = Math.floor((new Date(session_data.expires_at).getTime() - Date.now()) / 1000);
         await this.redis.set(session_key, session_value, expires_countdown);
         return session_id;
+    }
+    async updateSessionWithUserProfile(session_id, user_profile_data) {
+        const session_key = `session:${session_id}`;
+        const existing_session = (await this.redis.get(session_key));
+        if (existing_session) {
+            const updated_session = {
+                ...existing_session,
+                user: user_profile_data,
+            };
+            const expires_countdown = Math.floor((new Date(existing_session.expires_at).getTime() - Date.now()) / 1000);
+            await this.redis.set(session_key, updated_session, expires_countdown);
+        }
     }
 };
 exports.SessionService = SessionService;

@@ -25,7 +25,7 @@ export class AuthController {
   async createSession(
     @Body() body: { sso_token: string; fingerprint_hashed: string },
   ) {
-    return await this.sessionService.createDecodeSession(body.sso_token);
+    return await this.sessionService.createDecodeSession(body.sso_token, body.fingerprint_hashed);
   }
 
   @Post('create-dehive-account')
