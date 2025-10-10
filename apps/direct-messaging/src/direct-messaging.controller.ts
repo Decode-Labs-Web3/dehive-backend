@@ -8,6 +8,9 @@ import {
   UploadedFile,
   UseInterceptors,
   UseGuards,
+  HttpException,
+  HttpStatus,
+  Req,
 } from '@nestjs/common';
 import {
   ApiBody,
@@ -33,6 +36,7 @@ import { GetFollowingDto } from '../dto/get-following.dto';
 import { AuthGuard } from '../common/guards/auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
+import { Request } from 'express';
 
 @ApiTags('Direct Messages')
 @Controller('dm')
@@ -47,6 +51,11 @@ export class DirectMessagingController {
     description: 'The session ID of the authenticated user',
     required: true,
   })
+  @ApiHeader({
+    name: 'x-fingerprint-hashed',
+    description: 'The hashed fingerprint of the client device',
+    required: true,
+  })
   @ApiBody({ type: SendDirectMessageDto })
   @ApiResponse({ status: 201, description: 'Message sent successfully.' })
   @ApiResponse({ status: 400, description: 'Invalid input or missing fields.' })
@@ -58,7 +67,16 @@ export class DirectMessagingController {
   async sendMessage(
     @CurrentUser('_id') selfId: string,
     @Body() body: SendDirectMessageDto,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== 'POST') {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only POST is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const newMessage = await this.service.sendMessage(selfId, body);
     return {
       success: true,
@@ -75,10 +93,24 @@ export class DirectMessagingController {
     description: 'Session ID of authenticated user',
     required: true,
   })
+  @ApiHeader({
+    name: 'x-fingerprint-hashed',
+    description: 'The hashed fingerprint of the client device',
+    required: true,
+  })
   async createOrGet(
     @CurrentUser('_id') selfId: string,
     @Body() body: CreateOrGetConversationDto,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== 'POST') {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only POST is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const conv = await this.service.createOrGetConversation(selfId, body);
     return { success: true, statusCode: 200, message: 'OK', data: conv };
   }
@@ -90,12 +122,26 @@ export class DirectMessagingController {
     description: 'Session ID of authenticated user',
     required: true,
   })
+  @ApiHeader({
+    name: 'x-fingerprint-hashed',
+    description: 'The hashed fingerprint of the client device',
+    required: true,
+  })
   @ApiParam({ name: 'conversationId' })
   async list(
     @CurrentUser('_id') selfId: string,
     @Param('conversationId') conversationId: string,
     @Query() query: ListDirectMessagesDto,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== 'GET') {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const data = await this.service.listMessages(selfId, conversationId, query);
     return { success: true, statusCode: 200, message: 'OK', data };
   }
@@ -106,6 +152,11 @@ export class DirectMessagingController {
   @ApiHeader({
     name: 'x-session-id',
     description: 'Session ID of authenticated user',
+    required: true,
+  })
+  @ApiHeader({
+    name: 'x-fingerprint-hashed',
+    description: 'The hashed fingerprint of the client device',
     required: true,
   })
   @ApiConsumes('multipart/form-data')
@@ -145,7 +196,16 @@ export class DirectMessagingController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: DirectUploadInitDto,
     @CurrentUser('_id') selfId: string,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== 'POST') {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only POST is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const result = await this.service.handleUpload(selfId, file, body);
     return {
       success: true,
@@ -162,6 +222,11 @@ export class DirectMessagingController {
     description: 'Session ID of authenticated user',
     required: true,
   })
+  @ApiHeader({
+    name: 'x-fingerprint-hashed',
+    description: 'The hashed fingerprint of the client device',
+    required: true,
+  })
   @ApiResponse({
     status: 200,
     description: 'Successfully returned a list of uploaded files.',
@@ -173,7 +238,16 @@ export class DirectMessagingController {
   async listUploads(
     @CurrentUser('_id') selfId: string,
     @Query() query: ListDirectUploadsDto,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== 'GET') {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const data = await this.service.listUploads(selfId, query);
     return { success: true, statusCode: 200, message: 'OK', data };
   }
@@ -188,6 +262,11 @@ export class DirectMessagingController {
     description: 'Session ID of authenticated user',
     required: true,
   })
+  @ApiHeader({
+    name: 'x-fingerprint-hashed',
+    description: 'The hashed fingerprint of the client device',
+    required: true,
+  })
   @ApiResponse({
     status: 200,
     description: 'Successfully returned following list.',
@@ -199,7 +278,16 @@ export class DirectMessagingController {
   async getFollowing(
     @CurrentUser() currentUser: AuthenticatedUser,
     @Query() query: GetFollowingDto,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== 'GET') {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const result = await this.service.getFollowing(currentUser, query);
     return result;
   }

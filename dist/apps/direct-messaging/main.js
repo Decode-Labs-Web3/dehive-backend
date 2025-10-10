@@ -113,6 +113,87 @@ exports.CurrentUser = (0, common_1.createParamDecorator)((data, ctx) => {
 
 /***/ }),
 
+/***/ "./apps/direct-messaging/common/filters/method-not-allowed.filter.ts":
+/*!***************************************************************************!*\
+  !*** ./apps/direct-messaging/common/filters/method-not-allowed.filter.ts ***!
+  \***************************************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.MethodNotAllowedFilter = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+let MethodNotAllowedFilter = class MethodNotAllowedFilter {
+    catch(exception, host) {
+        const ctx = host.switchToHttp();
+        const response = ctx.getResponse();
+        const request = ctx.getRequest();
+        if (exception instanceof common_1.HttpException) {
+            const status = exception.getStatus();
+            const message = exception.message;
+            if (status === common_1.HttpStatus.METHOD_NOT_ALLOWED) {
+                const allowedMethods = this.getAllowedMethods(request.url);
+                response.status(405).json({
+                    success: false,
+                    statusCode: 405,
+                    message: `Method ${request.method} not allowed for this endpoint. Allowed methods: ${allowedMethods.join(', ')}`,
+                    error: 'Method Not Allowed',
+                    path: request.url,
+                    method: request.method,
+                    allowedMethods,
+                });
+                return;
+            }
+            response.status(status).json({
+                success: false,
+                statusCode: status,
+                message: message,
+                error: exception.constructor.name,
+                path: request.url,
+                method: request.method,
+            });
+            return;
+        }
+        response.status(500).json({
+            success: false,
+            statusCode: 500,
+            message: 'Internal server error',
+            error: 'Internal Server Error',
+            path: request.url,
+            method: request.method,
+        });
+    }
+    getAllowedMethods(url) {
+        const endpointMethods = {
+            '/api/dm/send': ['POST'],
+            '/api/dm/conversation': ['POST'],
+            '/api/dm/messages': ['GET'],
+            '/api/dm/files/upload': ['POST'],
+            '/api/dm/files/list': ['GET'],
+            '/api/dm/following': ['GET'],
+        };
+        for (const [endpoint, methods] of Object.entries(endpointMethods)) {
+            if (url.startsWith(endpoint)) {
+                return methods;
+            }
+        }
+        return ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+    }
+};
+exports.MethodNotAllowedFilter = MethodNotAllowedFilter;
+exports.MethodNotAllowedFilter = MethodNotAllowedFilter = __decorate([
+    (0, common_1.Catch)()
+], MethodNotAllowedFilter);
+
+
+/***/ }),
+
 /***/ "./apps/direct-messaging/common/guards/auth.guard.ts":
 /*!***********************************************************!*\
   !*** ./apps/direct-messaging/common/guards/auth.guard.ts ***!
@@ -1228,7 +1309,10 @@ let DirectMessagingController = class DirectMessagingController {
     constructor(service) {
         this.service = service;
     }
-    async sendMessage(selfId, body) {
+    async sendMessage(selfId, body, req) {
+        if (req.method !== 'POST') {
+            throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only POST is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
+        }
         const newMessage = await this.service.sendMessage(selfId, body);
         return {
             success: true,
@@ -1237,15 +1321,24 @@ let DirectMessagingController = class DirectMessagingController {
             data: newMessage,
         };
     }
-    async createOrGet(selfId, body) {
+    async createOrGet(selfId, body, req) {
+        if (req.method !== 'POST') {
+            throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only POST is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
+        }
         const conv = await this.service.createOrGetConversation(selfId, body);
         return { success: true, statusCode: 200, message: 'OK', data: conv };
     }
-    async list(selfId, conversationId, query) {
+    async list(selfId, conversationId, query, req) {
+        if (req.method !== 'GET') {
+            throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only GET is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
+        }
         const data = await this.service.listMessages(selfId, conversationId, query);
         return { success: true, statusCode: 200, message: 'OK', data };
     }
-    async uploadFile(file, body, selfId) {
+    async uploadFile(file, body, selfId, req) {
+        if (req.method !== 'POST') {
+            throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only POST is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
+        }
         const result = await this.service.handleUpload(selfId, file, body);
         return {
             success: true,
@@ -1254,11 +1347,17 @@ let DirectMessagingController = class DirectMessagingController {
             data: result,
         };
     }
-    async listUploads(selfId, query) {
+    async listUploads(selfId, query, req) {
+        if (req.method !== 'GET') {
+            throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only GET is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
+        }
         const data = await this.service.listUploads(selfId, query);
         return { success: true, statusCode: 200, message: 'OK', data };
     }
-    async getFollowing(currentUser, query) {
+    async getFollowing(currentUser, query, req) {
+        if (req.method !== 'GET') {
+            throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only GET is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
+        }
         const result = await this.service.getFollowing(currentUser, query);
         return result;
     }
@@ -1272,6 +1371,11 @@ __decorate([
         description: 'The session ID of the authenticated user',
         required: true,
     }),
+    (0, swagger_1.ApiHeader)({
+        name: 'x-fingerprint-hashed',
+        description: 'The hashed fingerprint of the client device',
+        required: true,
+    }),
     (0, swagger_1.ApiBody)({ type: send_direct_message_dto_1.SendDirectMessageDto }),
     (0, swagger_1.ApiResponse)({ status: 201, description: 'Message sent successfully.' }),
     (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid input or missing fields.' }),
@@ -1283,8 +1387,9 @@ __decorate([
     openapi.ApiResponse({ status: 201 }),
     __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, send_direct_message_dto_1.SendDirectMessageDto]),
+    __metadata("design:paramtypes", [String, send_direct_message_dto_1.SendDirectMessageDto, Object]),
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "sendMessage", null);
 __decorate([
@@ -1295,11 +1400,17 @@ __decorate([
         description: 'Session ID of authenticated user',
         required: true,
     }),
+    (0, swagger_1.ApiHeader)({
+        name: 'x-fingerprint-hashed',
+        description: 'The hashed fingerprint of the client device',
+        required: true,
+    }),
     openapi.ApiResponse({ status: 201 }),
     __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
     __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, create_or_get_conversation_dto_ts_1.CreateOrGetConversationDto]),
+    __metadata("design:paramtypes", [String, create_or_get_conversation_dto_ts_1.CreateOrGetConversationDto, Object]),
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "createOrGet", null);
 __decorate([
@@ -1310,13 +1421,19 @@ __decorate([
         description: 'Session ID of authenticated user',
         required: true,
     }),
+    (0, swagger_1.ApiHeader)({
+        name: 'x-fingerprint-hashed',
+        description: 'The hashed fingerprint of the client device',
+        required: true,
+    }),
     (0, swagger_1.ApiParam)({ name: 'conversationId' }),
     openapi.ApiResponse({ status: 200 }),
     __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
     __param(1, (0, common_1.Param)('conversationId')),
     __param(2, (0, common_1.Query)()),
+    __param(3, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, list_direct_messages_dto_1.ListDirectMessagesDto]),
+    __metadata("design:paramtypes", [String, String, list_direct_messages_dto_1.ListDirectMessagesDto, Object]),
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "list", null);
 __decorate([
@@ -1326,6 +1443,11 @@ __decorate([
     (0, swagger_1.ApiHeader)({
         name: 'x-session-id',
         description: 'Session ID of authenticated user',
+        required: true,
+    }),
+    (0, swagger_1.ApiHeader)({
+        name: 'x-fingerprint-hashed',
+        description: 'The hashed fingerprint of the client device',
         required: true,
     }),
     (0, swagger_1.ApiConsumes)('multipart/form-data'),
@@ -1364,8 +1486,9 @@ __decorate([
     __param(0, (0, common_1.UploadedFile)()),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(3, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, direct_upload_dto_1.DirectUploadInitDto, String]),
+    __metadata("design:paramtypes", [Object, direct_upload_dto_1.DirectUploadInitDto, String, Object]),
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "uploadFile", null);
 __decorate([
@@ -1374,6 +1497,11 @@ __decorate([
     (0, swagger_1.ApiHeader)({
         name: 'x-session-id',
         description: 'Session ID of authenticated user',
+        required: true,
+    }),
+    (0, swagger_1.ApiHeader)({
+        name: 'x-fingerprint-hashed',
+        description: 'The hashed fingerprint of the client device',
         required: true,
     }),
     (0, swagger_1.ApiResponse)({
@@ -1387,8 +1515,9 @@ __decorate([
     openapi.ApiResponse({ status: 200 }),
     __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
     __param(1, (0, common_1.Query)()),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, list_direct_upload_dto_1.ListDirectUploadsDto]),
+    __metadata("design:paramtypes", [String, list_direct_upload_dto_1.ListDirectUploadsDto, Object]),
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "listUploads", null);
 __decorate([
@@ -1402,6 +1531,11 @@ __decorate([
         description: 'Session ID of authenticated user',
         required: true,
     }),
+    (0, swagger_1.ApiHeader)({
+        name: 'x-fingerprint-hashed',
+        description: 'The hashed fingerprint of the client device',
+        required: true,
+    }),
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Successfully returned following list.',
@@ -1413,8 +1547,9 @@ __decorate([
     openapi.ApiResponse({ status: 200, type: Object }),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Query)()),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, get_following_dto_1.GetFollowingDto]),
+    __metadata("design:paramtypes", [Object, get_following_dto_1.GetFollowingDto, Object]),
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "getFollowing", null);
 exports.DirectMessagingController = DirectMessagingController = __decorate([
@@ -2357,12 +2492,14 @@ const direct_messaging_module_1 = __webpack_require__(/*! ./direct-messaging.mod
 const express = __webpack_require__(/*! express */ "express");
 const path = __webpack_require__(/*! path */ "path");
 const platform_socket_io_1 = __webpack_require__(/*! @nestjs/platform-socket.io */ "@nestjs/platform-socket.io");
+const method_not_allowed_filter_1 = __webpack_require__(/*! ../common/filters/method-not-allowed.filter */ "./apps/direct-messaging/common/filters/method-not-allowed.filter.ts");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(direct_messaging_module_1.DirectMessagingModule);
     const configService = app.get(config_1.ConfigService);
     app.enableCors({ origin: '*' });
     app.setGlobalPrefix('api');
     app.useGlobalPipes(new common_1.ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalFilters(new method_not_allowed_filter_1.MethodNotAllowedFilter());
     app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
     app.useWebSocketAdapter(new platform_socket_io_1.IoAdapter(app));
     const config = new swagger_1.DocumentBuilder()

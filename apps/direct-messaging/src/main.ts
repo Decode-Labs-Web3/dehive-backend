@@ -6,6 +6,7 @@ import { DirectMessagingModule } from './direct-messaging.module';
 import * as express from 'express';
 import * as path from 'path';
 import { IoAdapter } from '@nestjs/platform-socket.io';
+import { MethodNotAllowedFilter } from '../common/filters/method-not-allowed.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(DirectMessagingModule);
@@ -14,6 +15,7 @@ async function bootstrap() {
   app.enableCors({ origin: '*' });
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.useGlobalFilters(new MethodNotAllowedFilter());
   app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
   app.useWebSocketAdapter(new IoAdapter(app));
 
