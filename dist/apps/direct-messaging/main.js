@@ -590,29 +590,29 @@ const swagger_1 = __webpack_require__(/*! @nestjs/swagger */ "@nestjs/swagger");
 const class_validator_1 = __webpack_require__(/*! class-validator */ "class-validator");
 const class_transformer_1 = __webpack_require__(/*! class-transformer */ "class-transformer");
 class ListDirectMessagesDto {
-    page = 1;
-    limit = 50;
+    page = 0;
+    limit = 10;
     static _OPENAPI_METADATA_FACTORY() {
-        return { page: { required: true, type: () => Object, default: 1, minimum: 1 }, limit: { required: true, type: () => Object, default: 50, minimum: 1, maximum: 100 } };
+        return { page: { required: true, type: () => Object, default: 0, minimum: 0 }, limit: { required: true, type: () => Object, default: 10, minimum: 1, maximum: 100 } };
     }
 }
 exports.ListDirectMessagesDto = ListDirectMessagesDto;
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The page number to retrieve, starting from 1',
-        default: 1,
+        description: 'The page number to retrieve, starting from 0',
+        default: 0,
         type: Number,
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
-    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Min)(0),
     __metadata("design:type", Object)
 ], ListDirectMessagesDto.prototype, "page", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
         description: 'The number of messages to retrieve per page (max 100)',
-        default: 50,
+        default: 10,
         type: Number,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -651,10 +651,10 @@ const class_transformer_1 = __webpack_require__(/*! class-transformer */ "class-
 const enum_1 = __webpack_require__(/*! ../enum/enum */ "./apps/direct-messaging/enum/enum.ts");
 class ListDirectUploadsDto {
     type;
-    page = 1;
-    limit = 50;
+    page = 0;
+    limit = 10;
     static _OPENAPI_METADATA_FACTORY() {
-        return { type: { required: false, enum: (__webpack_require__(/*! ../enum/enum */ "./apps/direct-messaging/enum/enum.ts").AttachmentType) }, page: { required: true, type: () => Object, default: 1, minimum: 1 }, limit: { required: true, type: () => Object, default: 50, minimum: 1, maximum: 100 } };
+        return { type: { required: false, enum: (__webpack_require__(/*! ../enum/enum */ "./apps/direct-messaging/enum/enum.ts").AttachmentType) }, page: { required: true, type: () => Object, default: 0, minimum: 0 }, limit: { required: true, type: () => Object, default: 10, minimum: 1, maximum: 100 } };
     }
 }
 exports.ListDirectUploadsDto = ListDirectUploadsDto;
@@ -670,20 +670,20 @@ __decorate([
 ], ListDirectUploadsDto.prototype, "type", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The page number to retrieve, starting from 1',
-        default: 1,
+        description: 'The page number to retrieve, starting from 0',
+        default: 0,
         type: Number,
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
-    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Min)(0),
     __metadata("design:type", Object)
 ], ListDirectUploadsDto.prototype, "page", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
         description: 'The number of uploads to retrieve per page (max 100)',
-        default: 50,
+        default: 10,
         type: Number,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -822,7 +822,8 @@ let DmGateway = class DmGateway {
         this.conversationModel = conversationModel;
     }
     send(client, event, data) {
-        client.emit(event, data);
+        const serializedData = JSON.parse(JSON.stringify(data));
+        client.emit(event, serializedData);
     }
     handleConnection(client) {
         console.log('[DM-WS] Client connected. Awaiting identity.');
@@ -835,48 +836,113 @@ let DmGateway = class DmGateway {
         }
         this.meta.delete(client);
     }
-    async handleIdentity(userDehiveId, client) {
-        if (!userDehiveId || !mongoose_1.Types.ObjectId.isValid(userDehiveId)) {
-            return this.send(client, 'error', { message: 'Invalid userDehiveId' });
+    async handleIdentity(data, client) {
+        console.log(`[DM-WS] Identity request received:`, data);
+        console.log(`[DM-WS] Identity data type:`, typeof data);
+        let userDehiveId;
+        if (typeof data === 'string') {
+            userDehiveId = data;
         }
+        else if (typeof data === 'object' && data?.userDehiveId) {
+            userDehiveId = data.userDehiveId;
+        }
+        else {
+            console.log(`[DM-WS] Invalid identity format:`, data);
+            return this.send(client, 'error', {
+                message: 'Invalid identity format. Send userDehiveId as string or {userDehiveId: string}',
+                code: 'INVALID_FORMAT',
+                timestamp: new Date().toISOString()
+            });
+        }
+        console.log(`[DM-WS] Extracted userDehiveId: ${userDehiveId}`);
+        if (!userDehiveId || !mongoose_1.Types.ObjectId.isValid(userDehiveId)) {
+            console.log(`[DM-WS] Invalid userDehiveId: ${userDehiveId}`);
+            return this.send(client, 'error', {
+                message: 'Invalid userDehiveId',
+                code: 'INVALID_USER_ID',
+                timestamp: new Date().toISOString()
+            });
+        }
+        console.log(`[DM-WS] Checking if user exists: ${userDehiveId}`);
         const exists = await this.userDehiveModel.exists({
             _id: new mongoose_1.Types.ObjectId(userDehiveId),
         });
+        console.log(`[DM-WS] User exists result: ${exists}`);
         if (!exists) {
-            return this.send(client, 'error', { message: 'User not found' });
+            console.log(`[DM-WS] User not found in database: ${userDehiveId}`);
+            return this.send(client, 'error', {
+                message: 'User not found',
+                code: 'USER_NOT_FOUND',
+                timestamp: new Date().toISOString()
+            });
         }
         const meta = this.meta.get(client);
         if (meta) {
             meta.userDehiveId = userDehiveId;
             void client.join(`user:${userDehiveId}`);
             console.log(`[DM-WS] User identified as ${userDehiveId}`);
-            this.send(client, 'identityConfirmed', { userDehiveId });
+            this.send(client, 'identityConfirmed', {
+                userDehiveId,
+                status: 'success',
+                timestamp: new Date().toISOString()
+            });
         }
     }
     async handleSendMessage(data, client) {
         const meta = this.meta.get(client);
         const selfId = meta?.userDehiveId;
+        console.log(`[DM-WS] SendMessage request from user: ${selfId}`);
+        console.log(`[DM-WS] SendMessage data type:`, typeof data);
+        console.log(`[DM-WS] SendMessage data:`, JSON.stringify(data, null, 2));
         if (!selfId) {
-            return this.send(client, 'error', { message: 'Please identify first' });
+            return this.send(client, 'error', {
+                message: 'Please identify first',
+                code: 'AUTHENTICATION_REQUIRED',
+                timestamp: new Date().toISOString()
+            });
         }
         try {
-            if (typeof data.content !== 'string') {
+            let parsedData = data;
+            if (typeof data === 'string') {
+                try {
+                    parsedData = JSON.parse(data);
+                }
+                catch (parseError) {
+                    console.error('[DM-WS] Failed to parse JSON data:', parseError);
+                    return this.send(client, 'error', {
+                        message: 'Invalid JSON format',
+                        code: 'INVALID_JSON',
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
+            if (!parsedData || typeof parsedData !== 'object') {
                 return this.send(client, 'error', {
-                    message: 'Content must be a string (0-2000 chars).',
+                    message: 'Invalid message data format',
                 });
             }
-            if (String(data.content ?? '').length > 2000) {
+            if (!parsedData.conversationId || !mongoose_1.Types.ObjectId.isValid(parsedData.conversationId)) {
                 return this.send(client, 'error', {
-                    message: 'Content must not exceed 2000 characters.',
+                    message: 'Invalid conversationId',
                 });
             }
-            if (!Array.isArray(data.uploadIds)) {
+            if (typeof parsedData.content !== 'string') {
                 return this.send(client, 'error', {
-                    message: 'uploadIds is required and must be an array',
+                    message: 'Content must be a string',
                 });
             }
-            if (data.uploadIds.length > 0) {
-                const allValid = data.uploadIds.every((id) => {
+            if (parsedData.content.length > 2000) {
+                return this.send(client, 'error', {
+                    message: 'Content must not exceed 2000 characters',
+                });
+            }
+            if (!Array.isArray(parsedData.uploadIds)) {
+                return this.send(client, 'error', {
+                    message: 'uploadIds must be an array',
+                });
+            }
+            if (parsedData.uploadIds.length > 0) {
+                const allValid = parsedData.uploadIds.every((id) => {
                     return typeof id === 'string' && mongoose_1.Types.ObjectId.isValid(id);
                 });
                 if (!allValid) {
@@ -885,9 +951,9 @@ let DmGateway = class DmGateway {
                     });
                 }
             }
-            const savedMessage = await this.service.sendMessage(selfId, data);
+            const savedMessage = await this.service.sendMessage(selfId, parsedData);
             const conv = await this.conversationModel
-                .findById(data.conversationId)
+                .findById(parsedData.conversationId)
                 .lean();
             if (!conv) {
                 return this.send(client, 'error', {
@@ -903,13 +969,15 @@ let DmGateway = class DmGateway {
                 attachments: savedMessage.attachments,
                 createdAt: savedMessage.get('createdAt'),
             };
+            const serializedMessage = JSON.parse(JSON.stringify(messageToBroadcast));
             this.server
                 .to(`user:${recipientId}`)
                 .to(`user:${selfId}`)
-                .emit('newMessage', messageToBroadcast);
+                .emit('newMessage', serializedMessage);
         }
         catch (error) {
             console.error('[DM-WS] Error handling message:', error);
+            console.error('[DM-WS] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
             this.send(client, 'error', {
                 message: 'Failed to send message',
                 details: error instanceof Error ? error.message : String(error),
@@ -937,10 +1005,11 @@ let DmGateway = class DmGateway {
                 isEdited: true,
                 editedAt: updated.editedAt,
             };
+            const serializedPayload = JSON.parse(JSON.stringify(payload));
             this.server
                 .to(`user:${recipientId}`)
                 .to(`user:${selfId}`)
-                .emit('messageEdited', payload);
+                .emit('messageEdited', serializedPayload);
         }
         catch (error) {
             this.send(client, 'error', {
@@ -968,10 +1037,11 @@ let DmGateway = class DmGateway {
                 conversationId: updated.conversationId,
                 isDeleted: true,
             };
+            const serializedPayload = JSON.parse(JSON.stringify(payload));
             this.server
                 .to(`user:${recipientId}`)
                 .to(`user:${selfId}`)
-                .emit('messageDeleted', payload);
+                .emit('messageDeleted', serializedPayload);
         }
         catch (error) {
             this.send(client, 'error', {
@@ -991,7 +1061,7 @@ __decorate([
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, socket_io_1.Socket]),
+    __metadata("design:paramtypes", [Object, socket_io_1.Socket]),
     __metadata("design:returntype", Promise)
 ], DmGateway.prototype, "handleIdentity", null);
 __decorate([
@@ -1952,9 +2022,9 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
             .includes(selfId);
         if (!isParticipant)
             throw new common_1.BadRequestException('Not a participant');
-        const page = dto.page || 1;
-        const limit = dto.limit || 50;
-        const skip = (page - 1) * limit;
+        const page = dto.page || 0;
+        const limit = dto.limit || 10;
+        const skip = page * limit;
         const [items, total] = await Promise.all([
             this.messageModel
                 .find({ conversationId: new mongoose_2.Types.ObjectId(conversationId) })
@@ -1966,7 +2036,17 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
                 conversationId: new mongoose_2.Types.ObjectId(conversationId),
             }),
         ]);
-        return { page, limit, total, items };
+        const totalPages = Math.ceil(total / limit);
+        const isLastPage = page >= (totalPages - 1);
+        return {
+            items,
+            metadata: {
+                page,
+                limit,
+                total: items.length,
+                is_last_page: isLastPage
+            }
+        };
     }
     async editMessage(selfId, messageId, content) {
         if (!mongoose_2.Types.ObjectId.isValid(selfId))
@@ -2010,9 +2090,9 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
         if (!selfId || !mongoose_2.Types.ObjectId.isValid(selfId)) {
             throw new common_1.BadRequestException('Invalid user id');
         }
-        const page = dto.page > 0 ? dto.page : 1;
-        const limit = dto.limit > 0 ? Math.min(dto.limit, 100) : 50;
-        const skip = (page - 1) * limit;
+        const page = dto.page >= 0 ? dto.page : 0;
+        const limit = dto.limit > 0 ? Math.min(dto.limit, 100) : 10;
+        const skip = page * limit;
         const query = {
             ownerId: new mongoose_2.Types.ObjectId(selfId),
         };
@@ -2028,11 +2108,21 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
                 .lean(),
             this.directuploadModel.countDocuments(query),
         ]);
-        return { page, limit, total, items };
+        const totalPages = Math.ceil(total / limit);
+        const isLastPage = page >= (totalPages - 1);
+        return {
+            items,
+            metadata: {
+                page,
+                limit,
+                total: items.length,
+                is_last_page: isLastPage
+            }
+        };
     }
     async getFollowing(currentUser, dto) {
-        const page = 0;
-        const limit = 10;
+        const page = dto.page || 0;
+        const limit = dto.limit || 10;
         const sessionId = currentUser.session_id;
         if (!sessionId) {
             throw new common_1.UnauthorizedException('Session ID not found in user session.');
@@ -2055,7 +2145,22 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
         if (!result || !result.success) {
             throw new common_1.NotFoundException('Could not retrieve following list from Decode service');
         }
-        return result;
+        const items = result.data?.users || [];
+        const metadata = result.data?.meta;
+        return {
+            success: true,
+            statusCode: 200,
+            message: 'OK',
+            data: {
+                items,
+                metadata: metadata || {
+                    page,
+                    limit,
+                    total: items.length,
+                    is_last_page: true
+                }
+            }
+        };
     }
 };
 exports.DirectMessagingService = DirectMessagingService;

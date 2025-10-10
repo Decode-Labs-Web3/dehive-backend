@@ -419,9 +419,9 @@ export class DirectMessagingService {
       .includes(selfId);
     if (!isParticipant) throw new BadRequestException('Not a participant');
 
-    const page = dto.page || 1;
-    const limit = dto.limit || 50;
-    const skip = (page - 1) * limit;
+    const page = dto.page || 0;
+    const limit = dto.limit || 10;
+    const skip = page * limit;
     const [items, total] = await Promise.all([
       this.messageModel
         .find({ conversationId: new Types.ObjectId(conversationId) })
@@ -434,7 +434,18 @@ export class DirectMessagingService {
       }),
     ]);
 
-    return { page, limit, total, items };
+    const totalPages = Math.ceil(total / limit);
+    const isLastPage = page >= (totalPages - 1);
+
+    return {
+      items,
+      metadata: {
+        page,
+        limit,
+        total: items.length,
+        is_last_page: isLastPage
+      }
+    };
   }
 
   async editMessage(selfId: string, messageId: string, content: string) {
@@ -483,9 +494,9 @@ export class DirectMessagingService {
       throw new BadRequestException('Invalid user id');
     }
 
-    const page = dto.page > 0 ? dto.page : 1;
-    const limit = dto.limit > 0 ? Math.min(dto.limit, 100) : 50;
-    const skip = (page - 1) * limit;
+    const page = dto.page >= 0 ? dto.page : 0;
+    const limit = dto.limit > 0 ? Math.min(dto.limit, 100) : 10;
+    const skip = page * limit;
 
     const query: Record<string, any> = {
       ownerId: new Types.ObjectId(selfId),
@@ -504,12 +515,23 @@ export class DirectMessagingService {
       this.directuploadModel.countDocuments(query),
     ]);
 
-    return { page, limit, total, items };
+    const totalPages = Math.ceil(total / limit);
+    const isLastPage = page >= (totalPages - 1);
+
+    return {
+      items,
+      metadata: {
+        page,
+        limit,
+        total: items.length,
+        is_last_page: isLastPage
+      }
+    };
   }
 
   async getFollowing(currentUser: AuthenticatedUser, dto: GetFollowingDto) {
-    const page = 0;
-    const limit = 10;
+    const page = dto.page || 0;
+    const limit = dto.limit || 10;
 
     const sessionId = currentUser.session_id;
     if (!sessionId) {
@@ -539,6 +561,23 @@ export class DirectMessagingService {
       throw new NotFoundException('Could not retrieve following list from Decode service');
     }
 
-    return result;
+    // Use metadata directly from Decode API response
+    const items = result.data?.users || [];
+    const metadata = result.data?.meta;
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'OK',
+      data: {
+        items,
+        metadata: metadata || {
+          page,
+          limit,
+          total: items.length,
+          is_last_page: true
+        }
+      }
+    };
   }
 }
