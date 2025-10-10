@@ -1259,8 +1259,8 @@ let DirectMessagingController = class DirectMessagingController {
         return { success: true, statusCode: 200, message: 'OK', data };
     }
     async getFollowing(currentUser, query) {
-        const data = await this.service.getFollowing(currentUser, query);
-        return { success: true, statusCode: 200, message: 'OK', data };
+        const result = await this.service.getFollowing(currentUser, query);
+        return result;
     }
 };
 exports.DirectMessagingController = DirectMessagingController;
@@ -1410,7 +1410,7 @@ __decorate([
         status: 404,
         description: 'Could not retrieve following list from Decode service.',
     }),
-    openapi.ApiResponse({ status: 200 }),
+    openapi.ApiResponse({ status: 200, type: Object }),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),

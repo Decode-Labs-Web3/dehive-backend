@@ -200,7 +200,7 @@ export class DirectMessagingController {
     @CurrentUser() currentUser: AuthenticatedUser,
     @Query() query: GetFollowingDto,
   ) {
-    const data = await this.service.getFollowing(currentUser, query);
-    return { success: true, statusCode: 200, message: 'OK', data };
+    const result = await this.service.getFollowing(currentUser, query);
+    return result;
   }
 }
