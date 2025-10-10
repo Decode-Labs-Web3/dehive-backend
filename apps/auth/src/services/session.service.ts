@@ -146,7 +146,6 @@ export class SessionService {
         user: user_profile_data as unknown as AuthenticatedUser,
       };
 
-      // Calculate remaining time for the session
       const expires_countdown = Math.floor(
         (new Date(existing_session.expires_at).getTime() - Date.now()) / 1000,
       );

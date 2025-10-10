@@ -453,22 +453,46 @@ export class ServerService {
     }
 
     if (updateChannelDto.category_id) {
+      console.log('🎯 [UPDATE CHANNEL] Moving channel to new category...');
+      console.log('🎯 [UPDATE CHANNEL] Current category:', category._id);
+      console.log('🎯 [UPDATE CHANNEL] New category:', updateChannelDto.category_id);
+
       const newCategory = await this.categoryModel.findById(
         updateChannelDto.category_id,
       );
-      if (
-        !newCategory ||
-        newCategory.server_id.toString() !== category.server_id.toString()
-      ) {
-        throw new BadRequestException(
-          'The new category is invalid or does not belong to the same server.',
+
+      if (!newCategory) {
+        throw new NotFoundException(
+          `Category with ID "${updateChannelDto.category_id}" not found.`,
         );
       }
+
+      if (newCategory.server_id.toString() !== category.server_id.toString()) {
+        throw new BadRequestException(
+          'The new category does not belong to the same server.',
+        );
+      }
+
+      // Check if channel is already in the target category
+      if (channel.category_id.toString() === updateChannelDto.category_id) {
+        throw new BadRequestException(
+          'Channel is already in the specified category.',
+        );
+      }
+
+      console.log('✅ [UPDATE CHANNEL] Category validation passed');
     }
 
 
+    // Prepare update data with proper ObjectId conversion
+    const updateData: any = { ...updateChannelDto };
+    if (updateChannelDto.category_id) {
+      updateData.category_id = new Types.ObjectId(updateChannelDto.category_id);
+      console.log('🎯 [UPDATE CHANNEL] Converted category_id to ObjectId:', updateData.category_id);
+    }
+
     const updatedChannel = await this.channelModel
-      .findByIdAndUpdate(channelId, { $set: updateChannelDto }, { new: true })
+      .findByIdAndUpdate(channelId, { $set: updateData }, { new: true })
       .exec();
 
     if (!updatedChannel) {

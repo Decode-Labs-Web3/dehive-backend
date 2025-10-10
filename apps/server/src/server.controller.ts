@@ -222,7 +222,10 @@ export class ServerController {
   }
 
   @Patch('channels/:channelId')
-  @ApiOperation({ summary: 'Update a channel' })
+  @ApiOperation({
+    summary: 'Update a channel',
+    description: 'Update channel properties including name, topic, or move it to a different category within the same server.'
+  })
   @ApiHeader({
     name: 'x-session-id',
     description: 'Session ID of authenticated user',
