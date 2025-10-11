@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { HttpService } from "@nestjs/axios";
 import { firstValueFrom } from "rxjs";
-import { AxiosRequestConfig, AxiosResponse } from "axios";
+import { AxiosRequestConfig, AxiosResponse, AxiosError } from "axios";
 import { Response } from "../../interfaces/response.interface";
 
 @Injectable()
@@ -87,8 +87,7 @@ export abstract class BaseHttpClient {
     );
 
     // Preserve AxiosError to maintain status codes and response data
-
-    if (error?.response) {
+    if (error instanceof AxiosError) {
       throw error; // Re-throw the original AxiosError
     }
 

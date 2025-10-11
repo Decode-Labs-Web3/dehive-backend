@@ -29,15 +29,19 @@ jobs:
       - name: Run lint
         run: npm run lint
 
-      # 5️⃣ Build project
+      # 5️⃣ Run tests
+      - name: Run tests
+        run: npm run test
+
+      # 6️⃣ Build project
       - name: Build project
         run: npm run build
 
-      # 6️⃣ In log build process
+      # 7️⃣ In log build process
       - name: Log build directory
-        run: ls -R dist
+        run: find dist -name "main.js" -type f
 
-      # 7️⃣ Deploy lên server qua SSH
+      # 8️⃣ Deploy lên server qua SSH
       - name: Deploy with PM2
         uses: appleboy/ssh-action@v1.2.0
         with:
