@@ -420,7 +420,20 @@ export class DirectMessagingService {
       attachments,
       replyTo: replyToMessageId || null,
     });
-    return message;
+
+    // Populate the replyTo field to match the format returned by listMessages
+    const populatedMessage = await this.messageModel
+      .findById(message._id)
+      .populate('replyTo', 'content senderId createdAt')
+      .lean();
+
+    // Ensure replyTo field is properly formatted (null if no reply)
+    const formattedMessage = {
+      ...populatedMessage,
+      replyTo: populatedMessage?.replyTo || null
+    };
+
+    return formattedMessage;
   }
 
   async listMessages(
