@@ -1,0 +1,55 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main  # hoặc branch khác nếu mày muốn
+  pull_request:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Lấy code từ GitHub
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Cài Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3️⃣ Cài dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # 4️⃣ Check lint
+      - name: Run lint
+        run: npm run lint
+
+      # 5️⃣ Build project
+      - name: Build project
+        run: npm run build
+
+      # 6️⃣ In log build process
+      - name: Log build directory
+        run: ls -R dist
+
+      # 7️⃣ Deploy lên server qua SSH
+      - name: Deploy with PM2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_IP }}          # IP máy VM
+          username: ${{ secrets.SERVER_USER }}    # ví dụ ubuntu hoặc root
+          key: ${{ secrets.SERVER_SSH_KEY }}      # private key lưu trong GitHub Secrets
+          script: |
+            cd /home/${{ secrets.SERVER_USER }}/myapp  # đường dẫn code trên VM
+            git pull origin main
+            npm install
+            npm run build
+            pm2 delete all || true
+            pm2 start "npm run start:prod" --name "dehive-app"
+            pm2 save
+            pm2 status
