@@ -30,7 +30,8 @@ async function bootstrap() {
   SwaggerModule.setup('api-dm-docs', app, document);
 
   const port = configService.get<number>('DIRECT_MESSAGING_PORT') || 4004;
-  await app.listen(port);
+  const host = configService.get<string>('CLOUD_HOST') || 'localhost';
+  await app.listen(port, host);
   console.log(
     `[Dehive] Direct-Messaging service running at http://localhost:${port}`,
   );

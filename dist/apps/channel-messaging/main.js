@@ -3217,7 +3217,8 @@ async function bootstrap() {
     const document = swagger_1.SwaggerModule.createDocument(app, config);
     swagger_1.SwaggerModule.setup('api-docs', app, document);
     const port = configService.get('CHANNEL_MESSAGING_PORT') || 4003;
-    await app.listen(port, 'localhost');
+    const host = configService.get('CLOUD_HOST') || 'localhost';
+    await app.listen(port, host);
     console.log(`[Dehive] Channel-Messaging service is running on: ${await app.getUrl()}`);
     console.log(`[Dehive] Swagger UI available at: http://localhost:${port}/api-docs`);
 }

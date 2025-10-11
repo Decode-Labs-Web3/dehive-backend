@@ -2667,7 +2667,8 @@ async function bootstrap() {
     const document = swagger_1.SwaggerModule.createDocument(app, config);
     swagger_1.SwaggerModule.setup('api-dm-docs', app, document);
     const port = configService.get('DIRECT_MESSAGING_PORT') || 4004;
-    await app.listen(port);
+    const host = configService.get('CLOUD_HOST') || 'localhost';
+    await app.listen(port, host);
     console.log(`[Dehive] Direct-Messaging service running at http://localhost:${port}`);
     console.log(`[Dehive] Swagger UI at http://localhost:${port}/api-dm-docs`);
 }

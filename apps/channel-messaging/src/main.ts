@@ -31,7 +31,8 @@ async function bootstrap() {
   SwaggerModule.setup('api-docs', app, document);
 
   const port = configService.get<number>('CHANNEL_MESSAGING_PORT') || 4003;
-  await app.listen(port, 'localhost');
+  const host = configService.get<string>('CLOUD_HOST') || 'localhost';
+  await app.listen(port, host);
 
   console.log(
     `[Dehive] Channel-Messaging service is running on: ${await app.getUrl()}`,

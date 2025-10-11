@@ -3764,7 +3764,8 @@ async function bootstrap() {
     });
     swagger_1.SwaggerModule.setup('api-docs', app, document);
     const port = configService.get('SERVER_PORT') || 4002;
-    await app.listen(port, 'localhost');
+    const host = configService.get('CLOUD_HOST') || 'localhost';
+    await app.listen(port, host);
     console.log(`[Dehive] Server service is running on: ${await app.getUrl()}`);
     console.log(`[Dehive] Swagger UI available at: http://localhost:${port}/api-docs`);
 }

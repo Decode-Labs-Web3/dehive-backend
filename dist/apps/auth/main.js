@@ -1628,7 +1628,7 @@ async function bootstrap() {
         },
     }));
     const port = process.env.AUTH_PORT ?? 4006;
-    const host = process.env.AUTH_HOST ?? 'localhost';
+    const host = process.env.CLOUD_HOST ?? 'localhost';
     await app.listen(port, host);
     console.info(`[AuthService] Auth service is running on ${host}:${port}`);
 }

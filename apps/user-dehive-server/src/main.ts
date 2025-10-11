@@ -38,7 +38,9 @@ async function bootstrap() {
   SwaggerModule.setup('api-docs', app, document);
 
   const port = configService.get<number>('USER_DEHIVE_SERVER_PORT') || 4001;
-  await app.listen(port, 'localhost');
+  const host = configService.get<string>('CLOUD_HOST') || 'localhost';
+
+  await app.listen(port, host);
 
   console.log(
     `[Dehive] User-Dehive-Server service is running on: ${await app.getUrl()}`,
