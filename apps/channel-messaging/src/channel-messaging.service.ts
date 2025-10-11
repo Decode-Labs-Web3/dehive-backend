@@ -298,7 +298,7 @@ export class MessagingService {
   async createMessage(
     createMessageDto: CreateMessageDto,
     senderId: string,
-  ): Promise<ChannelMessageDocument> {
+  ): Promise<any> {
     let attachments: AttachmentDto[] = [];
 
     if (
@@ -371,7 +371,22 @@ export class MessagingService {
       conversationId: conversation._id,
       replyTo: replyToMessageId || null,
     });
-    return newMessage.save();
+
+    const savedMessage = await newMessage.save();
+
+    // Populate the replyTo field to match the format returned by getMessagesByConversationId
+    const populatedMessage = await this.channelMessageModel
+      .findById(savedMessage._id)
+      .populate('replyTo', 'content senderId createdAt')
+      .lean();
+
+    // Ensure replyTo field is properly formatted (null if no reply)
+    const formattedMessage = {
+      ...populatedMessage,
+      replyTo: populatedMessage?.replyTo || null
+    };
+
+    return formattedMessage;
   }
 
   async getOrCreateConversationByChannelId(channelId: string) {
@@ -494,7 +509,20 @@ export class MessagingService {
     msg.isEdited = true;
     (msg as unknown as { editedAt?: Date }).editedAt = new Date();
     await msg.save();
-    return msg;
+
+    // Populate the replyTo field to match the format returned by getMessagesByConversationId
+    const populatedMessage = await this.channelMessageModel
+      .findById(msg._id)
+      .populate('replyTo', 'content senderId createdAt')
+      .lean();
+
+    // Ensure replyTo field is properly formatted (null if no reply)
+    const formattedMessage = {
+      ...populatedMessage,
+      replyTo: populatedMessage?.replyTo || null
+    };
+
+    return formattedMessage;
   }
 
   async deleteMessage(messageId: string, requesterUserDehiveId: string) {
@@ -513,7 +541,20 @@ export class MessagingService {
     msg.content = '[deleted]';
     (msg as unknown as { attachments?: unknown[] }).attachments = [];
     await msg.save();
-    return msg;
+
+    // Populate the replyTo field to match the format returned by getMessagesByConversationId
+    const populatedMessage = await this.channelMessageModel
+      .findById(msg._id)
+      .populate('replyTo', 'content senderId createdAt')
+      .lean();
+
+    // Ensure replyTo field is properly formatted (null if no reply)
+    const formattedMessage = {
+      ...populatedMessage,
+      replyTo: populatedMessage?.replyTo || null
+    };
+
+    return formattedMessage;
   }
   async listUploads(params: {
     serverId: string;

@@ -533,30 +533,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       console.log(`[WebSocket] ✅ MESSAGE SAVED: ${savedMessage._id}`);
 
-      const populatedMessage = await savedMessage.populate<{
-        senderId: UserDehiveDocument;
-      }>({
-        path: 'senderId',
-        model: 'UserDehive',
-        select: '_id dehive_role status',
-      });
+      // Get user profile for the sender
+      const senderProfile = await this.userDehiveModel.findById(savedMessage.senderId).lean();
 
       const messageToBroadcast = {
-        _id: populatedMessage._id,
+        _id: savedMessage._id,
         sender: {
-          dehive_id: (populatedMessage.senderId as any)._id,
-          username: `User_${(populatedMessage.senderId as any)._id.toString().slice(-4)}`,
+          dehive_id: savedMessage.senderId,
+          username: `User_${savedMessage.senderId.toString().slice(-4)}`,
         },
-        content: populatedMessage.content,
-        attachments: (
-          populatedMessage as unknown as { attachments?: unknown[] }
-        ).attachments,
-        conversationId: (
-          (populatedMessage as any).conversationId as Types.ObjectId
-        )?.toString?.(),
-        createdAt: (populatedMessage as any).createdAt,
-        isEdited: populatedMessage.isEdited,
-        replyTo: (populatedMessage as any).replyTo || null,
+        content: savedMessage.content,
+        attachments: savedMessage.attachments || [],
+        conversationId: savedMessage.conversationId?.toString?.(),
+        createdAt: savedMessage.createdAt,
+        isEdited: savedMessage.isEdited,
+        replyTo: savedMessage.replyTo || null,
       };
 
       // Broadcast to all clients in the conversation room

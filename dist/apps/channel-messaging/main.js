@@ -1042,23 +1042,19 @@ let ChatGateway = class ChatGateway {
             console.log(`[WebSocket] 📨 UPLOAD IDS: ${JSON.stringify(parsedData.uploadIds)}`);
             const savedMessage = await this.messagingService.createMessage(parsedData, meta.userDehiveId);
             console.log(`[WebSocket] ✅ MESSAGE SAVED: ${savedMessage._id}`);
-            const populatedMessage = await savedMessage.populate({
-                path: 'senderId',
-                model: 'UserDehive',
-                select: '_id dehive_role status',
-            });
+            const senderProfile = await this.userDehiveModel.findById(savedMessage.senderId).lean();
             const messageToBroadcast = {
-                _id: populatedMessage._id,
+                _id: savedMessage._id,
                 sender: {
-                    dehive_id: populatedMessage.senderId._id,
-                    username: `User_${populatedMessage.senderId._id.toString().slice(-4)}`,
+                    dehive_id: savedMessage.senderId,
+                    username: `User_${savedMessage.senderId.toString().slice(-4)}`,
                 },
-                content: populatedMessage.content,
-                attachments: populatedMessage.attachments,
-                conversationId: populatedMessage.conversationId?.toString?.(),
-                createdAt: populatedMessage.createdAt,
-                isEdited: populatedMessage.isEdited,
-                replyTo: populatedMessage.replyTo || null,
+                content: savedMessage.content,
+                attachments: savedMessage.attachments || [],
+                conversationId: savedMessage.conversationId?.toString?.(),
+                createdAt: savedMessage.createdAt,
+                isEdited: savedMessage.isEdited,
+                replyTo: savedMessage.replyTo || null,
             };
             this.server
                 .to(String(parsedData.conversationId))
@@ -2287,7 +2283,16 @@ let MessagingService = class MessagingService {
             conversationId: conversation._id,
             replyTo: replyToMessageId || null,
         });
-        return newMessage.save();
+        const savedMessage = await newMessage.save();
+        const populatedMessage = await this.channelMessageModel
+            .findById(savedMessage._id)
+            .populate('replyTo', 'content senderId createdAt')
+            .lean();
+        const formattedMessage = {
+            ...populatedMessage,
+            replyTo: populatedMessage?.replyTo || null
+        };
+        return formattedMessage;
     }
     async getOrCreateConversationByChannelId(channelId) {
         if (!mongoose_2.Types.ObjectId.isValid(channelId)) {
@@ -2378,7 +2383,15 @@ let MessagingService = class MessagingService {
         msg.isEdited = true;
         msg.editedAt = new Date();
         await msg.save();
-        return msg;
+        const populatedMessage = await this.channelMessageModel
+            .findById(msg._id)
+            .populate('replyTo', 'content senderId createdAt')
+            .lean();
+        const formattedMessage = {
+            ...populatedMessage,
+            replyTo: populatedMessage?.replyTo || null
+        };
+        return formattedMessage;
     }
     async deleteMessage(messageId, requesterUserDehiveId) {
         if (!mongoose_2.Types.ObjectId.isValid(messageId)) {
@@ -2397,7 +2410,15 @@ let MessagingService = class MessagingService {
         msg.content = '[deleted]';
         msg.attachments = [];
         await msg.save();
-        return msg;
+        const populatedMessage = await this.channelMessageModel
+            .findById(msg._id)
+            .populate('replyTo', 'content senderId createdAt')
+            .lean();
+        const formattedMessage = {
+            ...populatedMessage,
+            replyTo: populatedMessage?.replyTo || null
+        };
+        return formattedMessage;
     }
     async listUploads(params) {
         const { serverId, userId, type, page, limit } = params;
