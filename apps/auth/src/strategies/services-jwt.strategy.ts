@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, ExtractJwt } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { ServicesJwtPayload } from '../interfaces/jwt-payload.interface';
-import { Response } from '../interfaces/response.interface';
+import { Injectable, Logger } from "@nestjs/common";
+import { PassportStrategy } from "@nestjs/passport";
+import { Strategy, ExtractJwt } from "passport-jwt";
+import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
+import { ServicesJwtPayload } from "../interfaces/jwt-payload.interface";
+import { Response } from "../interfaces/response.interface";
 
 @Injectable()
 export class ServicesJwtStrategy extends PassportStrategy(Strategy) {
@@ -16,9 +16,9 @@ export class ServicesJwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('jwt.secret.servicesToken') || '',
-      issuer: configService.get<string>('jwt.servicesToken.issuer') || '',
-      audience: configService.get<string>('jwt.servicesToken.audience') || '',
+      secretOrKey: configService.get<string>("jwt.secret.servicesToken") || "",
+      issuer: configService.get<string>("jwt.servicesToken.issuer") || "",
+      audience: configService.get<string>("jwt.servicesToken.audience") || "",
     });
   }
 
@@ -36,41 +36,41 @@ export class ServicesJwtStrategy extends PassportStrategy(Strategy) {
       const payload = this.jwtService.verify<ServicesJwtPayload>(
         services_token,
         {
-          secret: this.configService.get<string>('jwt.secret.servicesToken'),
+          secret: this.configService.get<string>("jwt.secret.servicesToken"),
           issuer: this.configService.get<string>(
-            'jwt.servicesToken.servicesIssuer',
+            "jwt.servicesToken.servicesIssuer",
           ),
           audience: this.configService.get<string>(
-            'jwt.servicesToken.audience',
+            "jwt.servicesToken.audience",
           ),
         },
       );
       if (
         payload.from_service !=
-          (this.configService.get<string>('jwt.servicesToken.servicesIssuer') ||
-            'dehive-services') ||
+          (this.configService.get<string>("jwt.servicesToken.servicesIssuer") ||
+            "dehive-services") ||
         payload.to_service !=
-          (this.configService.get<string>('jwt.servicesToken.audience') ||
-            'dehive-auth-service')
+          (this.configService.get<string>("jwt.servicesToken.audience") ||
+            "dehive-auth-service")
       ) {
         return {
           success: false,
           statusCode: 401,
-          message: 'Invalid services token',
+          message: "Invalid services token",
         };
       }
       this.logger.log(`Services token validated successfully`);
       return {
         success: true,
         statusCode: 200,
-        message: 'Services token validated',
+        message: "Services token validated",
         data: payload,
       };
     } catch {
       return {
         success: false,
         statusCode: 401,
-        message: 'Invalid services token',
+        message: "Invalid services token",
       };
     }
   }

@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import { Redis } from 'ioredis';
-import { firstValueFrom } from 'rxjs';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from "@nestjs/common";
+import { HttpService } from "@nestjs/axios";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
+import { firstValueFrom } from "rxjs";
+import { ConfigService } from "@nestjs/config";
 
 export interface UserProfile {
   _id: string;
@@ -23,7 +23,7 @@ export class AuthServiceClient {
   private readonly logger = new Logger(AuthServiceClient.name);
   private readonly authServiceUrl: string;
   private readonly PROFILE_CACHE_TTL = 900; // 15 minutes
-  private readonly PROFILE_CACHE_PREFIX = 'user_profile:';
+  private readonly PROFILE_CACHE_PREFIX = "user_profile:";
 
   constructor(
     private readonly httpService: HttpService,
@@ -31,8 +31,8 @@ export class AuthServiceClient {
     private readonly configService: ConfigService,
   ) {
     this.authServiceUrl =
-      this.configService.get<string>('AUTH_SERVICE_URL') ||
-      'http://localhost:4006';
+      this.configService.get<string>("AUTH_SERVICE_URL") ||
+      "http://localhost:4006";
   }
 
   async getUserProfile(userId: string): Promise<UserProfile | null> {
@@ -66,7 +66,7 @@ export class AuthServiceClient {
       );
 
       return profile;
-    } catch (error) {
+    } catch {
       this.logger.error(`Failed to fetch user profile: ${userId}`);
       return null;
     }
@@ -95,7 +95,7 @@ export class AuthServiceClient {
         if (!err && data) {
           try {
             profiles[id] = JSON.parse(data as string);
-          } catch (parseError) {
+          } catch {
             missingIds.push(id);
           }
         } else {

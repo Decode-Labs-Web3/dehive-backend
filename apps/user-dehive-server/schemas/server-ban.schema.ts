@@ -1,15 +1,15 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, Types } from "mongoose";
 
-@Schema({ collection: 'server_ban', timestamps: true })
+@Schema({ collection: "server_ban", timestamps: true })
 export class ServerBan {
-  @Prop({ type: Types.ObjectId, ref: 'Server', required: true })
+  @Prop({ type: Types.ObjectId, ref: "Server", required: true })
   server_id: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'UserDehive', required: true })
+  @Prop({ type: Types.ObjectId, ref: "UserDehive", required: true })
   user_dehive_id: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'UserDehive', required: true })
+  @Prop({ type: Types.ObjectId, ref: "UserDehive", required: true })
   banned_by: Types.ObjectId;
 
   @Prop({ required: false })

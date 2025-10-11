@@ -3,32 +3,32 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { HttpService } from '@nestjs/axios';
-import { Server, ServerDocument } from '../schemas/server.schema';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, Types } from "mongoose";
+import { HttpService } from "@nestjs/axios";
+import { Server, ServerDocument } from "../schemas/server.schema";
 import {
   UserDehive,
   UserDehiveDocument,
-} from '../../user-dehive-server/schemas/user-dehive.schema';
+} from "../../user-dehive-server/schemas/user-dehive.schema";
 import {
   UserDehiveServer,
   UserDehiveServerDocument,
-} from '../../user-dehive-server/schemas/user-dehive-server.schema';
-import { Category, CategoryDocument } from '../schemas/category.schema';
-import { Channel, ChannelDocument } from '../schemas/channel.schema';
-import { CreateServerDto } from '../dto/create-server.dto';
-import { UpdateServerDto } from '../dto/update-server.dto';
-import { CreateCategoryDto } from '../dto/create-category.dto';
-import { CreateChannelDto } from '../dto/create-channel.dto';
-import { UpdateCategoryDto } from '../dto/update-category.dto';
-import { UpdateChannelDto } from '../dto/update-channel.dto';
+} from "../../user-dehive-server/schemas/user-dehive-server.schema";
+import { Category, CategoryDocument } from "../schemas/category.schema";
+import { Channel, ChannelDocument } from "../schemas/channel.schema";
+import { CreateServerDto } from "../dto/create-server.dto";
+import { UpdateServerDto } from "../dto/update-server.dto";
+import { CreateCategoryDto } from "../dto/create-category.dto";
+import { CreateChannelDto } from "../dto/create-channel.dto";
+import { UpdateCategoryDto } from "../dto/update-category.dto";
+import { UpdateChannelDto } from "../dto/update-channel.dto";
 import {
   ChannelMessage,
   ChannelMessageDocument,
-} from '../schemas/channel-message.schema';
-import { ServerRole } from '../../user-dehive-server/enum/enum';
+} from "../schemas/channel-message.schema";
+import { ServerRole } from "../../user-dehive-server/enum/enum";
 
 @Injectable()
 export class ServerService {
@@ -52,15 +52,15 @@ export class ServerService {
     createServerDto: CreateServerDto,
     ownerBaseId: string,
   ): Promise<Server> {
-    console.log('🚀 [CREATE SERVER] Starting with ownerBaseId:', ownerBaseId);
+    console.log("🚀 [CREATE SERVER] Starting with ownerBaseId:", ownerBaseId);
 
     if (!ownerBaseId) {
-      throw new BadRequestException('Owner ID is required');
+      throw new BadRequestException("Owner ID is required");
     }
 
     const ownerDehiveId = ownerBaseId; // user_dehive_id = user_id from Decode
 
-    console.log('🔍 [CREATE SERVER] ownerDehiveId:', ownerDehiveId);
+    console.log("🔍 [CREATE SERVER] ownerDehiveId:", ownerDehiveId);
     const session = await this.serverModel.db.startSession();
     session.startTransaction();
     try {
@@ -88,9 +88,9 @@ export class ServerService {
         {
           $inc: { server_count: 1 },
           $setOnInsert: {
-            dehive_role: 'USER',
-            status: 'ACTIVE',
-            bio: '',
+            dehive_role: "USER",
+            status: "ACTIVE",
+            bio: "",
             banner_color: null,
             is_banned: false,
             banned_by_servers: [],
@@ -105,8 +105,8 @@ export class ServerService {
       return newServer;
     } catch (error) {
       await session.abortTransaction();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-      throw new BadRequestException('Could not create server.', error.message);
+
+      throw new BadRequestException("Could not create server.", error.message);
     } finally {
       void session.endSession();
     }
@@ -117,7 +117,7 @@ export class ServerService {
     const actorDehiveId = actorBaseId; // user_dehive_id = user_id from Decode
     const memberships = await this.userDehiveServerModel
       .find({ user_dehive_id: actorDehiveId })
-      .select('server_id')
+      .select("server_id")
       .lean();
     const serverIds = memberships.map((m) => m.server_id);
     return this.serverModel.find({ _id: { $in: serverIds } }).exec();
@@ -139,7 +139,7 @@ export class ServerService {
     const server = await this.findServerById(id);
     if (server.owner_id.toString() !== actorId) {
       throw new ForbiddenException(
-        'You do not have permission to edit this server.',
+        "You do not have permission to edit this server.",
       );
     }
     const updatedServer = await this.serverModel
@@ -158,7 +158,7 @@ export class ServerService {
     const server = await this.findServerById(id);
     if (server.owner_id.toString() !== actorId) {
       throw new ForbiddenException(
-        'You do not have permission to delete this server.',
+        "You do not have permission to delete this server.",
       );
     }
     const session = await this.serverModel.db.startSession();
@@ -167,14 +167,14 @@ export class ServerService {
       const serverId = new Types.ObjectId(id);
       const members = await this.userDehiveServerModel
         .find({ server_id: serverId })
-        .select('user_dehive_id')
+        .select("user_dehive_id")
         .session(session);
       const memberIds = members.map((m) => m.user_dehive_id);
 
       await this.serverModel.findByIdAndDelete(serverId, { session });
       const categories = await this.categoryModel
         .find({ server_id: serverId })
-        .select('_id')
+        .select("_id")
         .session(session);
       const categoryIds = categories.map((c) => c._id);
       if (categoryIds.length > 0) {
@@ -201,8 +201,8 @@ export class ServerService {
     } catch (error) {
       await session.abortTransaction();
       throw new BadRequestException(
-        'Could not delete server and its related data.',
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+        "Could not delete server and its related data.",
+
         error.message,
       );
     } finally {
@@ -218,7 +218,7 @@ export class ServerService {
     const server = await this.findServerById(serverId);
     if (server.owner_id.toString() !== actorId) {
       throw new ForbiddenException(
-        'Only the server owner can create categories.',
+        "Only the server owner can create categories.",
       );
     }
 
@@ -238,12 +238,12 @@ export class ServerService {
       },
       {
         $lookup: {
-          from: 'channel',
-          localField: '_id',
-          foreignField: 'category_id',
-          as: 'channels',
+          from: "channel",
+          localField: "_id",
+          foreignField: "category_id",
+          as: "channels",
         },
-      }
+      },
     ]);
   }
 
@@ -262,10 +262,9 @@ export class ServerService {
     const server = await this.findServerById(category.server_id.toString());
     if (server.owner_id.toString() !== actorId) {
       throw new ForbiddenException(
-        'You do not have permission to edit this category.',
+        "You do not have permission to edit this category.",
       );
     }
-
 
     Object.assign(category, updateCategoryDto);
     return category.save();
@@ -287,7 +286,7 @@ export class ServerService {
     const server = await this.findServerById(category.server_id.toString());
     if (server.owner_id.toString() !== actorId) {
       throw new ForbiddenException(
-        'You do not have permission to delete this category.',
+        "You do not have permission to delete this category.",
       );
     }
 
@@ -305,8 +304,8 @@ export class ServerService {
     } catch (error) {
       await session.abortTransaction();
       throw new BadRequestException(
-        'Could not delete category and its channels.',
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+        "Could not delete category and its channels.",
+
         error.message,
       );
     } finally {
@@ -320,21 +319,20 @@ export class ServerService {
     actorId: string,
     createChannelDto: CreateChannelDto,
   ): Promise<Channel> {
-    console.log('🎯 [CREATE CHANNEL] Starting channel creation...');
-    console.log('🎯 [CREATE CHANNEL] serverId:', serverId);
-    console.log('🎯 [CREATE CHANNEL] categoryId:', categoryId);
-    console.log('🎯 [CREATE CHANNEL] actorId:', actorId);
-    console.log('🎯 [CREATE CHANNEL] actorId type:', typeof actorId);
+    console.log("🎯 [CREATE CHANNEL] Starting channel creation...");
+    console.log("🎯 [CREATE CHANNEL] serverId:", serverId);
+    console.log("🎯 [CREATE CHANNEL] categoryId:", categoryId);
+    console.log("🎯 [CREATE CHANNEL] actorId:", actorId);
+    console.log("🎯 [CREATE CHANNEL] actorId type:", typeof actorId);
 
     const serverObjectId = new Types.ObjectId(serverId);
     const categoryObjectId = new Types.ObjectId(categoryId);
     const actorObjectId = new Types.ObjectId(actorId);
 
-    console.log('🎯 [CREATE CHANNEL] serverObjectId:', serverObjectId);
-    console.log('🎯 [CREATE CHANNEL] categoryObjectId:', categoryObjectId);
-    console.log('🎯 [CREATE CHANNEL] actorObjectId:', actorObjectId);
+    console.log("🎯 [CREATE CHANNEL] serverObjectId:", serverObjectId);
+    console.log("🎯 [CREATE CHANNEL] categoryObjectId:", categoryObjectId);
+    console.log("🎯 [CREATE CHANNEL] actorObjectId:", actorObjectId);
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [server, category, actorMembership] = await Promise.all([
       this.findServerById(serverId),
       this.categoryModel.findById(categoryObjectId).lean(),
@@ -346,23 +344,32 @@ export class ServerService {
         .lean(),
     ]);
 
-    console.log('🎯 [CREATE CHANNEL] server:', server);
-    console.log('🎯 [CREATE CHANNEL] server.owner_id:', server.owner_id);
-    console.log('🎯 [CREATE CHANNEL] server.owner_id type:', typeof server.owner_id);
-    console.log('🎯 [CREATE CHANNEL] category:', category);
-    console.log('🎯 [CREATE CHANNEL] actorMembership:', actorMembership);
+    console.log("🎯 [CREATE CHANNEL] server:", server);
+    console.log("🎯 [CREATE CHANNEL] server.owner_id:", server.owner_id);
+    console.log(
+      "🎯 [CREATE CHANNEL] server.owner_id type:",
+      typeof server.owner_id,
+    );
+    console.log("🎯 [CREATE CHANNEL] category:", category);
+    console.log("🎯 [CREATE CHANNEL] actorMembership:", actorMembership);
 
     if (!category)
       throw new NotFoundException(`Category with ID ${categoryId} not found.`);
     if (category.server_id.toString() !== serverId)
-      throw new BadRequestException('Category does not belong to this server.');
+      throw new BadRequestException("Category does not belong to this server.");
 
     // Check if actor is server owner
     const isOwner = server.owner_id.toString() === actorId;
-    console.log('🎯 [CREATE CHANNEL] isOwner:', isOwner);
-    console.log('🎯 [CREATE CHANNEL] server.owner_id.toString():', server.owner_id.toString());
-    console.log('🎯 [CREATE CHANNEL] actorId:', actorId);
-    console.log('🎯 [CREATE CHANNEL] owner comparison:', server.owner_id.toString() === actorId);
+    console.log("🎯 [CREATE CHANNEL] isOwner:", isOwner);
+    console.log(
+      "🎯 [CREATE CHANNEL] server.owner_id.toString():",
+      server.owner_id.toString(),
+    );
+    console.log("🎯 [CREATE CHANNEL] actorId:", actorId);
+    console.log(
+      "🎯 [CREATE CHANNEL] owner comparison:",
+      server.owner_id.toString() === actorId,
+    );
 
     const hasPermission =
       isOwner ||
@@ -370,16 +377,25 @@ export class ServerService {
         (actorMembership.role === ServerRole.OWNER ||
           actorMembership.role === ServerRole.MODERATOR));
 
-    console.log('🎯 [CREATE CHANNEL] hasPermission:', hasPermission);
-    console.log('🎯 [CREATE CHANNEL] actorMembership?.role:', actorMembership?.role);
+    console.log("🎯 [CREATE CHANNEL] hasPermission:", hasPermission);
+    console.log(
+      "🎯 [CREATE CHANNEL] actorMembership?.role:",
+      actorMembership?.role,
+    );
 
     if (!hasPermission) {
-      console.log('❌ [CREATE CHANNEL] Permission denied!');
-      console.log('❌ [CREATE CHANNEL] isOwner:', isOwner);
-      console.log('❌ [CREATE CHANNEL] actorMembership exists:', !!actorMembership);
-      console.log('❌ [CREATE CHANNEL] actorMembership role:', actorMembership?.role);
+      console.log("❌ [CREATE CHANNEL] Permission denied!");
+      console.log("❌ [CREATE CHANNEL] isOwner:", isOwner);
+      console.log(
+        "❌ [CREATE CHANNEL] actorMembership exists:",
+        !!actorMembership,
+      );
+      console.log(
+        "❌ [CREATE CHANNEL] actorMembership role:",
+        actorMembership?.role,
+      );
       throw new ForbiddenException(
-        'Only server owners and moderators can create channels.',
+        "Only server owners and moderators can create channels.",
       );
     }
 
@@ -403,9 +419,9 @@ export class ServerService {
     actorId: string,
     updateChannelDto: UpdateChannelDto,
   ): Promise<Channel> {
-    console.log('🎯 [UPDATE CHANNEL] Starting channel update...');
-    console.log('🎯 [UPDATE CHANNEL] channelId:', channelId);
-    console.log('🎯 [UPDATE CHANNEL] actorId:', actorId);
+    console.log("🎯 [UPDATE CHANNEL] Starting channel update...");
+    console.log("🎯 [UPDATE CHANNEL] channelId:", channelId);
+    console.log("🎯 [UPDATE CHANNEL] actorId:", actorId);
 
     const channel = await this.findChannelById(channelId);
     const category = await this.categoryModel
@@ -413,17 +429,17 @@ export class ServerService {
       .lean();
     if (!category)
       throw new NotFoundException(
-        'Category containing this channel not found.',
+        "Category containing this channel not found.",
       );
 
     // Get server info to check owner
     const server = await this.findServerById(category.server_id.toString());
-    console.log('🎯 [UPDATE CHANNEL] server:', server);
-    console.log('🎯 [UPDATE CHANNEL] server.owner_id:', server.owner_id);
+    console.log("🎯 [UPDATE CHANNEL] server:", server);
+    console.log("🎯 [UPDATE CHANNEL] server.owner_id:", server.owner_id);
 
     // Check if actor is server owner
     const isOwner = server.owner_id.toString() === actorId;
-    console.log('🎯 [UPDATE CHANNEL] isOwner:', isOwner);
+    console.log("🎯 [UPDATE CHANNEL] isOwner:", isOwner);
 
     const actorMembership = await this.userDehiveServerModel
       .findOne({
@@ -432,7 +448,7 @@ export class ServerService {
       })
       .lean();
 
-    console.log('🎯 [UPDATE CHANNEL] actorMembership:', actorMembership);
+    console.log("🎯 [UPDATE CHANNEL] actorMembership:", actorMembership);
 
     const hasPermission =
       isOwner ||
@@ -440,22 +456,31 @@ export class ServerService {
         (actorMembership.role === ServerRole.OWNER ||
           actorMembership.role === ServerRole.MODERATOR));
 
-    console.log('🎯 [UPDATE CHANNEL] hasPermission:', hasPermission);
+    console.log("🎯 [UPDATE CHANNEL] hasPermission:", hasPermission);
 
     if (!hasPermission) {
-      console.log('❌ [UPDATE CHANNEL] Permission denied!');
-      console.log('❌ [UPDATE CHANNEL] isOwner:', isOwner);
-      console.log('❌ [UPDATE CHANNEL] actorMembership exists:', !!actorMembership);
-      console.log('❌ [UPDATE CHANNEL] actorMembership role:', actorMembership?.role);
+      console.log("❌ [UPDATE CHANNEL] Permission denied!");
+      console.log("❌ [UPDATE CHANNEL] isOwner:", isOwner);
+      console.log(
+        "❌ [UPDATE CHANNEL] actorMembership exists:",
+        !!actorMembership,
+      );
+      console.log(
+        "❌ [UPDATE CHANNEL] actorMembership role:",
+        actorMembership?.role,
+      );
       throw new ForbiddenException(
-        'You do not have permission to edit channels in this server.',
+        "You do not have permission to edit channels in this server.",
       );
     }
 
     if (updateChannelDto.category_id) {
-      console.log('🎯 [UPDATE CHANNEL] Moving channel to new category...');
-      console.log('🎯 [UPDATE CHANNEL] Current category:', category._id);
-      console.log('🎯 [UPDATE CHANNEL] New category:', updateChannelDto.category_id);
+      console.log("🎯 [UPDATE CHANNEL] Moving channel to new category...");
+      console.log("🎯 [UPDATE CHANNEL] Current category:", category._id);
+      console.log(
+        "🎯 [UPDATE CHANNEL] New category:",
+        updateChannelDto.category_id,
+      );
 
       const newCategory = await this.categoryModel.findById(
         updateChannelDto.category_id,
@@ -469,26 +494,28 @@ export class ServerService {
 
       if (newCategory.server_id.toString() !== category.server_id.toString()) {
         throw new BadRequestException(
-          'The new category does not belong to the same server.',
+          "The new category does not belong to the same server.",
         );
       }
 
       // Check if channel is already in the target category
       if (channel.category_id.toString() === updateChannelDto.category_id) {
         throw new BadRequestException(
-          'Channel is already in the specified category.',
+          "Channel is already in the specified category.",
         );
       }
 
-      console.log('✅ [UPDATE CHANNEL] Category validation passed');
+      console.log("✅ [UPDATE CHANNEL] Category validation passed");
     }
 
-
     // Prepare update data with proper ObjectId conversion
-    const updateData: any = { ...updateChannelDto };
+    const updateData: Record<string, unknown> = { ...updateChannelDto };
     if (updateChannelDto.category_id) {
       updateData.category_id = new Types.ObjectId(updateChannelDto.category_id);
-      console.log('🎯 [UPDATE CHANNEL] Converted category_id to ObjectId:', updateData.category_id);
+      console.log(
+        "🎯 [UPDATE CHANNEL] Converted category_id to ObjectId:",
+        updateData.category_id,
+      );
     }
 
     const updatedChannel = await this.channelModel
@@ -508,9 +535,9 @@ export class ServerService {
     channelId: string,
     actorId: string,
   ): Promise<{ deleted: boolean }> {
-    console.log('🎯 [DELETE CHANNEL] Starting channel deletion...');
-    console.log('🎯 [DELETE CHANNEL] channelId:', channelId);
-    console.log('🎯 [DELETE CHANNEL] actorId:', actorId);
+    console.log("🎯 [DELETE CHANNEL] Starting channel deletion...");
+    console.log("🎯 [DELETE CHANNEL] channelId:", channelId);
+    console.log("🎯 [DELETE CHANNEL] actorId:", actorId);
 
     const channelObjectId = new Types.ObjectId(channelId);
     const channel = await this.findChannelById(channelId);
@@ -520,17 +547,17 @@ export class ServerService {
       .lean();
     if (!category)
       throw new NotFoundException(
-        'Category containing this channel not found.',
+        "Category containing this channel not found.",
       );
 
     // Get server info to check owner
     const server = await this.findServerById(category.server_id.toString());
-    console.log('🎯 [DELETE CHANNEL] server:', server);
-    console.log('🎯 [DELETE CHANNEL] server.owner_id:', server.owner_id);
+    console.log("🎯 [DELETE CHANNEL] server:", server);
+    console.log("🎯 [DELETE CHANNEL] server.owner_id:", server.owner_id);
 
     // Check if actor is server owner
     const isOwner = server.owner_id.toString() === actorId;
-    console.log('🎯 [DELETE CHANNEL] isOwner:', isOwner);
+    console.log("🎯 [DELETE CHANNEL] isOwner:", isOwner);
 
     const actorMembership = await this.userDehiveServerModel
       .findOne({
@@ -539,7 +566,7 @@ export class ServerService {
       })
       .lean();
 
-    console.log('🎯 [DELETE CHANNEL] actorMembership:', actorMembership);
+    console.log("🎯 [DELETE CHANNEL] actorMembership:", actorMembership);
 
     const hasPermission =
       isOwner ||
@@ -547,15 +574,21 @@ export class ServerService {
         (actorMembership.role === ServerRole.OWNER ||
           actorMembership.role === ServerRole.MODERATOR));
 
-    console.log('🎯 [DELETE CHANNEL] hasPermission:', hasPermission);
+    console.log("🎯 [DELETE CHANNEL] hasPermission:", hasPermission);
 
     if (!hasPermission) {
-      console.log('❌ [DELETE CHANNEL] Permission denied!');
-      console.log('❌ [DELETE CHANNEL] isOwner:', isOwner);
-      console.log('❌ [DELETE CHANNEL] actorMembership exists:', !!actorMembership);
-      console.log('❌ [DELETE CHANNEL] actorMembership role:', actorMembership?.role);
+      console.log("❌ [DELETE CHANNEL] Permission denied!");
+      console.log("❌ [DELETE CHANNEL] isOwner:", isOwner);
+      console.log(
+        "❌ [DELETE CHANNEL] actorMembership exists:",
+        !!actorMembership,
+      );
+      console.log(
+        "❌ [DELETE CHANNEL] actorMembership role:",
+        actorMembership?.role,
+      );
       throw new ForbiddenException(
-        'You do not have permission to delete channels in this server.',
+        "You do not have permission to delete channels in this server.",
       );
     }
 
@@ -573,8 +606,8 @@ export class ServerService {
     } catch (error) {
       await session.abortTransaction();
       throw new BadRequestException(
-        'Could not delete channel and its messages.',
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
+        "Could not delete channel and its messages.",
+
         error.message,
       );
     } finally {

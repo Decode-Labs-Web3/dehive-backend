@@ -1,7 +1,7 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, Types } from "mongoose";
 
-@Schema({ collection: 'server', timestamps: true })
+@Schema({ collection: "server", timestamps: true })
 export class Server {
   @Prop({ required: true })
   name: string;
@@ -9,7 +9,7 @@ export class Server {
   @Prop({ required: true })
   description: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'UserDehive', required: true })
+  @Prop({ type: Types.ObjectId, ref: "UserDehive", required: true })
   owner_id: Types.ObjectId;
 
   @Prop({ default: 0 })

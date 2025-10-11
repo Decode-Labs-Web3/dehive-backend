@@ -1,20 +1,20 @@
-import { BadRequestException, HttpStatus, Injectable } from '@nestjs/common';
-import { v4 as uuidv4 } from 'uuid';
+import { BadRequestException, HttpStatus, Injectable } from "@nestjs/common";
+import { v4 as uuidv4 } from "uuid";
 
 // Interfaces
-import { Response } from '../interfaces/response.interface';
-import { SessionDoc } from '../interfaces/session-doc.interface';
+import { Response } from "../interfaces/response.interface";
+import { SessionDoc } from "../interfaces/session-doc.interface";
 
 // Infrastructure Services
-import { DecodeApiClient } from '../infrastructure/external-services/decode-api.client';
-import { RedisInfrastructure } from '../infrastructure/redis.infrastructure';
+import { DecodeApiClient } from "../infrastructure/external-services/decode-api.client";
+import { RedisInfrastructure } from "../infrastructure/redis.infrastructure";
 
 // Services
-import { UserService } from './user.service';
-import { RegisterService } from './register.service';
-import { SessionCacheDoc } from '../interfaces/session-doc.interface';
-import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
-import { UserProfile } from 'apps/user-dehive-server/interfaces/user-profile.interface';
+import { UserService } from "./user.service";
+import { RegisterService } from "./register.service";
+import { SessionCacheDoc } from "../interfaces/session-doc.interface";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import { UserProfile } from "apps/user-dehive-server/interfaces/user-profile.interface";
 
 @Injectable()
 export class SessionService {
@@ -40,8 +40,9 @@ export class SessionService {
       !create_decode_session_response.data.access_token
     ) {
       throw new BadRequestException(
-        'Failed to create decode session',
-        create_decode_session_response?.message || 'Invalid response from decode API',
+        "Failed to create decode session",
+        create_decode_session_response?.message ||
+          "Invalid response from decode API",
       );
     }
 
@@ -72,26 +73,35 @@ export class SessionService {
       session_id,
       fingerprint_hashed,
     );
-    if (!user_profile_response || !user_profile_response.success || !user_profile_response.data) {
+    if (
+      !user_profile_response ||
+      !user_profile_response.success ||
+      !user_profile_response.data
+    ) {
       throw new BadRequestException(
-        'Failed to get user profile after creating session',
-        user_profile_response?.message || 'Invalid user profile response',
+        "Failed to get user profile after creating session",
+        user_profile_response?.message || "Invalid user profile response",
       );
     }
     const user_profile_data = user_profile_response.data;
 
-    let user_dehive_data = await this.userService.userExists(user_profile_data._id);
+    const user_dehive_data = await this.userService.userExists(
+      user_profile_data._id,
+    );
     if (!user_dehive_data.success) {
       await this.registerService.register(user_profile_data._id);
     }
 
     // Update the session with user profile data
-    await this.updateSessionWithUserProfile(session_id, user_profile_data as unknown as UserProfile);
+    await this.updateSessionWithUserProfile(
+      session_id,
+      user_profile_data as unknown as UserProfile,
+    );
 
     return {
       success: true,
       statusCode: HttpStatus.OK,
-      message: 'Decode session created',
+      message: "Decode session created",
       data: {
         session_id: session_id,
         expires_at: create_decode_session_response.data?.expires_at,
@@ -107,26 +117,31 @@ export class SessionService {
     if (!session_data) {
       return {
         success: false,
-        message: 'Session not found',
+        message: "Session not found",
         statusCode: HttpStatus.NOT_FOUND,
       };
     }
     return {
       success: true,
-      message: 'Session found',
+      message: "Session found",
       statusCode: HttpStatus.OK,
       data: session_data,
     };
   }
 
-  private async storeSession(session_data: SessionDoc, user_profile_data: UserProfile | null): Promise<string> {
+  private async storeSession(
+    session_data: SessionDoc,
+    user_profile_data: UserProfile | null,
+  ): Promise<string> {
     const session_id = uuidv4();
     const session_key = `session:${session_id}`;
     const session_value = {
       session_token: session_data.session_token,
       access_token: session_data.access_token,
       expires_at: session_data.expires_at,
-      user: user_profile_data ? (user_profile_data as unknown as AuthenticatedUser) : null,
+      user: user_profile_data
+        ? (user_profile_data as unknown as AuthenticatedUser)
+        : null,
     };
 
     const expires_countdown = Math.floor(
@@ -136,9 +151,14 @@ export class SessionService {
     return session_id;
   }
 
-  private async updateSessionWithUserProfile(session_id: string, user_profile_data: UserProfile): Promise<void> {
+  private async updateSessionWithUserProfile(
+    session_id: string,
+    user_profile_data: UserProfile,
+  ): Promise<void> {
     const session_key = `session:${session_id}`;
-    const existing_session = (await this.redis.get(session_key)) as SessionCacheDoc;
+    const existing_session = (await this.redis.get(
+      session_key,
+    )) as SessionCacheDoc;
 
     if (existing_session) {
       const updated_session = {

@@ -1,15 +1,15 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, ObjectId } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, ObjectId } from "mongoose";
 
 @Schema({
-  collection: 'user_dehive',
+  collection: "user_dehive",
   timestamps: true,
 })
 export class UserDehive extends Document {
   @Prop({
     type: String,
-    enum: ['ADMIN', 'MODERATOR', 'USER'],
-    default: 'USER',
+    enum: ["ADMIN", "MODERATOR", "USER"],
+    default: "USER",
   })
   dehive_role: string;
 
@@ -18,8 +18,8 @@ export class UserDehive extends Document {
 
   @Prop({
     type: String,
-    enum: ['ACTIVE', 'INACTIVE', 'BANNED'],
-    default: 'ACTIVE',
+    enum: ["ACTIVE", "INACTIVE", "BANNED"],
+    default: "ACTIVE",
   })
   status: string;
 
@@ -30,7 +30,7 @@ export class UserDehive extends Document {
   last_login: Date;
 
   // Profile fields
-  @Prop({ type: String, default: '' })
+  @Prop({ type: String, default: "" })
   bio: string;
 
   @Prop({ type: String })

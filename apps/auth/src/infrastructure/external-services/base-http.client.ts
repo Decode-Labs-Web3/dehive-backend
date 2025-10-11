@@ -1,8 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-import { AxiosRequestConfig, AxiosResponse } from 'axios';
-import { Response } from '../../interfaces/response.interface';
+import { Injectable, Logger } from "@nestjs/common";
+import { HttpService } from "@nestjs/axios";
+import { firstValueFrom } from "rxjs";
+import { AxiosRequestConfig, AxiosResponse } from "axios";
+import { Response } from "../../interfaces/response.interface";
 
 @Injectable()
 export abstract class BaseHttpClient {
@@ -18,20 +18,20 @@ export abstract class BaseHttpClient {
     config?: AxiosRequestConfig,
   ): Promise<Response<T>> {
     try {
-      console.log('base http client get', `${this.baseURL}${url}`, config);
+      console.log("base http client get", `${this.baseURL}${url}`, config);
       const response: AxiosResponse<Response<T>> = await firstValueFrom(
         this.httpService.get<Response<T>>(`${this.baseURL}${url}`, config),
       );
-      console.log('base http client response', response.data);
+      console.log("base http client response", response.data);
       return response.data;
     } catch (error) {
-      this.handleError(error, 'GET', url);
+      this.handleError(error, "GET", url);
     }
   }
 
   protected async post<T>(
     url: string,
-    data?: any,
+    data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<Response<T>> {
     try {
@@ -44,13 +44,13 @@ export abstract class BaseHttpClient {
       );
       return response.data;
     } catch (error) {
-      this.handleError(error, 'POST', url);
+      this.handleError(error, "POST", url);
     }
   }
 
   protected async put<T>(
     url: string,
-    data?: any,
+    data?: unknown,
     config?: AxiosRequestConfig,
   ): Promise<Response<T>> {
     try {
@@ -63,7 +63,7 @@ export abstract class BaseHttpClient {
       );
       return response.data;
     } catch (error) {
-      this.handleError(error, 'PUT', url);
+      this.handleError(error, "PUT", url);
     }
   }
 
@@ -77,17 +77,17 @@ export abstract class BaseHttpClient {
       );
       return response.data;
     } catch (error) {
-      this.handleError(error, 'DELETE', url);
+      this.handleError(error, "DELETE", url);
     }
   }
 
-  private handleError(error: any, method: string, url: string): never {
+  private handleError(error: unknown, method: string, url: string): never {
     this.logger.error(
       `HTTP ${method} ${this.baseURL}${url} failed: ${error instanceof Error ? error.message : String(error)}`,
     );
 
     // Preserve AxiosError to maintain status codes and response data
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
     if (error?.response) {
       throw error; // Re-throw the original AxiosError
     }

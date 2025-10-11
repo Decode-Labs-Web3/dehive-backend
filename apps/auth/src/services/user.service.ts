@@ -1,20 +1,20 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
-import { DecodeApiClient } from '../infrastructure/external-services/decode-api.client';
-import { UserDecodeDoc } from '../interfaces/user-doc.interface';
-import { Response } from '../interfaces/response.interface';
-import { UserDehive } from '../schemas/user-dehive.schema';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { UserDehiveDoc } from '../interfaces/user-doc.interface';
-import { RedisInfrastructure } from '../infrastructure/redis.infrastructure';
-import { SessionCacheDoc } from '../interfaces/session-doc.interface';
-import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
+import { HttpStatus, Injectable } from "@nestjs/common";
+import { DecodeApiClient } from "../infrastructure/external-services/decode-api.client";
+import { UserDecodeDoc } from "../interfaces/user-doc.interface";
+import { Response } from "../interfaces/response.interface";
+import { UserDehive } from "../schemas/user-dehive.schema";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model } from "mongoose";
+import { UserDehiveDoc } from "../interfaces/user-doc.interface";
+import { RedisInfrastructure } from "../infrastructure/redis.infrastructure";
+import { SessionCacheDoc } from "../interfaces/session-doc.interface";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 
 @Injectable()
 export class UserService {
   constructor(
     private readonly decodeApiClient: DecodeApiClient,
-    @InjectModel('UserDehive')
+    @InjectModel("UserDehive")
     private readonly userDehiveModel: Model<UserDehive>,
     private readonly redis: RedisInfrastructure,
   ) {}
@@ -41,17 +41,18 @@ export class UserService {
       const user_decode_data = user_decode.data;
 
       // Check if UserDehive exists, if not create it
-      let user_dehive_data = await this.userDehiveModel.findById(user_dehive_id);
+      let user_dehive_data =
+        await this.userDehiveModel.findById(user_dehive_id);
 
       if (!user_dehive_data) {
         // Auto-create UserDehive record
         const newUserDehive = new this.userDehiveModel({
           _id: user_dehive_id,
           user_id: user_dehive_id,
-          bio: '',
+          bio: "",
           banner_color: null,
           server_count: 0,
-          status: 'offline',
+          status: "offline",
           last_login: new Date(),
         });
         user_dehive_data = await newUserDehive.save();
@@ -81,7 +82,7 @@ export class UserService {
       };
       return {
         success: true,
-        message: 'User found',
+        message: "User found",
         statusCode: HttpStatus.OK,
         data: user as unknown as UserDehiveDoc,
       };
@@ -123,10 +124,10 @@ export class UserService {
         const newUserDehive = new this.userDehiveModel({
           _id: user_decode_data._id,
           user_id: user_decode_data._id,
-          bio: '',
+          bio: "",
           banner_color: null,
           server_count: 0,
-          status: 'offline',
+          status: "offline",
           last_login: new Date(),
         });
         user_dehive_data = await newUserDehive.save();
@@ -155,7 +156,7 @@ export class UserService {
         last_account_deactivation: user_decode_data.last_account_deactivation,
       };
       console.log(
-        'user service get my decode profile user_decode_data',
+        "user service get my decode profile user_decode_data",
         user_decode_data,
       );
       // Store user data in redis with session_id
@@ -169,7 +170,7 @@ export class UserService {
       }
       return {
         success: true,
-        message: 'User found',
+        message: "User found",
         statusCode: HttpStatus.OK,
         data: user as unknown as UserDehiveDoc,
       };
@@ -187,13 +188,13 @@ export class UserService {
     if (!user_dehive_data) {
       return {
         success: false,
-        message: 'User not found',
+        message: "User not found",
         statusCode: HttpStatus.NOT_FOUND,
       };
     }
     return {
       success: true,
-      message: 'User exists',
+      message: "User exists",
       statusCode: HttpStatus.OK,
       data: user_dehive_data ? true : false,
     };
@@ -235,7 +236,7 @@ export class UserService {
     const { session_id, fingerprint_hashed } = input;
     try {
       console.log(
-        'user service get my decode profile input',
+        "user service get my decode profile input",
         session_id,
         fingerprint_hashed,
       );
@@ -252,7 +253,7 @@ export class UserService {
       }
       return {
         success: true,
-        message: 'User found',
+        message: "User found",
         statusCode: HttpStatus.OK,
         data: user_decode.data,
       };

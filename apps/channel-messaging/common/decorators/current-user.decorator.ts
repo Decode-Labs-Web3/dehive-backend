@@ -1,5 +1,5 @@
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface';
+import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
 
 /**
  * CurrentUser decorator to extract authenticated user data from the request
@@ -18,11 +18,11 @@ import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface
  */
 export const CurrentUser = createParamDecorator(
   (
-    data: keyof AuthenticatedUser | 'sessionId' | undefined,
+    data: keyof AuthenticatedUser | "sessionId" | undefined,
     ctx: ExecutionContext,
   ): AuthenticatedUser | string | undefined => {
     console.log(
-      '🎯 [CHANNEL-MESSAGING CURRENT USER] Decorator called with data:',
+      "🎯 [CHANNEL-MESSAGING CURRENT USER] Decorator called with data:",
       data,
     );
     try {
@@ -31,16 +31,16 @@ export const CurrentUser = createParamDecorator(
         .getRequest<{ user: AuthenticatedUser; sessionId?: string }>();
 
       console.log(
-        '🎯 [CHANNEL-MESSAGING CURRENT USER] Request user:',
+        "🎯 [CHANNEL-MESSAGING CURRENT USER] Request user:",
         request.user,
       );
       console.log(
-        '🎯 [CHANNEL-MESSAGING CURRENT USER] Request sessionId:',
+        "🎯 [CHANNEL-MESSAGING CURRENT USER] Request sessionId:",
         request.sessionId,
       );
 
       // If sessionId is requested, return it from request
-      if (data === 'sessionId') {
+      if (data === "sessionId") {
         return request.sessionId;
       }
 
@@ -57,12 +57,12 @@ export const CurrentUser = createParamDecorator(
 
       // Return the entire user object
       console.log(
-        '🎯 [CHANNEL-MESSAGING CURRENT USER] Returning full user:',
+        "🎯 [CHANNEL-MESSAGING CURRENT USER] Returning full user:",
         user,
       );
       return user;
     } catch (error) {
-      console.error('❌ [CHANNEL-MESSAGING CURRENT USER] Error:', error);
+      console.error("❌ [CHANNEL-MESSAGING CURRENT USER] Error:", error);
       return undefined;
     }
   },

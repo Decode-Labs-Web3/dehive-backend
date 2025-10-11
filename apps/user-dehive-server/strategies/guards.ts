@@ -3,11 +3,11 @@ import {
   ExecutionContext,
   Injectable,
   ForbiddenException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { UserDehiveServer } from '../entities/user-dehive-server.entity';
-import { ServerRole } from '../enum/enum';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, Types } from "mongoose";
+import { UserDehiveServer } from "../entities/user-dehive-server.entity";
+import { ServerRole } from "../enum/enum";
 
 interface RequestWithBody {
   body: {
@@ -17,17 +17,16 @@ interface RequestWithBody {
   };
 }
 
-function getRequestBody(context: ExecutionContext): RequestWithBody['body'] {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+function getRequestBody(context: ExecutionContext): RequestWithBody["body"] {
   const request = context.switchToHttp().getRequest();
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+
   return request.body;
 }
 
 @Injectable()
 export class IsServerOwnerGuard implements CanActivate {
   constructor(
-    @InjectModel('UserDehiveServer')
+    @InjectModel("UserDehiveServer")
     private userDehiveServerModel: Model<UserDehiveServer>,
   ) {}
 
@@ -48,7 +47,7 @@ export class IsServerOwnerGuard implements CanActivate {
 
     if (!membership) {
       throw new ForbiddenException(
-        'Only the server owner can perform this action',
+        "Only the server owner can perform this action",
       );
     }
 
@@ -59,7 +58,7 @@ export class IsServerOwnerGuard implements CanActivate {
 @Injectable()
 export class IsMemberGuard implements CanActivate {
   constructor(
-    @InjectModel('UserDehiveServer')
+    @InjectModel("UserDehiveServer")
     private userDehiveServerModel: Model<UserDehiveServer>,
   ) {}
 
@@ -85,7 +84,7 @@ export class IsMemberGuard implements CanActivate {
 @Injectable()
 export class IsModeratorGuard implements CanActivate {
   constructor(
-    @InjectModel('UserDehiveServer')
+    @InjectModel("UserDehiveServer")
     private userDehiveServerModel: Model<UserDehiveServer>,
   ) {}
 
@@ -107,7 +106,7 @@ export class IsModeratorGuard implements CanActivate {
 
     if (!moderator) {
       throw new ForbiddenException(
-        'Only owners and moderators can perform this action',
+        "Only owners and moderators can perform this action",
       );
     }
 

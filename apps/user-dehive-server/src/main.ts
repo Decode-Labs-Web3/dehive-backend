@@ -1,9 +1,9 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { UserDehiveServerModule } from './user-dehive-server.module';
-import { TransformInterceptor } from '../interfaces/transform.interface';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestFactory } from "@nestjs/core";
+import { ValidationPipe } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { UserDehiveServerModule } from "./user-dehive-server.module";
+import { TransformInterceptor } from "../interfaces/transform.interface";
+import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 
 async function bootstrap() {
   const app = await NestFactory.create(UserDehiveServerModule);
@@ -23,22 +23,22 @@ async function bootstrap() {
 
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix("api");
 
   const config = new DocumentBuilder()
-    .setTitle('Dehive - Membership Service')
+    .setTitle("Dehive - Membership Service")
     .setDescription(
-      'API documentation for managing user memberships, invites, roles, and profiles.',
+      "API documentation for managing user memberships, invites, roles, and profiles.",
     )
-    .setVersion('1.0')
-    .addTag('memberships')
+    .setVersion("1.0")
+    .addTag("memberships")
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document);
+  SwaggerModule.setup("api-docs", app, document);
 
-  const port = configService.get<number>('USER_DEHIVE_SERVER_PORT') || 4001;
-  const host = configService.get<string>('CLOUD_HOST') || 'localhost';
+  const port = configService.get<number>("USER_DEHIVE_SERVER_PORT") || 4001;
+  const host = configService.get<string>("CLOUD_HOST") || "localhost";
 
   await app.listen(port, host);
 

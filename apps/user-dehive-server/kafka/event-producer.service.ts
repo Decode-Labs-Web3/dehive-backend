@@ -1,16 +1,15 @@
-import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
-import { ClientKafka } from '@nestjs/microservices';
+import { Injectable, Inject, Logger, OnModuleInit } from "@nestjs/common";
+import { ClientKafka } from "@nestjs/microservices";
 
 @Injectable()
 export class EventProducerService implements OnModuleInit {
   private readonly logger = new Logger(EventProducerService.name);
 
   constructor(
-    @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
+    @Inject("KAFKA_SERVICE") private readonly kafkaClient: ClientKafka,
   ) {}
 
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async emit(topic: string, payload: any) {
+  async emit(topic: string, payload: unknown) {
     try {
       this.kafkaClient.emit(topic, payload);
       this.logger.log(`Event emitted successfully to topic: ${topic}`);
@@ -22,6 +21,6 @@ export class EventProducerService implements OnModuleInit {
 
   async onModuleInit() {
     await this.kafkaClient.connect();
-    this.logger.log('Kafka client connected successfully');
+    this.logger.log("Kafka client connected successfully");
   }
 }

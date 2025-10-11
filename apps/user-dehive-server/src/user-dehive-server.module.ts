@@ -1,38 +1,38 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
-import { HttpModule } from '@nestjs/axios';
-import { RedisModule } from '@nestjs-modules/ioredis';
-import { UserDehiveServerController } from './user-dehive-server.controller';
-import { UserDehiveServerService } from './user-dehive-server.service';
-import { DecodeApiClient } from '../clients/decode-api.client';
-import { UserDehive, UserDehiveSchema } from '../schemas/user-dehive.schema';
-import { Server, ServerSchema } from '../schemas/server.schema';
-import { InviteLink, InviteLinkSchema } from '../schemas/invite-link.schema';
+import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { MongooseModule } from "@nestjs/mongoose";
+import { HttpModule } from "@nestjs/axios";
+import { RedisModule } from "@nestjs-modules/ioredis";
+import { UserDehiveServerController } from "./user-dehive-server.controller";
+import { UserDehiveServerService } from "./user-dehive-server.service";
+import { DecodeApiClient } from "../clients/decode-api.client";
+import { UserDehive, UserDehiveSchema } from "../schemas/user-dehive.schema";
+import { Server, ServerSchema } from "../schemas/server.schema";
+import { InviteLink, InviteLinkSchema } from "../schemas/invite-link.schema";
 import {
   ServerAuditLog,
   ServerAuditLogSchema,
-} from '../schemas/server-audit-log.schema';
-import { ServerBan, ServerBanSchema } from '../schemas/server-ban.schema';
+} from "../schemas/server-audit-log.schema";
+import { ServerBan, ServerBanSchema } from "../schemas/server-ban.schema";
 import {
   UserDehiveServer,
   UserDehiveServerSchema,
-} from '../schemas/user-dehive-server.schema';
-import { AuthGuard } from '../common/guards/auth.guard';
+} from "../schemas/user-dehive-server.schema";
+import { AuthGuard } from "../common/guards/auth.guard";
 
 const MONGOOSE_MODELS = MongooseModule.forFeature([
-  { name: 'UserDehive', schema: UserDehiveSchema },
-  { name: 'UserDehiveServer', schema: UserDehiveServerSchema },
-  { name: 'Server', schema: ServerSchema },
-  { name: 'ServerBan', schema: ServerBanSchema },
-  { name: 'InviteLink', schema: InviteLinkSchema },
+  { name: "UserDehive", schema: UserDehiveSchema },
+  { name: "UserDehiveServer", schema: UserDehiveServerSchema },
+  { name: "Server", schema: ServerSchema },
+  { name: "ServerBan", schema: ServerBanSchema },
+  { name: "InviteLink", schema: InviteLinkSchema },
 ]);
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ".env",
     }),
     HttpModule.register({
       timeout: 5000,
@@ -41,8 +41,8 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
     RedisModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        type: 'single',
-        url: config.get<string>('REDIS_URI'),
+        type: "single",
+        url: config.get<string>("REDIS_URI"),
       }),
       inject: [ConfigService],
     }),
@@ -52,8 +52,8 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI'),
-        dbName: 'dehive_db', // Explicitly set database name
+        uri: configService.get<string>("MONGODB_URI"),
+        dbName: "dehive_db", // Explicitly set database name
       }),
     }),
 
@@ -67,11 +67,7 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
     ]),
   ],
   controllers: [UserDehiveServerController],
-  providers: [
-    UserDehiveServerService,
-    DecodeApiClient,
-    AuthGuard,
-  ],
+  providers: [UserDehiveServerService, DecodeApiClient, AuthGuard],
   exports: [UserDehiveServerService, MONGOOSE_MODELS],
 })
 export class UserDehiveServerModule {}

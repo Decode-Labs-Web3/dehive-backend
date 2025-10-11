@@ -1,12 +1,12 @@
-import { IsNumber, IsOptional, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNumber, IsOptional, Min, Max } from "class-validator";
+import { Type } from "class-transformer";
+import { ApiProperty } from "@nestjs/swagger";
 
 export class GetMessagesParamsDto {}
 
 export class GetMessagesDto {
   @ApiProperty({
-    description: 'The page number to retrieve, starting from 1.',
+    description: "The page number to retrieve, starting from 1.",
     default: 1,
     required: false,
     type: Number,
@@ -18,7 +18,7 @@ export class GetMessagesDto {
   page?: number = 1;
 
   @ApiProperty({
-    description: 'The number of messages to retrieve per page (max 100).',
+    description: "The number of messages to retrieve per page (max 100).",
     default: 50,
     required: false,
     type: Number,

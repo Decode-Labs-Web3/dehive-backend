@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
 import {
   ConnectedSocket,
   MessageBody,
@@ -8,25 +6,25 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { Model, Types } from 'mongoose';
-import { InjectModel } from '@nestjs/mongoose';
-import { DirectMessagingService } from '../src/direct-messaging.service';
-import { SendDirectMessageDto } from '../dto/send-direct-message.dto';
+} from "@nestjs/websockets";
+import { Server, Socket } from "socket.io";
+import { Model, Types } from "mongoose";
+import { InjectModel } from "@nestjs/mongoose";
+import { DirectMessagingService } from "../src/direct-messaging.service";
+import { SendDirectMessageDto } from "../dto/send-direct-message.dto";
 import {
   UserDehive,
   UserDehiveDocument,
-} from '../../user-dehive-server/schemas/user-dehive.schema';
+} from "../../user-dehive-server/schemas/user-dehive.schema";
 import {
   DirectConversation,
   DirectConversationDocument,
-} from '../schemas/direct-conversation.schema';
+} from "../schemas/direct-conversation.schema";
 
 type SocketMeta = { userDehiveId?: string };
 
 @WebSocketGateway({
-  cors: { origin: '*' },
+  cors: { origin: "*" },
 })
 export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -52,7 +50,18 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Helper function to format message data consistently for WebSocket responses
    * This ensures WebSocket responses match API response format
    */
-  private formatMessageData(message: any) {
+  private formatMessageData(message: {
+    _id: unknown;
+    conversationId: unknown;
+    senderId: unknown;
+    content: unknown;
+    attachments?: unknown[];
+    isEdited?: boolean;
+    editedAt?: unknown;
+    replyTo?: unknown;
+    createdAt?: unknown;
+    updatedAt?: unknown;
+  }) {
     return {
       _id: message._id,
       conversationId: message.conversationId,
@@ -63,13 +72,13 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       editedAt: message.editedAt || null,
       isDeleted: message.isDeleted || false,
       replyTo: message.replyTo || null,
-      createdAt: (message as any).createdAt,
-      updatedAt: (message as any).updatedAt,
+      createdAt: (message as { createdAt: unknown }).createdAt,
+      updatedAt: (message as { updatedAt: unknown }).updatedAt,
     };
   }
 
   handleConnection(client: Socket) {
-    console.log('[DM-WS] Client connected. Awaiting identity.');
+    console.log("[DM-WS] Client connected. Awaiting identity.");
     this.meta.set(client, {});
   }
 
@@ -81,7 +90,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.meta.delete(client);
   }
 
-  @SubscribeMessage('identity')
+  @SubscribeMessage("identity")
   async handleIdentity(
     @MessageBody() data: string | { userDehiveId: string },
     @ConnectedSocket() client: Socket,
@@ -91,16 +100,17 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Handle both string and object formats
     let userDehiveId: string;
-    if (typeof data === 'string') {
+    if (typeof data === "string") {
       userDehiveId = data;
-    } else if (typeof data === 'object' && data?.userDehiveId) {
+    } else if (typeof data === "object" && data?.userDehiveId) {
       userDehiveId = data.userDehiveId;
     } else {
       console.log(`[DM-WS] Invalid identity format:`, data);
-      return this.send(client, 'error', {
-        message: 'Invalid identity format. Send userDehiveId as string or {userDehiveId: string}',
-        code: 'INVALID_FORMAT',
-        timestamp: new Date().toISOString()
+      return this.send(client, "error", {
+        message:
+          "Invalid identity format. Send userDehiveId as string or {userDehiveId: string}",
+        code: "INVALID_FORMAT",
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -108,10 +118,10 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     if (!userDehiveId || !Types.ObjectId.isValid(userDehiveId)) {
       console.log(`[DM-WS] Invalid userDehiveId: ${userDehiveId}`);
-      return this.send(client, 'error', {
-        message: 'Invalid userDehiveId',
-        code: 'INVALID_USER_ID',
-        timestamp: new Date().toISOString()
+      return this.send(client, "error", {
+        message: "Invalid userDehiveId",
+        code: "INVALID_USER_ID",
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -123,10 +133,10 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(`[DM-WS] User exists result: ${exists}`);
     if (!exists) {
       console.log(`[DM-WS] User not found in database: ${userDehiveId}`);
-      return this.send(client, 'error', {
-        message: 'User not found',
-        code: 'USER_NOT_FOUND',
-        timestamp: new Date().toISOString()
+      return this.send(client, "error", {
+        message: "User not found",
+        code: "USER_NOT_FOUND",
+        timestamp: new Date().toISOString(),
       });
     }
 
@@ -135,15 +145,15 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       meta.userDehiveId = userDehiveId;
       void client.join(`user:${userDehiveId}`);
       console.log(`[DM-WS] User identified as ${userDehiveId}`);
-      this.send(client, 'identityConfirmed', {
+      this.send(client, "identityConfirmed", {
         userDehiveId,
-        status: 'success',
-        timestamp: new Date().toISOString()
+        status: "success",
+        timestamp: new Date().toISOString(),
       });
     }
   }
 
-  @SubscribeMessage('sendMessage')
+  @SubscribeMessage("sendMessage")
   async handleSendMessage(
     @MessageBody() data: SendDirectMessageDto,
     @ConnectedSocket() client: Socket,
@@ -156,77 +166,83 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(`[DM-WS] SendMessage data:`, JSON.stringify(data, null, 2));
 
     if (!selfId) {
-      return this.send(client, 'error', {
-        message: 'Please identify first',
-        code: 'AUTHENTICATION_REQUIRED',
-        timestamp: new Date().toISOString()
+      return this.send(client, "error", {
+        message: "Please identify first",
+        code: "AUTHENTICATION_REQUIRED",
+        timestamp: new Date().toISOString(),
       });
     }
 
     try {
       // Parse JSON string if needed
       let parsedData = data;
-      if (typeof data === 'string') {
+      if (typeof data === "string") {
         try {
           parsedData = JSON.parse(data);
         } catch (parseError) {
-          console.error('[DM-WS] Failed to parse JSON data:', parseError);
-          return this.send(client, 'error', {
-            message: 'Invalid JSON format',
-            code: 'INVALID_JSON',
-            timestamp: new Date().toISOString()
+          console.error("[DM-WS] Failed to parse JSON data:", parseError);
+          return this.send(client, "error", {
+            message: "Invalid JSON format",
+            code: "INVALID_JSON",
+            timestamp: new Date().toISOString(),
           });
         }
       }
 
       // Validate data structure
-      if (!parsedData || typeof parsedData !== 'object') {
-        return this.send(client, 'error', {
-          message: 'Invalid message data format',
+      if (!parsedData || typeof parsedData !== "object") {
+        return this.send(client, "error", {
+          message: "Invalid message data format",
         });
       }
 
       // Validate conversationId
-      if (!parsedData.conversationId || !Types.ObjectId.isValid(parsedData.conversationId)) {
-        return this.send(client, 'error', {
-          message: 'Invalid conversationId',
+      if (
+        !parsedData.conversationId ||
+        !Types.ObjectId.isValid(parsedData.conversationId)
+      ) {
+        return this.send(client, "error", {
+          message: "Invalid conversationId",
         });
       }
 
       // Validate content
-      if (typeof parsedData.content !== 'string') {
-        return this.send(client, 'error', {
-          message: 'Content must be a string',
+      if (typeof parsedData.content !== "string") {
+        return this.send(client, "error", {
+          message: "Content must be a string",
         });
       }
       if (parsedData.content.length > 2000) {
-        return this.send(client, 'error', {
-          message: 'Content must not exceed 2000 characters',
+        return this.send(client, "error", {
+          message: "Content must not exceed 2000 characters",
         });
       }
 
       // Validate uploadIds
       if (!Array.isArray(parsedData.uploadIds)) {
-        return this.send(client, 'error', {
-          message: 'uploadIds must be an array',
+        return this.send(client, "error", {
+          message: "uploadIds must be an array",
         });
       }
       if (parsedData.uploadIds.length > 0) {
         const allValid = parsedData.uploadIds.every((id: unknown) => {
-          return typeof id === 'string' && Types.ObjectId.isValid(id);
+          return typeof id === "string" && Types.ObjectId.isValid(id);
         });
         if (!allValid) {
-          return this.send(client, 'error', {
-            message: 'One or more uploadIds are invalid',
+          return this.send(client, "error", {
+            message: "One or more uploadIds are invalid",
           });
         }
       }
 
       // Validate replyTo if provided
       if (parsedData.replyTo !== undefined && parsedData.replyTo !== null) {
-        if (typeof parsedData.replyTo !== 'string' || !Types.ObjectId.isValid(parsedData.replyTo)) {
-          return this.send(client, 'error', {
-            message: 'replyTo must be a valid message ID',
+        if (
+          typeof parsedData.replyTo !== "string" ||
+          !Types.ObjectId.isValid(parsedData.replyTo)
+        ) {
+          return this.send(client, "error", {
+            message: "replyTo must be a valid message ID",
           });
         }
       }
@@ -236,8 +252,8 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
         .findById(parsedData.conversationId)
         .lean();
       if (!conv) {
-        return this.send(client, 'error', {
-          message: 'Conversation not found',
+        return this.send(client, "error", {
+          message: "Conversation not found",
         });
       }
 
@@ -251,18 +267,21 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
-        .emit('newMessage', serializedMessage);
+        .emit("newMessage", serializedMessage);
     } catch (error) {
-      console.error('[DM-WS] Error handling message:', error);
-      console.error('[DM-WS] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-      this.send(client, 'error', {
-        message: 'Failed to send message',
+      console.error("[DM-WS] Error handling message:", error);
+      console.error(
+        "[DM-WS] Error stack:",
+        error instanceof Error ? error.stack : "No stack trace",
+      );
+      this.send(client, "error", {
+        message: "Failed to send message",
         details: error instanceof Error ? error.message : String(error),
       });
     }
   }
 
-  @SubscribeMessage('editMessage')
+  @SubscribeMessage("editMessage")
   async handleEditMessage(
     @MessageBody() data: { messageId: string; content: string },
     @ConnectedSocket() client: Socket,
@@ -270,12 +289,12 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const meta = this.meta.get(client);
     const selfId = meta?.userDehiveId;
     if (!selfId)
-      return this.send(client, 'error', { message: 'Please identify first' });
+      return this.send(client, "error", { message: "Please identify first" });
     try {
       const updated = await this.service.editMessage(
         selfId,
         data?.messageId,
-        data?.content ?? '',
+        data?.content ?? "",
       );
 
       const conv = await this.conversationModel
@@ -293,16 +312,16 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
-        .emit('messageEdited', serializedPayload);
+        .emit("messageEdited", serializedPayload);
     } catch (error) {
-      this.send(client, 'error', {
-        message: 'Failed to edit message',
+      this.send(client, "error", {
+        message: "Failed to edit message",
         details: error instanceof Error ? error.message : String(error),
       });
     }
   }
 
-  @SubscribeMessage('deleteMessage')
+  @SubscribeMessage("deleteMessage")
   async handleDeleteMessage(
     @MessageBody() data: { messageId: string },
     @ConnectedSocket() client: Socket,
@@ -310,7 +329,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const meta = this.meta.get(client);
     const selfId = meta?.userDehiveId;
     if (!selfId)
-      return this.send(client, 'error', { message: 'Please identify first' });
+      return this.send(client, "error", { message: "Please identify first" });
     try {
       const updated = await this.service.deleteMessage(selfId, data?.messageId);
       const conv = await this.conversationModel
@@ -329,10 +348,10 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
-        .emit('messageDeleted', serializedPayload);
+        .emit("messageDeleted", serializedPayload);
     } catch (error) {
-      this.send(client, 'error', {
-        message: 'Failed to delete message',
+      this.send(client, "error", {
+        message: "Failed to delete message",
         details: error instanceof Error ? error.message : String(error),
       });
     }

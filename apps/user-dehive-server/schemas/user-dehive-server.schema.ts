@@ -1,18 +1,18 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
-import { ServerRole } from '../enum/enum';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, Types } from "mongoose";
+import { ServerRole } from "../enum/enum";
 
-@Schema({ collection: 'user_dehive_server', timestamps: true })
+@Schema({ collection: "user_dehive_server", timestamps: true })
 export class UserDehiveServer {
   @Prop({
     type: Types.ObjectId,
-    ref: 'UserDehive',
+    ref: "UserDehive",
     required: true,
     index: true,
   })
   user_dehive_id: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Server', required: true, index: true })
+  @Prop({ type: Types.ObjectId, ref: "Server", required: true, index: true })
   server_id: Types.ObjectId;
 
   @Prop({ type: String, enum: ServerRole, default: ServerRole.MEMBER })

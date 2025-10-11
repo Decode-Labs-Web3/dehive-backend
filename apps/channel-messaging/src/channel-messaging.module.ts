@@ -1,39 +1,39 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
-import { HttpModule } from '@nestjs/axios';
-import { RedisModule } from '@nestjs-modules/ioredis';
-import { ChatGateway } from '../gateway/chat.gateway';
-import { MessagingController } from './channel-messaging.controller';
-import { MessagingService } from './channel-messaging.service';
-import { AuthServiceClient } from './auth-service.client';
+import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { MongooseModule } from "@nestjs/mongoose";
+import { HttpModule } from "@nestjs/axios";
+import { RedisModule } from "@nestjs-modules/ioredis";
+import { ChatGateway } from "../gateway/chat.gateway";
+import { MessagingController } from "./channel-messaging.controller";
+import { MessagingService } from "./channel-messaging.service";
+import { AuthServiceClient } from "./auth-service.client";
 import {
   ChannelMessage,
   ChannelMessageSchema,
-} from '../schemas/channel-message.schema';
-import { Upload, UploadSchema } from '../schemas/upload.schema';
+} from "../schemas/channel-message.schema";
+import { Upload, UploadSchema } from "../schemas/upload.schema";
 import {
   UserDehive,
   UserDehiveSchema,
-} from '../../user-dehive-server/schemas/user-dehive.schema';
-import { Server, ServerSchema } from '../../server/schemas/server.schema';
-import { Category, CategorySchema } from '../../server/schemas/category.schema';
-import { Channel, ChannelSchema } from '../../server/schemas/channel.schema';
+} from "../../user-dehive-server/schemas/user-dehive.schema";
+import { Server, ServerSchema } from "../../server/schemas/server.schema";
+import { Category, CategorySchema } from "../../server/schemas/category.schema";
+import { Channel, ChannelSchema } from "../../server/schemas/channel.schema";
 import {
   ChannelConversation,
   ChannelConversationSchema,
-} from '../schemas/channel-conversation.schema';
+} from "../schemas/channel-conversation.schema";
 import {
   UserDehiveServer,
   UserDehiveServerSchema,
-} from '../../user-dehive-server/schemas/user-dehive-server.schema';
-import { AuthGuard } from '../common/guards/auth.guard';
+} from "../../user-dehive-server/schemas/user-dehive-server.schema";
+import { AuthGuard } from "../common/guards/auth.guard";
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ".env",
     }),
     HttpModule.register({
       timeout: 5000,
@@ -42,8 +42,8 @@ import { AuthGuard } from '../common/guards/auth.guard';
     RedisModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        type: 'single',
-        url: config.get<string>('REDIS_URI'),
+        type: "single",
+        url: config.get<string>("REDIS_URI"),
       }),
       inject: [ConfigService],
     }),
@@ -52,8 +52,8 @@ import { AuthGuard } from '../common/guards/auth.guard';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI'),
-        dbName: 'dehive_db',
+        uri: configService.get<string>("MONGODB_URI"),
+        dbName: "dehive_db",
       }),
     }),
 

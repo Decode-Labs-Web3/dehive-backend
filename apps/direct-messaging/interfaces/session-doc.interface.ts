@@ -1,5 +1,5 @@
-import { Types } from 'mongoose';
-import { UserProfile } from './user-profile.interface';
+import { Types } from "mongoose";
+import { UserProfile } from "./user-profile.interface";
 
 export type SessionDoc = {
   _id: string;

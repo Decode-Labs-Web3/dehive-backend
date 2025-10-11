@@ -24,7 +24,7 @@
  * @since 2024
  */
 
-import { registerAs } from '@nestjs/config';
+import { registerAs } from "@nestjs/config";
 
 /**
  * JWT Configuration
@@ -36,17 +36,17 @@ import { registerAs } from '@nestjs/config';
  * @param registerAs - NestJS configuration registration function
  * @returns Configuration object with JWT settings
  */
-export default registerAs('jwt', () => ({
+export default registerAs("jwt", () => ({
   // JWT Secret Keys - These should come from environment variables for security
   secret: {
     servicesToken: process.env.JWT_SERVICE_TOKEN_SECRET,
   },
 
   servicesToken: {
-    expiresIn: '5s', // 5 seconds
-    algorithm: 'HS256',
-    issuer: 'dehive-auth-service',
-    audience: 'dehive-auth-service',
-    servicesIssuer: 'dehive-services',
+    expiresIn: "5s", // 5 seconds
+    algorithm: "HS256",
+    issuer: "dehive-auth-service",
+    audience: "dehive-auth-service",
+    servicesIssuer: "dehive-services",
   },
 }));

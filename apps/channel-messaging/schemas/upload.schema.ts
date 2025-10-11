@@ -1,20 +1,20 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, Types } from "mongoose";
 
-@Schema({ collection: 'channel_upload', timestamps: true })
+@Schema({ collection: "channel_upload", timestamps: true })
 export class Upload {
   @Prop({
     type: Types.ObjectId,
-    ref: 'UserDehive',
+    ref: "UserDehive",
     required: true,
     index: true,
   })
   ownerId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Server', required: false, index: true })
+  @Prop({ type: Types.ObjectId, ref: "Server", required: false, index: true })
   serverId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Channel', required: false, index: true })
+  @Prop({ type: Types.ObjectId, ref: "Channel", required: false, index: true })
   channelId?: Types.ObjectId;
 
   @Prop({ required: true })

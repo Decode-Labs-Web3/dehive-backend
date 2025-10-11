@@ -5,19 +5,22 @@ import {
   UnauthorizedException,
   Logger,
   SetMetadata,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-import { Request } from 'express';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import { Redis } from 'ioredis';
-import { ConfigService } from '@nestjs/config';
-import { SessionCacheDoc, SessionDoc } from '../../interfaces/session-doc.interface';
-import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface';
-import { UserProfile } from '../../interfaces/user-profile.interface';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { HttpService } from "@nestjs/axios";
+import { firstValueFrom } from "rxjs";
+import { Request } from "express";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
+import { ConfigService } from "@nestjs/config";
+import {
+  SessionCacheDoc,
+  SessionDoc,
+} from "../../interfaces/session-doc.interface";
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
+import { UserProfile } from "../../interfaces/user-profile.interface";
 
-export const PUBLIC_KEY = 'public';
+export const PUBLIC_KEY = "public";
 export const Public = () => SetMetadata(PUBLIC_KEY, true);
 
 @Injectable()
@@ -31,30 +34,38 @@ export class AuthGuard implements CanActivate {
     private readonly configService: ConfigService,
     @InjectRedis() private readonly redis: Redis,
   ) {
-    const host = this.configService.get<string>('DECODE_API_GATEWAY_HOST');
-    const port = this.configService.get<number>('DECODE_API_GATEWAY_PORT');
+    const host = this.configService.get<string>("DECODE_API_GATEWAY_HOST");
+    const port = this.configService.get<number>("DECODE_API_GATEWAY_PORT");
     if (!host || !port) {
-      throw new Error('DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!');
+      throw new Error(
+        "DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!",
+      );
     }
     this.authServiceUrl = `http://${host}:${port}`;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.get<boolean>(PUBLIC_KEY, context.getHandler());
+    const isPublic = this.reflector.get<boolean>(
+      PUBLIC_KEY,
+      context.getHandler(),
+    );
     if (isPublic) return true;
 
     const request = context.switchToHttp().getRequest<Request>();
-    const sessionId = request.headers['x-session-id'] as string | undefined;
+    const sessionId = request.headers["x-session-id"] as string | undefined;
 
-    const fingerprintHash = request.headers['x-fingerprint-hashed'] as string | undefined;
+    const fingerprintHash = request.headers["x-fingerprint-hashed"] as
+      | string
+      | undefined;
 
     if (!sessionId) {
-      throw new UnauthorizedException('Session ID is required');
+      throw new UnauthorizedException("Session ID is required");
     }
     if (!fingerprintHash) {
-      throw new UnauthorizedException('Fingerprint hash is required in headers (x-fingerprint-hashed)');
+      throw new UnauthorizedException(
+        "Fingerprint hash is required in headers (x-fingerprint-hashed)",
+      );
     }
-
 
     try {
       const sessionKey = `session:${sessionId}`;
@@ -67,31 +78,39 @@ export class AuthGuard implements CanActivate {
             session_id: sessionId,
             fingerprint_hash: fingerprintHash,
           };
-          request['user'] = authenticatedUser;
+          request["user"] = authenticatedUser;
           return true;
         }
       }
 
       const response = await firstValueFrom(
-        this.httpService.get<{ data: SessionDoc }>(`${this.authServiceUrl}/auth/sso/validate`, {
-          headers: { 'x-session-id': sessionId },
-        }),
+        this.httpService.get<{ data: SessionDoc }>(
+          `${this.authServiceUrl}/auth/sso/validate`,
+          {
+            headers: { "x-session-id": sessionId },
+          },
+        ),
       );
 
       const sessionData = response.data.data;
       if (!sessionData || !sessionData.access_token) {
-        throw new UnauthorizedException('Invalid session data from auth service');
+        throw new UnauthorizedException(
+          "Invalid session data from auth service",
+        );
       }
 
       const profileResponse = await firstValueFrom(
-        this.httpService.get<{ data: UserProfile }>(`${this.authServiceUrl}/users/profile/me`, {
-          headers: { 'Authorization': `Bearer ${sessionData.access_token}` },
-        }),
+        this.httpService.get<{ data: UserProfile }>(
+          `${this.authServiceUrl}/users/profile/me`,
+          {
+            headers: { Authorization: `Bearer ${sessionData.access_token}` },
+          },
+        ),
       );
 
       const userProfile = profileResponse.data.data;
       if (!userProfile) {
-        throw new UnauthorizedException('Could not retrieve user profile');
+        throw new UnauthorizedException("Could not retrieve user profile");
       }
 
       const cacheData: SessionCacheDoc = {
@@ -100,18 +119,28 @@ export class AuthGuard implements CanActivate {
         user: userProfile,
         expires_at: sessionData.expires_at,
       };
-      const ttl = Math.ceil((new Date(sessionData.expires_at).getTime() - Date.now()) / 1000);
+      const ttl = Math.ceil(
+        (new Date(sessionData.expires_at).getTime() - Date.now()) / 1000,
+      );
       if (ttl > 0) {
-        await this.redis.set(sessionKey, JSON.stringify(cacheData), 'EX', ttl);
+        await this.redis.set(sessionKey, JSON.stringify(cacheData), "EX", ttl);
       }
 
-      const authenticatedUser: AuthenticatedUser = { ...userProfile, session_id: sessionId, fingerprint_hash: fingerprintHash };
-      request['user'] = authenticatedUser;
+      const authenticatedUser: AuthenticatedUser = {
+        ...userProfile,
+        session_id: sessionId,
+        fingerprint_hash: fingerprintHash,
+      };
+      request["user"] = authenticatedUser;
       return true;
-
     } catch (error) {
-      this.logger.error(`Authentication failed for session ${sessionId}:`, error.stack);
-      throw new UnauthorizedException('Authentication failed or invalid session');
+      this.logger.error(
+        `Authentication failed for session ${sessionId}:`,
+        error.stack,
+      );
+      throw new UnauthorizedException(
+        "Authentication failed or invalid session",
+      );
     }
   }
 }

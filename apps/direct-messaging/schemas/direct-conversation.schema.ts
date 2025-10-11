@@ -1,11 +1,11 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, Types } from "mongoose";
 
-@Schema({ collection: 'direct_conversation', timestamps: true })
+@Schema({ collection: "direct_conversation", timestamps: true })
 export class DirectConversation {
   @Prop({
     type: Types.ObjectId,
-    ref: 'UserDehive',
+    ref: "UserDehive",
     required: true,
     index: true,
   })
@@ -13,7 +13,7 @@ export class DirectConversation {
 
   @Prop({
     type: Types.ObjectId,
-    ref: 'UserDehive',
+    ref: "UserDehive",
     required: true,
     index: true,
   })
@@ -28,7 +28,7 @@ export const DirectConversationSchema =
   SchemaFactory.createForClass(DirectConversation);
 
 DirectConversationSchema.pre<DirectConversationDocument>(
-  'save',
+  "save",
   function (next) {
     if (this.userA.toString() > this.userB.toString()) {
       const temp = this.userA;

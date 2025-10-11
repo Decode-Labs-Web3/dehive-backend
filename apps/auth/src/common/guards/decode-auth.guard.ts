@@ -6,29 +6,29 @@ import {
   ForbiddenException,
   Logger,
   SetMetadata,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { ConfigService } from '@nestjs/config';
-import { HttpService } from '@nestjs/axios';
-import { AxiosError } from 'axios';
-import { firstValueFrom } from 'rxjs';
-import { Request } from 'express';
+} from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { ConfigService } from "@nestjs/config";
+import { HttpService } from "@nestjs/axios";
+import { AxiosError } from "axios";
+import { firstValueFrom } from "rxjs";
+import { Request } from "express";
 
 // Interfaces Import
-import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface';
-import { AuthServiceResponse } from '../../interfaces/auth-service-response.interface';
-import { SessionCacheDoc } from '../../interfaces/session-doc.interface';
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
+import { AuthServiceResponse } from "../../interfaces/auth-service-response.interface";
+import { SessionCacheDoc } from "../../interfaces/session-doc.interface";
 
 // Infrastructure Services
-import { RedisInfrastructure } from '../../infrastructure/redis.infrastructure';
-import { DecodeApiClient } from '../../infrastructure/external-services/decode-api.client';
+import { RedisInfrastructure } from "../../infrastructure/redis.infrastructure";
+import { DecodeApiClient } from "../../infrastructure/external-services/decode-api.client";
 
 // Decorators for role-based access
-export const ROLES_KEY = 'roles';
-export const PERMISSIONS_KEY = 'permissions';
-export const PUBLIC_KEY = 'public';
+export const ROLES_KEY = "roles";
+export const PERMISSIONS_KEY = "permissions";
+export const PUBLIC_KEY = "public";
 
-export const Roles = (...roles: ('user' | 'admin' | 'moderator')[]) =>
+export const Roles = (...roles: ("user" | "admin" | "moderator")[]) =>
   SetMetadata(ROLES_KEY, roles);
 
 export const Permissions = (...permissions: string[]) =>
@@ -54,8 +54,8 @@ export class DecodeAuthGuard implements CanActivate {
     private readonly decodeApiClient: DecodeApiClient,
   ) {
     this.authServiceUrl =
-      this.configService.get<string>('services.decode_auth.url') ||
-      'http://localhost:4001';
+      this.configService.get<string>("services.decode_auth.url") ||
+      "http://localhost:4001";
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -74,8 +74,8 @@ export class DecodeAuthGuard implements CanActivate {
     const sessionId = this.extractSessionIdFromHeader(request);
     if (!sessionId) {
       throw new UnauthorizedException({
-        message: 'Session ID is required',
-        error: 'MISSING_SESSION_ID',
+        message: "Session ID is required",
+        error: "MISSING_SESSION_ID",
       });
     }
 
@@ -87,7 +87,7 @@ export class DecodeAuthGuard implements CanActivate {
       this.checkRoleAccess(context, user);
 
       // Attach user to request for use in controllers
-      request['user'] = user;
+      request["user"] = user;
 
       // Log successful authentication
       this.logger.log(
@@ -112,14 +112,14 @@ export class DecodeAuthGuard implements CanActivate {
 
       // Convert unknown errors to UnauthorizedException
       throw new UnauthorizedException({
-        message: 'Authentication failed',
-        error: 'AUTHENTICATION_ERROR',
+        message: "Authentication failed",
+        error: "AUTHENTICATION_ERROR",
       });
     }
   }
 
   private extractSessionIdFromHeader(request: Request): string | undefined {
-    return request.headers['x-session-id'] as string | undefined;
+    return request.headers["x-session-id"] as string | undefined;
   }
 
   private async validateSession(sessionId: string): Promise<AuthenticatedUser> {
@@ -133,8 +133,8 @@ export class DecodeAuthGuard implements CanActivate {
     const sessionData = await this.getSessionFromRedis(sessionId);
     if (!sessionData) {
       throw new UnauthorizedException({
-        message: 'Session not found or expired',
-        error: 'SESSION_NOT_FOUND',
+        message: "Session not found or expired",
+        error: "SESSION_NOT_FOUND",
       });
     }
 
@@ -155,8 +155,8 @@ export class DecodeAuthGuard implements CanActivate {
         // If token validation fails, try to refresh
         if (
           (error instanceof UnauthorizedException &&
-            error.message.includes('expired')) ||
-          (error instanceof Error && error.message.includes('TOKEN_EXPIRED'))
+            error.message.includes("expired")) ||
+          (error instanceof Error && error.message.includes("TOKEN_EXPIRED"))
         ) {
           this.logger.log(
             `Access token expired for session ${sessionId}, attempting refresh`,
@@ -171,8 +171,8 @@ export class DecodeAuthGuard implements CanActivate {
               await this.getSessionFromRedis(sessionId);
             if (!updatedSessionData || !updatedSessionData.user) {
               throw new UnauthorizedException({
-                message: 'Session refresh failed',
-                error: 'REFRESH_FAILED',
+                message: "Session refresh failed",
+                error: "REFRESH_FAILED",
               });
             }
 
@@ -188,8 +188,8 @@ export class DecodeAuthGuard implements CanActivate {
               `Session refresh failed for ${sessionId}: ${refreshError}`,
             );
             throw new UnauthorizedException({
-              message: 'Session refresh failed',
-              error: 'REFRESH_FAILED',
+              message: "Session refresh failed",
+              error: "REFRESH_FAILED",
             });
           }
         }
@@ -233,8 +233,8 @@ export class DecodeAuthGuard implements CanActivate {
           { access_token: accessToken },
           {
             headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': 'User-Service/1.0',
+              "Content-Type": "application/json",
+              "User-Agent": "User-Service/1.0",
             },
             timeout: 5000, // 5 second timeout
           },
@@ -243,8 +243,8 @@ export class DecodeAuthGuard implements CanActivate {
 
       if (!response.data.success || !response.data.data) {
         throw new UnauthorizedException({
-          message: 'Invalid access token',
-          error: 'INVALID_TOKEN',
+          message: "Invalid access token",
+          error: "INVALID_TOKEN",
         });
       }
 
@@ -253,28 +253,28 @@ export class DecodeAuthGuard implements CanActivate {
         userId: userData._id,
         email: userData.email,
         username: userData.username,
-        role: userData.role as 'user' | 'admin' | 'moderator',
+        role: userData.role as "user" | "admin" | "moderator",
       };
 
       return user;
     } catch (error) {
       if (error instanceof AxiosError && error.response?.status === 401) {
         throw new UnauthorizedException({
-          message: 'Invalid or expired access token',
-          error: 'TOKEN_EXPIRED',
+          message: "Invalid or expired access token",
+          error: "TOKEN_EXPIRED",
         });
       }
 
       if (error instanceof AxiosError) {
-        this.logger.error('Auth service is unavailable');
+        this.logger.error("Auth service is unavailable");
         throw new UnauthorizedException({
-          message: 'Authentication service unavailable',
-          error: 'SERVICE_UNAVAILABLE',
+          message: "Authentication service unavailable",
+          error: "SERVICE_UNAVAILABLE",
         });
       }
       throw new UnauthorizedException({
-        message: 'Token validation failed',
-        error: 'VALIDATION_ERROR',
+        message: "Token validation failed",
+        error: "VALIDATION_ERROR",
       });
     }
   }
@@ -285,7 +285,7 @@ export class DecodeAuthGuard implements CanActivate {
       const sessionData = (await this.redis.get(sessionKey)) as SessionCacheDoc;
 
       if (!sessionData) {
-        throw new Error('Session data not found');
+        throw new Error("Session data not found");
       }
 
       // Call Decode API to refresh the session
@@ -294,18 +294,18 @@ export class DecodeAuthGuard implements CanActivate {
       );
 
       if (!refreshResponse.success || !refreshResponse.data) {
-        throw new Error('Failed to refresh session');
+        throw new Error("Failed to refresh session");
       }
 
       // Get fresh user data from Decode API
       const userResponse = await this.decodeApiClient.getUser(
         sessionData.user.userId,
         sessionId,
-        '', // fingerprint_hashed - empty for now
+        "", // fingerprint_hashed - empty for now
       );
 
       if (!userResponse.success || !userResponse.data) {
-        throw new Error('Failed to get updated user data');
+        throw new Error("Failed to get updated user data");
       }
 
       const userData = userResponse.data;
@@ -313,7 +313,7 @@ export class DecodeAuthGuard implements CanActivate {
         userId: userData._id,
         email: userData.email,
         username: userData.username,
-        role: userData.role as 'user' | 'admin' | 'moderator',
+        role: userData.role as "user" | "admin" | "moderator",
       };
 
       // Update Redis with new session data and fresh user data
@@ -355,8 +355,8 @@ export class DecodeAuthGuard implements CanActivate {
 
     if (!requiredRoles.includes(user.role)) {
       throw new ForbiddenException({
-        message: `Access denied. Required roles: ${requiredRoles.join(', ')}. Your role: ${user.role}`,
-        error: 'INSUFFICIENT_PERMISSIONS',
+        message: `Access denied. Required roles: ${requiredRoles.join(", ")}. Your role: ${user.role}`,
+        error: "INSUFFICIENT_PERMISSIONS",
       });
     }
   }

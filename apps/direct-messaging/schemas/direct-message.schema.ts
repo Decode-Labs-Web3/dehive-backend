@@ -1,11 +1,11 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, Types } from "mongoose";
 
-@Schema({ collection: 'direct_message', timestamps: true })
+@Schema({ collection: "direct_message", timestamps: true })
 export class DirectMessage {
   @Prop({
     type: Types.ObjectId,
-    ref: 'DirectConversation',
+    ref: "DirectConversation",
     required: true,
     index: true,
   })
@@ -13,7 +13,7 @@ export class DirectMessage {
 
   @Prop({
     type: Types.ObjectId,
-    ref: 'UserDehive',
+    ref: "UserDehive",
     required: true,
     index: true,
   })
@@ -23,7 +23,7 @@ export class DirectMessage {
   content: string;
 
   @Prop({ type: [{ type: Object }], default: [] })
-  attachments: Record<string, any>[];
+  attachments: Record<string, unknown>[];
 
   @Prop({ default: false })
   isEdited: boolean;
@@ -36,7 +36,7 @@ export class DirectMessage {
 
   @Prop({
     type: Types.ObjectId,
-    ref: 'DirectMessage',
+    ref: "DirectMessage",
     required: false,
     default: null,
   })

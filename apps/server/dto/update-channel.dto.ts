@@ -4,13 +4,13 @@ import {
   Length,
   IsOptional,
   IsMongoId,
-} from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+} from "class-validator";
+import { ApiProperty } from "@nestjs/swagger";
 
 export class UpdateChannelDto {
   @ApiProperty({
-    description: 'The new name for the channel.',
-    example: 'welcome-and-rules',
+    description: "The new name for the channel.",
+    example: "welcome-and-rules",
     required: false,
   })
   @IsOptional()
@@ -20,8 +20,8 @@ export class UpdateChannelDto {
   name?: string;
 
   @ApiProperty({
-    description: 'The new topic for the channel.',
-    example: 'Please read the rules before posting!',
+    description: "The new topic for the channel.",
+    example: "Please read the rules before posting!",
     required: false,
   })
   @IsOptional()
@@ -30,8 +30,8 @@ export class UpdateChannelDto {
   topic?: string;
 
   @ApiProperty({
-    description: 'The ID of the new category to move this channel to.',
-    example: '68c40af9dfffdf7ae4af2e8c',
+    description: "The ID of the new category to move this channel to.",
+    example: "68c40af9dfffdf7ae4af2e8c",
     required: false,
   })
   @IsOptional()

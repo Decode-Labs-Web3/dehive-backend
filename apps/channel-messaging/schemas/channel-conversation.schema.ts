@@ -1,11 +1,11 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document, Types } from "mongoose";
 
-@Schema({ collection: 'channel_conversation', timestamps: true })
+@Schema({ collection: "channel_conversation", timestamps: true })
 export class ChannelConversation {
   @Prop({
     type: Types.ObjectId,
-    ref: 'Channel',
+    ref: "Channel",
     required: true,
     unique: true,
     index: true,

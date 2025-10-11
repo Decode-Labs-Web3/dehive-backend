@@ -1,4 +1,4 @@
-import { UserProfile } from './user-profile.interface';
+import { UserProfile } from "./user-profile.interface";
 
 export interface AuthenticatedUser extends UserProfile {
   session_id: string;

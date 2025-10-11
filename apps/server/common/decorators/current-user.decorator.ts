@@ -1,5 +1,5 @@
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface';
+import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
 
 /**
  * CurrentUser decorator to extract authenticated user data from the request
@@ -18,23 +18,23 @@ import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface
  */
 export const CurrentUser = createParamDecorator(
   (
-    data: keyof AuthenticatedUser | 'sessionId' | undefined,
+    data: keyof AuthenticatedUser | "sessionId" | undefined,
     ctx: ExecutionContext,
   ): AuthenticatedUser | string | undefined => {
-    console.log('🎯 [SERVER CURRENT USER] Decorator called with data:', data);
+    console.log("🎯 [SERVER CURRENT USER] Decorator called with data:", data);
     try {
       const request = ctx
         .switchToHttp()
         .getRequest<{ user: AuthenticatedUser; sessionId?: string }>();
 
-      console.log('🎯 [SERVER CURRENT USER] Request user:', request.user);
+      console.log("🎯 [SERVER CURRENT USER] Request user:", request.user);
       console.log(
-        '🎯 [SERVER CURRENT USER] Request sessionId:',
+        "🎯 [SERVER CURRENT USER] Request sessionId:",
         request.sessionId,
       );
 
       // If sessionId is requested, return it from request
-      if (data === 'sessionId') {
+      if (data === "sessionId") {
         return request.sessionId;
       }
 
@@ -50,10 +50,10 @@ export const CurrentUser = createParamDecorator(
       }
 
       // Return the entire user object
-      console.log('🎯 [SERVER CURRENT USER] Returning full user:', user);
+      console.log("🎯 [SERVER CURRENT USER] Returning full user:", user);
       return user;
     } catch (error) {
-      console.error('❌ [SERVER CURRENT USER] Error:', error);
+      console.error("❌ [SERVER CURRENT USER] Error:", error);
       return undefined;
     }
   },

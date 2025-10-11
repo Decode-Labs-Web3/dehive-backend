@@ -1,8 +1,8 @@
-import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
-import { ConfigModule } from '@nestjs/config';
-import { GatewayController } from './gateway.controller';
-import { GatewayService } from './gateway.service';
+import { Module } from "@nestjs/common";
+import { HttpModule } from "@nestjs/axios";
+import { ConfigModule } from "@nestjs/config";
+import { GatewayController } from "./gateway.controller";
+import { GatewayService } from "./gateway.service";
 
 @Module({
   imports: [
@@ -11,13 +11,13 @@ import { GatewayService } from './gateway.service';
       timeout: 10000,
       maxRedirects: 5,
       headers: {
-        'User-Agent': 'Dehive-API-Gateway/1.0',
+        "User-Agent": "Dehive-API-Gateway/1.0",
       },
     }),
     // Configuration module for environment variables
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: [".env.local", ".env"],
       cache: true,
     }),
   ],

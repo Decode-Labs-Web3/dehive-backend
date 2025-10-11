@@ -1,8 +1,8 @@
-import { NestFactory } from '@nestjs/core';
-import { AuthModule } from './auth.module';
-import { ValidationPipe } from '@nestjs/common';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
-import { ValidationExceptionFilter } from './common/filters/validation-exception.filter';
+import { NestFactory } from "@nestjs/core";
+import { AuthModule } from "./auth.module";
+import { ValidationPipe } from "@nestjs/common";
+import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
+import { ValidationExceptionFilter } from "./common/filters/validation-exception.filter";
 
 async function bootstrap() {
   // Create the NestJS application instance with the AuthModule
@@ -31,7 +31,7 @@ async function bootstrap() {
   // Configure server host and port from environment variables
   // Default values ensure the service can run in various environments
   const port = process.env.AUTH_PORT ?? 4006;
-  const host = process.env.CLOUD_HOST ?? 'localhost';
+  const host = process.env.CLOUD_HOST ?? "localhost";
 
   // Start the server and listen for incoming requests
   await app.listen(port, host);
@@ -47,6 +47,6 @@ async function bootstrap() {
  * This ensures proper error reporting and prevents the service from running in an invalid state
  */
 bootstrap().catch((error) => {
-  console.error('Failed to start Auth service:', error);
+  console.error("Failed to start Auth service:", error);
   process.exit(1);
 });

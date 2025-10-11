@@ -1,10 +1,10 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsNumber, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
+import { ApiProperty } from "@nestjs/swagger";
+import { IsOptional, IsNumber, Min, Max } from "class-validator";
+import { Type } from "class-transformer";
 
 export class GetFollowingDto {
   @ApiProperty({
-    description: 'Page number for pagination',
+    description: "Page number for pagination",
     example: 0,
     default: 0,
     minimum: 0,
@@ -17,7 +17,7 @@ export class GetFollowingDto {
   page?: number = 0;
 
   @ApiProperty({
-    description: 'Number of items per page',
+    description: "Number of items per page",
     example: 10,
     default: 10,
     minimum: 1,

@@ -1,48 +1,47 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
   UnauthorizedException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, Types } from "mongoose";
 import {
   DirectConversation,
   DirectConversationDocument,
-} from '../schemas/direct-conversation.schema';
+} from "../schemas/direct-conversation.schema";
 import {
   DirectMessage,
   DirectMessageDocument,
-} from '../schemas/direct-message.schema';
-import { CreateOrGetConversationDto } from '../dto/create-or-get-conversation.dto.ts';
+} from "../schemas/direct-message.schema";
+import { CreateOrGetConversationDto } from "../dto/create-or-get-conversation.dto.ts";
 import {
   DirectUploadInitDto,
   DirectUploadResponseDto,
-} from '../dto/direct-upload.dto';
-import { ListDirectMessagesDto } from '../dto/list-direct-messages.dto';
-import { SendDirectMessageDto } from '../dto/send-direct-message.dto';
+} from "../dto/direct-upload.dto";
+import { ListDirectMessagesDto } from "../dto/list-direct-messages.dto";
+import { SendDirectMessageDto } from "../dto/send-direct-message.dto";
 import {
   DirectUpload,
   DirectUploadDocument,
-} from '../schemas/direct-upload.schema';
-import { AttachmentType } from '../enum/enum';
-import * as fs from 'fs';
-import * as path from 'path';
-import { randomUUID } from 'crypto';
-import sharp from 'sharp';
-import * as childProcess from 'child_process';
-import ffmpegPath from 'ffmpeg-static';
-import ffprobePath from 'ffprobe-static';
-import { ConfigService } from '@nestjs/config';
-import { ListDirectUploadsDto } from '../dto/list-direct-upload.dto';
-import { DecodeApiClient } from '../clients/decode-api.client';
-import { GetFollowingDto } from '../dto/get-following.dto';
-import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import { Redis } from 'ioredis';
-import { SessionCacheDoc } from '../interfaces/session-doc.interface';
+} from "../schemas/direct-upload.schema";
+import { AttachmentType } from "../enum/enum";
+import * as fs from "fs";
+import * as path from "path";
+import { randomUUID } from "crypto";
+import sharp from "sharp";
+import * as childProcess from "child_process";
+import ffmpegPath from "ffmpeg-static";
+import ffprobePath from "ffprobe-static";
+import { ConfigService } from "@nestjs/config";
+import { ListDirectUploadsDto } from "../dto/list-direct-upload.dto";
+import { DecodeApiClient } from "../clients/decode-api.client";
+import { GetFollowingDto } from "../dto/get-following.dto";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
+import { SessionCacheDoc } from "../interfaces/session-doc.interface";
 
 @Injectable()
 export class DirectMessagingService {
@@ -61,25 +60,25 @@ export class DirectMessagingService {
   ) {}
 
   private detectAttachmentType(mime: string): AttachmentType {
-    if (mime.startsWith('image/')) return AttachmentType.IMAGE;
-    if (mime.startsWith('video/')) return AttachmentType.VIDEO;
-    if (mime.startsWith('audio/')) return AttachmentType.AUDIO;
+    if (mime.startsWith("image/")) return AttachmentType.IMAGE;
+    if (mime.startsWith("video/")) return AttachmentType.VIDEO;
+    if (mime.startsWith("audio/")) return AttachmentType.AUDIO;
     return AttachmentType.FILE;
   }
 
   private getLimits() {
     const toBytes = (mb: string, def: number) =>
-      (parseInt(mb || '', 10) || def) * 1024 * 1024;
+      (parseInt(mb || "", 10) || def) * 1024 * 1024;
     return {
       image: toBytes(
-        this.configService.get<string>('MAX_IMAGE_MB') ?? '10',
+        this.configService.get<string>("MAX_IMAGE_MB") ?? "10",
         10,
       ),
       video: toBytes(
-        this.configService.get<string>('MAX_VIDEO_MB') ?? '100',
+        this.configService.get<string>("MAX_VIDEO_MB") ?? "100",
         100,
       ),
-      file: toBytes(this.configService.get<string>('MAX_FILE_MB') ?? '25', 25),
+      file: toBytes(this.configService.get<string>("MAX_FILE_MB") ?? "25", 25),
     };
   }
 
@@ -104,7 +103,6 @@ export class DirectMessagingService {
       );
   }
 
-
   async createOrGetConversation(
     selfId: string,
     dto: CreateOrGetConversationDto,
@@ -113,7 +111,7 @@ export class DirectMessagingService {
       !Types.ObjectId.isValid(selfId) ||
       !Types.ObjectId.isValid(dto.otherUserDehiveId)
     ) {
-      throw new BadRequestException('Invalid participant id');
+      throw new BadRequestException("Invalid participant id");
     }
     const existing = await this.conversationModel.findOne({
       $or: [
@@ -141,8 +139,8 @@ export class DirectMessagingService {
     file: unknown,
     body: DirectUploadInitDto,
   ): Promise<DirectUploadResponseDto> {
-    if (!file || typeof file !== 'object') {
-      throw new BadRequestException('File is required');
+    if (!file || typeof file !== "object") {
+      throw new BadRequestException("File is required");
     }
     type UploadedFileLike = {
       mimetype?: string;
@@ -153,17 +151,17 @@ export class DirectMessagingService {
     const uploaded = file as UploadedFileLike;
 
     if (!selfId || !Types.ObjectId.isValid(selfId)) {
-      throw new BadRequestException('Invalid or missing user_dehive_id');
+      throw new BadRequestException("Invalid or missing user_dehive_id");
     }
     if (!body.conversationId || !Types.ObjectId.isValid(body.conversationId)) {
-      throw new BadRequestException('Invalid conversationId');
+      throw new BadRequestException("Invalid conversationId");
     }
 
     const conv = await this.conversationModel
       .findById(body.conversationId)
       .lean();
     if (!conv) {
-      throw new NotFoundException('Conversation not found');
+      throw new NotFoundException("Conversation not found");
     }
     const isParticipant = [
       conv.userA.toString(),
@@ -171,40 +169,40 @@ export class DirectMessagingService {
     ].includes(selfId);
     if (!isParticipant) {
       throw new BadRequestException(
-        'You are not a participant of this conversation',
+        "You are not a participant of this conversation",
       );
     }
 
-    const mime = uploaded.mimetype || 'application/octet-stream';
+    const mime = uploaded.mimetype || "application/octet-stream";
     const size = uploaded.size ?? 0;
     this.validateUploadSize(mime, size);
 
     const storage = (
-      this.configService.get<string>('STORAGE') || 'local'
+      this.configService.get<string>("STORAGE") || "local"
     ).toLowerCase();
     const port =
-      this.configService.get<number>('DIRECT_MESSAGING_PORT') || 4004;
+      this.configService.get<number>("DIRECT_MESSAGING_PORT") || 4004;
     const cdnBase =
-      this.configService.get<string>('CDN_BASE_URL_DM') ||
+      this.configService.get<string>("CDN_BASE_URL_DM") ||
       `http://localhost:${port}/uploads`;
 
-    let fileUrl = '';
-    const originalName = uploaded.originalname || 'upload.bin';
-    const ext = path.extname(originalName) || '';
+    let fileUrl = "";
+    const originalName = uploaded.originalname || "upload.bin";
+    const ext = path.extname(originalName) || "";
     const safeName = `${randomUUID()}${ext}`;
-    const uploadDir = path.resolve(process.cwd(), 'uploads');
+    const uploadDir = path.resolve(process.cwd(), "uploads");
 
-    if (storage === 'local') {
+    if (storage === "local") {
       if (!fs.existsSync(uploadDir))
         fs.mkdirSync(uploadDir, { recursive: true });
       const dest = path.join(uploadDir, safeName);
       const buffer: Buffer = Buffer.isBuffer(uploaded.buffer)
         ? uploaded.buffer
-        : Buffer.from('');
+        : Buffer.from("");
       fs.writeFileSync(dest, buffer);
-      fileUrl = `${cdnBase.replace(/\/$/, '')}/${safeName}`;
+      fileUrl = `${cdnBase.replace(/\/$/, "")}/${safeName}`;
     } else {
-      throw new BadRequestException('S3/MinIO storage is not implemented yet');
+      throw new BadRequestException("S3/MinIO storage is not implemented yet");
     }
 
     const type = this.detectAttachmentType(mime);
@@ -224,21 +222,21 @@ export class DirectMessagingService {
       ) {
         const tmpFilePath = path.join(uploadDir, safeName);
         const probeBin =
-          (typeof ffprobePath === 'object' && 'path' in ffprobePath
+          (typeof ffprobePath === "object" && "path" in ffprobePath
             ? (ffprobePath as { path: string }).path
-            : undefined) || 'ffprobe';
+            : undefined) || "ffprobe";
         const probe = childProcess.spawnSync(
           probeBin,
           [
-            '-v',
-            'error',
-            '-print_format',
-            'json',
-            '-show_format',
-            '-show_streams',
+            "-v",
+            "error",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
             tmpFilePath,
           ],
-          { encoding: 'utf-8' },
+          { encoding: "utf-8" },
         );
 
         if (probe.status === 0 && probe.stdout) {
@@ -255,16 +253,16 @@ export class DirectMessagingService {
           } = JSON.parse(probe.stdout);
 
           const videoStream = Array.isArray(info.streams)
-            ? info.streams.find((s) => s && s.codec_type === 'video')
+            ? info.streams.find((s) => s && s.codec_type === "video")
             : undefined;
 
           if (videoStream) {
             width =
-              typeof videoStream.width === 'number'
+              typeof videoStream.width === "number"
                 ? videoStream.width
                 : undefined;
             height =
-              typeof videoStream.height === 'number'
+              typeof videoStream.height === "number"
                 ? videoStream.height
                 : undefined;
           }
@@ -281,31 +279,31 @@ export class DirectMessagingService {
           ) {
             dur = parseFloat(info.format.duration);
           }
-          if (typeof dur === 'number' && !Number.isNaN(dur))
+          if (typeof dur === "number" && !Number.isNaN(dur))
             durationMs = Math.round(dur * 1000);
 
           if (type === AttachmentType.VIDEO) {
             const thumbName = `${path.parse(safeName).name}_thumb.jpg`;
             const thumbPath = path.join(uploadDir, thumbName);
-            const ffmpegBin = ffmpegPath || 'ffmpeg';
+            const ffmpegBin = ffmpegPath || "ffmpeg";
             const ffmpeg = childProcess.spawnSync(
               ffmpegBin,
               [
-                '-i',
+                "-i",
                 tmpFilePath,
-                '-ss',
-                '00:00:00.000',
-                '-vframes',
-                '1',
-                '-vf',
-                'scale=640:-1',
+                "-ss",
+                "00:00:00.000",
+                "-vframes",
+                "1",
+                "-vf",
+                "scale=640:-1",
                 thumbPath,
-                '-y',
+                "-y",
               ],
-              { encoding: 'utf-8' },
+              { encoding: "utf-8" },
             );
             if (ffmpeg.status === 0) {
-              thumbnailUrl = `${cdnBase.replace(/\/$/, '')}/${thumbName}`;
+              thumbnailUrl = `${cdnBase.replace(/\/$/, "")}/${thumbName}`;
             }
           }
         }
@@ -347,19 +345,19 @@ export class DirectMessagingService {
 
   async sendMessage(selfId: string, dto: SendDirectMessageDto) {
     if (!Types.ObjectId.isValid(selfId)) {
-      throw new BadRequestException('Invalid sender id');
+      throw new BadRequestException("Invalid sender id");
     }
     if (!Types.ObjectId.isValid(dto.conversationId)) {
-      throw new BadRequestException('Invalid conversation id');
+      throw new BadRequestException("Invalid conversation id");
     }
     const conv = await this.conversationModel
       .findById(dto.conversationId)
       .lean();
-    if (!conv) throw new NotFoundException('Conversation not found');
+    if (!conv) throw new NotFoundException("Conversation not found");
     const isParticipant = [conv.userA, conv.userB]
       .map((x) => String(x))
       .includes(selfId);
-    if (!isParticipant) throw new BadRequestException('Not a participant');
+    if (!isParticipant) throw new BadRequestException("Not a participant");
 
     let attachments: Array<{
       type: AttachmentType;
@@ -378,7 +376,7 @@ export class DirectMessagingService {
         .find({ _id: { $in: ids }, ownerId: new Types.ObjectId(selfId) })
         .lean();
       if (uploads.length !== ids.length) {
-        throw new BadRequestException('You can only attach your own uploads');
+        throw new BadRequestException("You can only attach your own uploads");
       }
       attachments = uploads.map((u) => ({
         type: u.type as unknown as AttachmentType,
@@ -397,17 +395,21 @@ export class DirectMessagingService {
     let replyToMessageId: Types.ObjectId | undefined;
     if (dto.replyTo) {
       if (!Types.ObjectId.isValid(dto.replyTo)) {
-        throw new BadRequestException('Invalid replyTo message id');
+        throw new BadRequestException("Invalid replyTo message id");
       }
 
       // Check if the message being replied to exists and is in the same conversation
-      const replyToMessage = await this.messageModel.findById(dto.replyTo).lean();
+      const replyToMessage = await this.messageModel
+        .findById(dto.replyTo)
+        .lean();
       if (!replyToMessage) {
-        throw new NotFoundException('Message being replied to not found');
+        throw new NotFoundException("Message being replied to not found");
       }
 
       if (String(replyToMessage.conversationId) !== dto.conversationId) {
-        throw new BadRequestException('Cannot reply to a message from a different conversation');
+        throw new BadRequestException(
+          "Cannot reply to a message from a different conversation",
+        );
       }
 
       replyToMessageId = new Types.ObjectId(dto.replyTo);
@@ -424,13 +426,13 @@ export class DirectMessagingService {
     // Populate the replyTo field to match the format returned by listMessages
     const populatedMessage = await this.messageModel
       .findById(message._id)
-      .populate('replyTo', 'content senderId createdAt')
+      .populate("replyTo", "content senderId createdAt")
       .lean();
 
     // Ensure replyTo field is properly formatted (null if no reply)
     const formattedMessage = {
       ...populatedMessage,
-      replyTo: populatedMessage?.replyTo || null
+      replyTo: populatedMessage?.replyTo || null,
     };
 
     return formattedMessage;
@@ -442,16 +444,16 @@ export class DirectMessagingService {
     dto: ListDirectMessagesDto,
   ) {
     if (!Types.ObjectId.isValid(selfId))
-      throw new BadRequestException('Invalid self id');
+      throw new BadRequestException("Invalid self id");
     if (!Types.ObjectId.isValid(conversationId))
-      throw new BadRequestException('Invalid conversation id');
+      throw new BadRequestException("Invalid conversation id");
 
     const conv = await this.conversationModel.findById(conversationId).lean();
-    if (!conv) throw new NotFoundException('Conversation not found');
+    if (!conv) throw new NotFoundException("Conversation not found");
     const isParticipant = [conv.userA, conv.userB]
       .map((x) => String(x))
       .includes(selfId);
-    if (!isParticipant) throw new BadRequestException('Not a participant');
+    if (!isParticipant) throw new BadRequestException("Not a participant");
 
     const page = dto.page || 0;
     const limit = dto.limit || 10;
@@ -459,7 +461,7 @@ export class DirectMessagingService {
     const [items, total] = await Promise.all([
       this.messageModel
         .find({ conversationId: new Types.ObjectId(conversationId) })
-        .populate('replyTo', 'content senderId createdAt')
+        .populate("replyTo", "content senderId createdAt")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -470,12 +472,12 @@ export class DirectMessagingService {
     ]);
 
     const totalPages = Math.ceil(total / limit);
-    const isLastPage = page >= (totalPages - 1);
+    const isLastPage = page >= totalPages - 1;
 
     // Ensure each message has replyTo field (null if no reply)
-    const formattedItems = items.map(item => ({
+    const formattedItems = items.map((item) => ({
       ...item,
-      replyTo: item.replyTo || null
+      replyTo: item.replyTo || null,
     }));
 
     return {
@@ -484,25 +486,25 @@ export class DirectMessagingService {
         page,
         limit,
         total: items.length,
-        is_last_page: isLastPage
-      }
+        is_last_page: isLastPage,
+      },
     };
   }
 
   async editMessage(selfId: string, messageId: string, content: string) {
     if (!Types.ObjectId.isValid(selfId))
-      throw new BadRequestException('Invalid self id');
+      throw new BadRequestException("Invalid self id");
     if (!Types.ObjectId.isValid(messageId))
-      throw new BadRequestException('Invalid message id');
-    if (typeof content !== 'string')
-      throw new BadRequestException('Content must be a string');
+      throw new BadRequestException("Invalid message id");
+    if (typeof content !== "string")
+      throw new BadRequestException("Content must be a string");
 
     const message = await this.messageModel.findById(messageId);
-    if (!message) throw new NotFoundException('Message not found');
+    if (!message) throw new NotFoundException("Message not found");
     if (String(message.senderId) !== selfId)
-      throw new BadRequestException('You can only edit your own message');
+      throw new BadRequestException("You can only edit your own message");
     if (message.isDeleted)
-      throw new BadRequestException('Cannot edit a deleted message');
+      throw new BadRequestException("Cannot edit a deleted message");
 
     message.content = content;
     message.isEdited = true;
@@ -513,18 +515,18 @@ export class DirectMessagingService {
 
   async deleteMessage(selfId: string, messageId: string) {
     if (!Types.ObjectId.isValid(selfId))
-      throw new BadRequestException('Invalid self id');
+      throw new BadRequestException("Invalid self id");
     if (!Types.ObjectId.isValid(messageId))
-      throw new BadRequestException('Invalid message id');
+      throw new BadRequestException("Invalid message id");
 
     const message = await this.messageModel.findById(messageId);
-    if (!message) throw new NotFoundException('Message not found');
+    if (!message) throw new NotFoundException("Message not found");
     if (String(message.senderId) !== selfId)
-      throw new BadRequestException('You can only delete your own message');
+      throw new BadRequestException("You can only delete your own message");
     if (message.isDeleted) return message.toJSON();
 
     message.isDeleted = true;
-    message.content = '[deleted]';
+    message.content = "[deleted]";
     (message as unknown as { attachments?: unknown[] }).attachments = [];
     await message.save();
     return message.toJSON();
@@ -532,14 +534,14 @@ export class DirectMessagingService {
 
   async listUploads(selfId: string, dto: ListDirectUploadsDto) {
     if (!selfId || !Types.ObjectId.isValid(selfId)) {
-      throw new BadRequestException('Invalid user id');
+      throw new BadRequestException("Invalid user id");
     }
 
     const page = dto.page >= 0 ? dto.page : 0;
     const limit = dto.limit > 0 ? Math.min(dto.limit, 100) : 10;
     const skip = page * limit;
 
-    const query: Record<string, any> = {
+    const query: Record<string, unknown> = {
       ownerId: new Types.ObjectId(selfId),
     };
     if (dto.type) {
@@ -557,7 +559,7 @@ export class DirectMessagingService {
     ]);
 
     const totalPages = Math.ceil(total / limit);
-    const isLastPage = page >= (totalPages - 1);
+    const isLastPage = page >= totalPages - 1;
 
     return {
       items,
@@ -565,8 +567,8 @@ export class DirectMessagingService {
         page,
         limit,
         total: items.length,
-        is_last_page: isLastPage
-      }
+        is_last_page: isLastPage,
+      },
     };
   }
 
@@ -576,12 +578,12 @@ export class DirectMessagingService {
 
     const sessionId = currentUser.session_id;
     if (!sessionId) {
-      throw new UnauthorizedException('Session ID not found in user session.');
+      throw new UnauthorizedException("Session ID not found in user session.");
     }
     const sessionKey = `session:${sessionId}`;
     const sessionDataRaw = await this.redis.get(sessionKey);
     if (!sessionDataRaw) {
-      throw new UnauthorizedException('Session not found in cache.');
+      throw new UnauthorizedException("Session not found in cache.");
     }
 
     const sessionData: SessionCacheDoc = JSON.parse(sessionDataRaw);
@@ -589,17 +591,28 @@ export class DirectMessagingService {
     const fingerprintHash = currentUser.fingerprint_hash;
 
     if (!accessToken) {
-      throw new UnauthorizedException('Access token not found in user session.');
+      throw new UnauthorizedException(
+        "Access token not found in user session.",
+      );
     }
 
     if (!fingerprintHash) {
-      throw new UnauthorizedException('Fingerprint hash not found in user session.');
+      throw new UnauthorizedException(
+        "Fingerprint hash not found in user session.",
+      );
     }
 
-    const result = await this.decodeApiClient.getFollowing(accessToken, fingerprintHash, page, limit);
+    const result = await this.decodeApiClient.getFollowing(
+      accessToken,
+      fingerprintHash,
+      page,
+      limit,
+    );
 
     if (!result || !result.success) {
-      throw new NotFoundException('Could not retrieve following list from Decode service');
+      throw new NotFoundException(
+        "Could not retrieve following list from Decode service",
+      );
     }
 
     const items = result.data?.users || [];
@@ -608,16 +621,16 @@ export class DirectMessagingService {
     return {
       success: true,
       statusCode: 200,
-      message: 'OK',
+      message: "OK",
       data: {
         items,
         metadata: metadata || {
           page,
           limit,
           total: items.length,
-          is_last_page: true
-        }
-      }
+          is_last_page: true,
+        },
+      },
     };
   }
 }

@@ -4,8 +4,8 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
-} from '@nestjs/common';
-import { Request, Response } from 'express';
+} from "@nestjs/common";
+import { Request, Response } from "express";
 
 @Catch()
 export class MethodNotAllowedFilter implements ExceptionFilter {
@@ -25,8 +25,8 @@ export class MethodNotAllowedFilter implements ExceptionFilter {
         response.status(405).json({
           success: false,
           statusCode: 405,
-          message: `Method ${request.method} not allowed for this endpoint. Allowed methods: ${allowedMethods.join(', ')}`,
-          error: 'Method Not Allowed',
+          message: `Method ${request.method} not allowed for this endpoint. Allowed methods: ${allowedMethods.join(", ")}`,
+          error: "Method Not Allowed",
           path: request.url,
           method: request.method,
           allowedMethods,
@@ -50,8 +50,8 @@ export class MethodNotAllowedFilter implements ExceptionFilter {
     response.status(500).json({
       success: false,
       statusCode: 500,
-      message: 'Internal server error',
-      error: 'Internal Server Error',
+      message: "Internal server error",
+      error: "Internal Server Error",
       path: request.url,
       method: request.method,
     });
@@ -60,12 +60,12 @@ export class MethodNotAllowedFilter implements ExceptionFilter {
   private getAllowedMethods(url: string): string[] {
     // Define allowed methods for each endpoint
     const endpointMethods: Record<string, string[]> = {
-      '/api/dm/send': ['POST'],
-      '/api/dm/conversation': ['POST'],
-      '/api/dm/messages': ['GET'],
-      '/api/dm/files/upload': ['POST'],
-      '/api/dm/files/list': ['GET'],
-      '/api/dm/following': ['GET'],
+      "/api/dm/send": ["POST"],
+      "/api/dm/conversation": ["POST"],
+      "/api/dm/messages": ["GET"],
+      "/api/dm/files/upload": ["POST"],
+      "/api/dm/files/list": ["GET"],
+      "/api/dm/following": ["GET"],
     };
 
     // Find matching endpoint
@@ -75,6 +75,6 @@ export class MethodNotAllowedFilter implements ExceptionFilter {
       }
     }
 
-    return ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+    return ["GET", "POST", "PUT", "DELETE", "PATCH"];
   }
 }
