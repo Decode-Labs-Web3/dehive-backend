@@ -45,11 +45,11 @@ jobs:
       - name: Deploy with PM2
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.SERVER_IP }}          # IP máy VM
-          username: ${{ secrets.SERVER_USER }}    # ví dụ ubuntu hoặc root
-          key: ${{ secrets.SERVER_SSH_KEY }}      # private key lưu trong GitHub Secrets
+          host: ${{ secrets.HOST }}          # IP máy VM
+          username: ${{ secrets.USERNAME }}    # ví dụ ubuntu hoặc root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}      # private key lưu trong GitHub Secrets
           script: |
-            cd /home/${{ secrets.SERVER_USER }}/myapp  # đường dẫn code trên VM
+            cd /home/${{ secrets.USERNAME }}/myapp  # đường dẫn code trên VM
             git pull origin main
             npm install
             npm run build
