@@ -395,8 +395,9 @@ class CreateMessageDto {
     content;
     uploadIds;
     attachments;
+    replyTo;
     static _OPENAPI_METADATA_FACTORY() {
-        return { conversationId: { required: true, type: () => String }, content: { required: true, type: () => String, minLength: 0, maxLength: 2000 }, uploadIds: { required: true, type: () => [String] }, attachments: { required: false, type: () => [(__webpack_require__(/*! ./attachment.dto */ "./apps/channel-messaging/dto/attachment.dto.ts").AttachmentDto)] } };
+        return { conversationId: { required: true, type: () => String }, content: { required: true, type: () => String, minLength: 0, maxLength: 2000 }, uploadIds: { required: true, type: () => [String] }, attachments: { required: false, type: () => [(__webpack_require__(/*! ./attachment.dto */ "./apps/channel-messaging/dto/attachment.dto.ts").AttachmentDto)] }, replyTo: { required: false, type: () => String, nullable: true } };
     }
 }
 exports.CreateMessageDto = CreateMessageDto;
@@ -439,6 +440,16 @@ __decorate([
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Array)
 ], CreateMessageDto.prototype, "attachments", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        description: 'ID of the message being replied to (optional)',
+        example: '68dc1234abcd5678efgh9014',
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateIf)((o) => o.replyTo !== null && o.replyTo !== undefined),
+    (0, class_validator_1.IsMongoId)({ message: 'replyTo must be a valid MongoId' }),
+    __metadata("design:type", Object)
+], CreateMessageDto.prototype, "replyTo", void 0);
 
 
 /***/ }),
@@ -1019,6 +1030,13 @@ let ChatGateway = class ChatGateway {
                     });
                 }
             }
+            if (parsedData.replyTo !== undefined && parsedData.replyTo !== null) {
+                if (typeof parsedData.replyTo !== 'string' || !mongoose_2.Types.ObjectId.isValid(parsedData.replyTo)) {
+                    return this.send(client, 'error', {
+                        message: 'replyTo must be a valid message ID',
+                    });
+                }
+            }
             console.log(`[WebSocket] 📨 SEND MESSAGE: User ${meta.userDehiveId} sending to conversation ${convId}`);
             console.log(`[WebSocket] 📨 MESSAGE CONTENT: "${parsedData.content}"`);
             console.log(`[WebSocket] 📨 UPLOAD IDS: ${JSON.stringify(parsedData.uploadIds)}`);
@@ -1040,6 +1058,7 @@ let ChatGateway = class ChatGateway {
                 conversationId: populatedMessage.conversationId?.toString?.(),
                 createdAt: populatedMessage.createdAt,
                 isEdited: populatedMessage.isEdited,
+                replyTo: populatedMessage.replyTo || null,
             };
             this.server
                 .to(String(parsedData.conversationId))
@@ -1365,6 +1384,7 @@ let ChannelMessage = class ChannelMessage {
     isEdited;
     editedAt;
     isDeleted;
+    replyTo;
 };
 exports.ChannelMessage = ChannelMessage;
 __decorate([
@@ -1409,6 +1429,15 @@ __decorate([
     (0, mongoose_1.Prop)({ default: false }),
     __metadata("design:type", Boolean)
 ], ChannelMessage.prototype, "isDeleted", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({
+        type: mongoose_2.Types.ObjectId,
+        ref: 'ChannelMessage',
+        required: false,
+        default: null,
+    }),
+    __metadata("design:type", mongoose_2.Types.ObjectId)
+], ChannelMessage.prototype, "replyTo", void 0);
 exports.ChannelMessage = ChannelMessage = __decorate([
     (0, mongoose_1.Schema)({ collection: 'channel_message', timestamps: true })
 ], ChannelMessage);
@@ -2236,12 +2265,27 @@ let MessagingService = class MessagingService {
         if (!conversation) {
             throw new common_1.BadRequestException('Invalid conversationId');
         }
+        let replyToMessageId;
+        if (createMessageDto.replyTo) {
+            if (!mongoose_2.Types.ObjectId.isValid(createMessageDto.replyTo)) {
+                throw new common_1.BadRequestException('Invalid replyTo message id');
+            }
+            const replyToMessage = await this.channelMessageModel.findById(createMessageDto.replyTo).lean();
+            if (!replyToMessage) {
+                throw new common_1.NotFoundException('Message being replied to not found');
+            }
+            if (String(replyToMessage.conversationId) !== createMessageDto.conversationId) {
+                throw new common_1.BadRequestException('Cannot reply to a message from a different conversation');
+            }
+            replyToMessageId = new mongoose_2.Types.ObjectId(createMessageDto.replyTo);
+        }
         const newMessage = new this.channelMessageModel({
             content: createMessageDto.content,
             attachments,
             senderId: new mongoose_2.Types.ObjectId(senderId),
             channelId: conversation.channelId,
             conversationId: conversation._id,
+            replyTo: replyToMessageId || null,
         });
         return newMessage.save();
     }
@@ -2272,6 +2316,7 @@ let MessagingService = class MessagingService {
             model: 'UserDehive',
             select: '_id',
         })
+            .populate('replyTo', 'content senderId createdAt')
             .lean();
         if (!messages || messages.length === 0) {
             return [];
@@ -2307,6 +2352,7 @@ let MessagingService = class MessagingService {
                 attachments: msg.attachments,
                 isEdited: msg.isEdited,
                 editedAt: msg.editedAt,
+                replyTo: msg.replyTo || null,
                 createdAt: msg.createdAt,
                 updatedAt: msg.updatedAt,
             };

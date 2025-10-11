@@ -722,8 +722,9 @@ class SendDirectMessageDto {
     conversationId;
     content;
     uploadIds;
+    replyTo;
     static _OPENAPI_METADATA_FACTORY() {
-        return { conversationId: { required: true, type: () => String }, content: { required: true, type: () => String, minLength: 0, maxLength: 2000 }, uploadIds: { required: true, type: () => [String] } };
+        return { conversationId: { required: true, type: () => String }, content: { required: true, type: () => String, minLength: 0, maxLength: 2000 }, uploadIds: { required: true, type: () => [String] }, replyTo: { required: false, type: () => String, nullable: true } };
     }
 }
 exports.SendDirectMessageDto = SendDirectMessageDto;
@@ -757,6 +758,17 @@ __decorate([
     (0, class_validator_1.IsMongoId)({ each: true, message: 'Each uploadId must be a valid MongoId' }),
     __metadata("design:type", Array)
 ], SendDirectMessageDto.prototype, "uploadIds", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        description: 'ID of the message being replied to (optional)',
+        example: '68dc1234abcd5678efgh9014',
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.ValidateIf)((o) => o.replyTo !== null && o.replyTo !== undefined),
+    (0, class_validator_1.IsMongoId)({ message: 'replyTo must be a valid MongoId' }),
+    __metadata("design:type", Object)
+], SendDirectMessageDto.prototype, "replyTo", void 0);
 
 
 /***/ }),
@@ -835,6 +847,7 @@ let DmGateway = class DmGateway {
             isEdited: message.isEdited || false,
             editedAt: message.editedAt || null,
             isDeleted: message.isDeleted || false,
+            replyTo: message.replyTo || null,
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
         };
@@ -962,6 +975,13 @@ let DmGateway = class DmGateway {
                 if (!allValid) {
                     return this.send(client, 'error', {
                         message: 'One or more uploadIds are invalid',
+                    });
+                }
+            }
+            if (parsedData.replyTo !== undefined && parsedData.replyTo !== null) {
+                if (typeof parsedData.replyTo !== 'string' || !mongoose_1.Types.ObjectId.isValid(parsedData.replyTo)) {
+                    return this.send(client, 'error', {
+                        message: 'replyTo must be a valid message ID',
                     });
                 }
             }
@@ -1198,6 +1218,7 @@ let DirectMessage = class DirectMessage {
     isEdited;
     editedAt;
     isDeleted;
+    replyTo;
 };
 exports.DirectMessage = DirectMessage;
 __decorate([
@@ -1238,6 +1259,15 @@ __decorate([
     (0, mongoose_1.Prop)({ default: false }),
     __metadata("design:type", Boolean)
 ], DirectMessage.prototype, "isDeleted", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({
+        type: mongoose_2.Types.ObjectId,
+        ref: 'DirectMessage',
+        required: false,
+        default: null,
+    }),
+    __metadata("design:type", mongoose_2.Types.ObjectId)
+], DirectMessage.prototype, "replyTo", void 0);
 exports.DirectMessage = DirectMessage = __decorate([
     (0, mongoose_1.Schema)({ collection: 'direct_message', timestamps: true })
 ], DirectMessage);
@@ -1499,7 +1529,6 @@ __decorate([
         required: true,
     }),
     (0, swagger_1.ApiParam)({ name: 'conversationId' }),
-    openapi.ApiResponse({ status: 200 }),
     __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
     __param(1, (0, common_1.Param)('conversationId')),
     __param(2, (0, common_1.Query)()),
@@ -2003,11 +2032,26 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
                 thumbnailUrl: u.thumbnailUrl,
             }));
         }
+        let replyToMessageId;
+        if (dto.replyTo) {
+            if (!mongoose_2.Types.ObjectId.isValid(dto.replyTo)) {
+                throw new common_1.BadRequestException('Invalid replyTo message id');
+            }
+            const replyToMessage = await this.messageModel.findById(dto.replyTo).lean();
+            if (!replyToMessage) {
+                throw new common_1.NotFoundException('Message being replied to not found');
+            }
+            if (String(replyToMessage.conversationId) !== dto.conversationId) {
+                throw new common_1.BadRequestException('Cannot reply to a message from a different conversation');
+            }
+            replyToMessageId = new mongoose_2.Types.ObjectId(dto.replyTo);
+        }
         const message = await this.messageModel.create({
             conversationId: new mongoose_2.Types.ObjectId(dto.conversationId),
             senderId: new mongoose_2.Types.ObjectId(selfId),
             content: dto.content,
             attachments,
+            replyTo: replyToMessageId || null,
         });
         return message;
     }
@@ -2030,6 +2074,7 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
         const [items, total] = await Promise.all([
             this.messageModel
                 .find({ conversationId: new mongoose_2.Types.ObjectId(conversationId) })
+                .populate('replyTo', 'content senderId createdAt')
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
@@ -2040,8 +2085,12 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
         ]);
         const totalPages = Math.ceil(total / limit);
         const isLastPage = page >= (totalPages - 1);
+        const formattedItems = items.map(item => ({
+            ...item,
+            replyTo: item.replyTo || null
+        }));
         return {
-            items,
+            items: formattedItems,
             metadata: {
                 page,
                 limit,

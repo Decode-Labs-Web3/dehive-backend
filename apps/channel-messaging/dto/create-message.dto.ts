@@ -5,6 +5,7 @@ import {
   IsMongoId,
   IsOptional,
   IsArray,
+  ValidateIf,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AttachmentDto } from './attachment.dto';
@@ -46,4 +47,13 @@ export class CreateMessageDto {
   })
   @IsOptional()
   attachments?: AttachmentDto[];
+
+  @ApiPropertyOptional({
+    description: 'ID of the message being replied to (optional)',
+    example: '68dc1234abcd5678efgh9014',
+  })
+  @IsOptional()
+  @ValidateIf((o) => o.replyTo !== null && o.replyTo !== undefined)
+  @IsMongoId({ message: 'replyTo must be a valid MongoId' })
+  replyTo?: string | null;
 }

@@ -36,6 +36,14 @@ export class ChannelMessage {
 
   @Prop({ default: false })
   isDeleted: boolean;
+
+  @Prop({
+    type: Types.ObjectId,
+    ref: 'ChannelMessage',
+    required: false,
+    default: null,
+  })
+  replyTo?: Types.ObjectId;
 }
 
 export type ChannelMessageDocument = ChannelMessage & Document;

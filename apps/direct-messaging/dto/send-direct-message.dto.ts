@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsMongoId, IsString, Length } from 'class-validator';
+import { IsArray, IsMongoId, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
 
 export class SendDirectMessageDto {
   @ApiProperty({
@@ -30,4 +30,14 @@ export class SendDirectMessageDto {
   @IsArray()
   @IsMongoId({ each: true, message: 'Each uploadId must be a valid MongoId' })
   uploadIds: string[];
+
+  @ApiProperty({
+    description: 'ID of the message being replied to (optional)',
+    example: '68dc1234abcd5678efgh9014',
+    required: false,
+  })
+  @IsOptional()
+  @ValidateIf((o) => o.replyTo !== null && o.replyTo !== undefined)
+  @IsMongoId({ message: 'replyTo must be a valid MongoId' })
+  replyTo?: string | null;
 }

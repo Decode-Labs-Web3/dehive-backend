@@ -62,6 +62,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       isEdited: message.isEdited || false,
       editedAt: message.editedAt || null,
       isDeleted: message.isDeleted || false,
+      replyTo: message.replyTo || null,
       createdAt: (message as any).createdAt,
       updatedAt: (message as any).updatedAt,
     };
@@ -217,6 +218,15 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
         if (!allValid) {
           return this.send(client, 'error', {
             message: 'One or more uploadIds are invalid',
+          });
+        }
+      }
+
+      // Validate replyTo if provided
+      if (parsedData.replyTo !== undefined && parsedData.replyTo !== null) {
+        if (typeof parsedData.replyTo !== 'string' || !Types.ObjectId.isValid(parsedData.replyTo)) {
+          return this.send(client, 'error', {
+            message: 'replyTo must be a valid message ID',
           });
         }
       }

@@ -33,6 +33,14 @@ export class DirectMessage {
 
   @Prop({ default: false })
   isDeleted: boolean;
+
+  @Prop({
+    type: Types.ObjectId,
+    ref: 'DirectMessage',
+    required: false,
+    default: null,
+  })
+  replyTo?: Types.ObjectId;
 }
 
 export type DirectMessageDocument = DirectMessage & Document;

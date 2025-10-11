@@ -393,11 +393,32 @@ export class DirectMessagingService {
       }));
     }
 
+    // Validate replyTo if provided
+    let replyToMessageId: Types.ObjectId | undefined;
+    if (dto.replyTo) {
+      if (!Types.ObjectId.isValid(dto.replyTo)) {
+        throw new BadRequestException('Invalid replyTo message id');
+      }
+
+      // Check if the message being replied to exists and is in the same conversation
+      const replyToMessage = await this.messageModel.findById(dto.replyTo).lean();
+      if (!replyToMessage) {
+        throw new NotFoundException('Message being replied to not found');
+      }
+
+      if (String(replyToMessage.conversationId) !== dto.conversationId) {
+        throw new BadRequestException('Cannot reply to a message from a different conversation');
+      }
+
+      replyToMessageId = new Types.ObjectId(dto.replyTo);
+    }
+
     const message = await this.messageModel.create({
       conversationId: new Types.ObjectId(dto.conversationId),
       senderId: new Types.ObjectId(selfId),
       content: dto.content,
       attachments,
+      replyTo: replyToMessageId || null,
     });
     return message;
   }
@@ -425,6 +446,7 @@ export class DirectMessagingService {
     const [items, total] = await Promise.all([
       this.messageModel
         .find({ conversationId: new Types.ObjectId(conversationId) })
+        .populate('replyTo', 'content senderId createdAt')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -437,8 +459,14 @@ export class DirectMessagingService {
     const totalPages = Math.ceil(total / limit);
     const isLastPage = page >= (totalPages - 1);
 
+    // Ensure each message has replyTo field (null if no reply)
+    const formattedItems = items.map(item => ({
+      ...item,
+      replyTo: item.replyTo || null
+    }));
+
     return {
-      items,
+      items: formattedItems,
       metadata: {
         page,
         limit,

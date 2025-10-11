@@ -343,12 +343,33 @@ export class MessagingService {
       throw new BadRequestException('Invalid conversationId');
     }
 
+    // Validate replyTo if provided
+    let replyToMessageId: Types.ObjectId | undefined;
+    if (createMessageDto.replyTo) {
+      if (!Types.ObjectId.isValid(createMessageDto.replyTo)) {
+        throw new BadRequestException('Invalid replyTo message id');
+      }
+
+      // Check if the message being replied to exists and is in the same conversation
+      const replyToMessage = await this.channelMessageModel.findById(createMessageDto.replyTo).lean();
+      if (!replyToMessage) {
+        throw new NotFoundException('Message being replied to not found');
+      }
+
+      if (String(replyToMessage.conversationId) !== createMessageDto.conversationId) {
+        throw new BadRequestException('Cannot reply to a message from a different conversation');
+      }
+
+      replyToMessageId = new Types.ObjectId(createMessageDto.replyTo);
+    }
+
     const newMessage = new this.channelMessageModel({
       content: createMessageDto.content,
       attachments,
       senderId: new Types.ObjectId(senderId),
       channelId: conversation.channelId,
       conversationId: conversation._id,
+      replyTo: replyToMessageId || null,
     });
     return newMessage.save();
   }
@@ -380,7 +401,7 @@ export class MessagingService {
       throw new BadRequestException('Invalid conversationId');
     }
 
-    // 1. Get messages with UserDehive populated
+    // 1. Get messages with UserDehive populated and replyTo populated
     const messages = await this.channelMessageModel
       .find({ conversationId: new Types.ObjectId(conversationId) })
       .sort({ createdAt: -1 })
@@ -393,6 +414,7 @@ export class MessagingService {
         model: 'UserDehive',
         select: '_id',
       })
+      .populate('replyTo', 'content senderId createdAt')
       .lean();
 
     if (!messages || messages.length === 0) {
@@ -440,6 +462,7 @@ export class MessagingService {
         attachments: msg.attachments,
         isEdited: msg.isEdited,
         editedAt: msg.editedAt,
+        replyTo: msg.replyTo || null,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
         createdAt: (msg as any).createdAt,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access

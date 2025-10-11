@@ -511,6 +511,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
 
+      // Validate replyTo if provided
+      if (parsedData.replyTo !== undefined && parsedData.replyTo !== null) {
+        if (typeof parsedData.replyTo !== 'string' || !Types.ObjectId.isValid(parsedData.replyTo)) {
+          return this.send(client, 'error', {
+            message: 'replyTo must be a valid message ID',
+          });
+        }
+      }
+
       console.log(
         `[WebSocket] 📨 SEND MESSAGE: User ${meta.userDehiveId} sending to conversation ${convId}`,
       );
@@ -547,6 +556,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         )?.toString?.(),
         createdAt: (populatedMessage as any).createdAt,
         isEdited: populatedMessage.isEdited,
+        replyTo: (populatedMessage as any).replyTo || null,
       };
 
       // Broadcast to all clients in the conversation room
