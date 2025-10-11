@@ -33,7 +33,11 @@ import {
   ChannelConversationDocument,
 } from '../schemas/channel-conversation.schema';
 
-type SocketMeta = { userDehiveId?: string };
+type SocketMeta = {
+  userDehiveId?: string;
+  currentRooms?: Set<string>;
+  isAuthenticated?: boolean;
+};
 
 @WebSocketGateway({
   cors: {
@@ -68,13 +72,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleConnection(client: Socket) {
     console.log('[WebSocket] Client connected. Awaiting identity.');
-    this.meta.set(client, {});
+    this.meta.set(client, {
+      currentRooms: new Set<string>(),
+      isAuthenticated: false
+    });
   }
 
   handleDisconnect(client: Socket) {
     console.log('[WebSocket] Client disconnected.');
     const meta = this.meta.get(client);
-    if (meta) this.meta.delete(client);
+    if (meta) {
+      // Leave all rooms before disconnecting
+      if (meta.currentRooms) {
+        meta.currentRooms.forEach(roomId => {
+          client.leave(roomId);
+        });
+      }
+      this.meta.delete(client);
+    }
   }
 
   @SubscribeMessage('identity')
@@ -117,6 +132,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       `[WebSocket] Client is identifying as UserDehive ID: ${userDehiveId}`,
     );
     meta.userDehiveId = userDehiveId;
+    meta.isAuthenticated = true;
     try {
       this.send(
         client,
@@ -135,18 +151,39 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('joinChannel')
   async handleJoinChannel(
     @MessageBody()
-    data: { serverId: string; categoryId: string; channelId: string },
+    data: string | { serverId: string; categoryId: string; channelId: string },
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
-    if (!meta?.userDehiveId) {
+    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
       return this.send(client, 'error', {
         message:
           'Please identify yourself first by sending an "identity" event.',
       });
     }
 
-    const { serverId, categoryId, channelId } = data;
+    // Parse JSON string if needed
+    let parsedData: { serverId: string; categoryId: string; channelId: string };
+    try {
+      if (typeof data === 'string') {
+        parsedData = JSON.parse(data);
+      } else {
+        parsedData = data;
+      }
+    } catch (error) {
+      return this.send(client, 'error', {
+        message: 'Invalid JSON payload.',
+        details: { received: data, error: error instanceof Error ? error.message : String(error) }
+      });
+    }
+
+    const { serverId, categoryId, channelId } = parsedData;
+
+    // Debug logging
+    console.log('[WebSocket] joinChannel raw data:', data);
+    console.log('[WebSocket] joinChannel parsed data:', JSON.stringify(parsedData, null, 2));
+    console.log('[WebSocket] Extracted values:', { serverId, categoryId, channelId });
+
     if (
       !serverId ||
       !categoryId ||
@@ -155,39 +192,140 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       !Types.ObjectId.isValid(categoryId) ||
       !Types.ObjectId.isValid(channelId)
     ) {
+      console.log('[WebSocket] Validation failed:', {
+        serverId: { value: serverId, valid: Types.ObjectId.isValid(serverId) },
+        categoryId: { value: categoryId, valid: Types.ObjectId.isValid(categoryId) },
+        channelId: { value: channelId, valid: Types.ObjectId.isValid(channelId) }
+      });
+
       return this.send(client, 'error', {
         message:
           'Invalid payload. serverId, categoryId, and channelId are required and must be valid ObjectIds.',
+        details: {
+          received: data,
+          extracted: { serverId, categoryId, channelId }
+        }
       });
     }
 
     try {
-      const isMember = await this.userDehiveServerModel.findOne({
-        user_dehive_id: new Types.ObjectId(meta.userDehiveId),
-        server_id: new Types.ObjectId(serverId),
+      console.log('[WebSocket] Checking user membership...');
+      console.log('[WebSocket] Query params:', {
+        userDehiveId: meta.userDehiveId,
+        serverId: serverId,
+        userDehiveIdObjectId: new Types.ObjectId(meta.userDehiveId),
+        serverIdObjectId: new Types.ObjectId(serverId)
       });
 
+      // Try different query approaches
+      const query1 = {
+        user_dehive_id: new Types.ObjectId(meta.userDehiveId),
+        server_id: new Types.ObjectId(serverId),
+      };
+
+      const query2 = {
+        user_dehive_id: meta.userDehiveId,
+        server_id: serverId,
+      };
+
+      const query3 = {
+        user_dehive_id: meta.userDehiveId,
+        server_id: new Types.ObjectId(serverId),
+      };
+
+      console.log('[WebSocket] Trying query 1 (both ObjectId):', query1);
+      let isMember = await this.userDehiveServerModel.findOne(query1);
+
       if (!isMember) {
+        console.log('[WebSocket] Query 1 failed, trying query 2 (both string):', query2);
+        isMember = await this.userDehiveServerModel.findOne(query2);
+      }
+
+      if (!isMember) {
+        console.log('[WebSocket] Query 2 failed, trying query 3 (string + ObjectId):', query3);
+        isMember = await this.userDehiveServerModel.findOne(query3);
+      }
+
+      // Debug: Check all documents for this user
+      const allUserMemberships = await this.userDehiveServerModel.find({
+        user_dehive_id: meta.userDehiveId
+      });
+      console.log('[WebSocket] All memberships for user:', allUserMemberships);
+
+      // Debug: Check all documents for this server
+      const allServerMembers = await this.userDehiveServerModel.find({
+        server_id: new Types.ObjectId(serverId)
+      });
+      console.log('[WebSocket] All members of server:', allServerMembers);
+
+      if (!isMember) {
+        console.log('[WebSocket] User is not a member of server:', serverId);
         return this.send(client, 'error', {
           message: 'Access denied. You are not a member of this server.',
+          details: {
+            serverId,
+            userDehiveId: meta.userDehiveId,
+            allUserMemberships,
+            allServerMembers
+          }
         });
       }
 
+      console.log('[WebSocket] User membership confirmed:', isMember);
+
+      console.log('[WebSocket] Checking channel...');
       const channel = await this.channelModel.findById(channelId);
-      if (!channel || channel.category_id.toString() !== categoryId) {
+      if (!channel) {
+        console.log('[WebSocket] Channel not found:', channelId);
         return this.send(client, 'error', {
-          message:
-            'Channel not found or does not belong to the specified category.',
+          message: 'Channel not found.',
+          details: { channelId }
         });
       }
 
-      const category = await this.categoryModel.findById(categoryId);
-      if (!category || category.server_id.toString() !== serverId) {
+      if (channel.category_id.toString() !== categoryId) {
+        console.log('[WebSocket] Channel does not belong to category:', {
+          channelCategoryId: channel.category_id.toString(),
+          expectedCategoryId: categoryId
+        });
         return this.send(client, 'error', {
-          message:
-            'Category not found or does not belong to the specified server.',
+          message: 'Channel does not belong to the specified category.',
+          details: {
+            channelId,
+            channelCategoryId: channel.category_id.toString(),
+            expectedCategoryId: categoryId
+          }
         });
       }
+
+      console.log('[WebSocket] Channel validation passed');
+
+      console.log('[WebSocket] Checking category...');
+      const category = await this.categoryModel.findById(categoryId);
+      if (!category) {
+        console.log('[WebSocket] Category not found:', categoryId);
+        return this.send(client, 'error', {
+          message: 'Category not found.',
+          details: { categoryId }
+        });
+      }
+
+      if (category.server_id.toString() !== serverId) {
+        console.log('[WebSocket] Category does not belong to server:', {
+          categoryServerId: category.server_id.toString(),
+          expectedServerId: serverId
+        });
+        return this.send(client, 'error', {
+          message: 'Category does not belong to the specified server.',
+          details: {
+            categoryId,
+            categoryServerId: category.server_id.toString(),
+            expectedServerId: serverId
+          }
+        });
+      }
+
+      console.log('[WebSocket] Category validation passed');
 
       const conversation = await this.channelConversationModel.findOneAndUpdate(
         { channelId: new Types.ObjectId(channelId) },
@@ -196,7 +334,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
 
       const conversationId = String((conversation as any)._id);
+
+      // Leave previous rooms if any
+      if (meta.currentRooms) {
+        meta.currentRooms.forEach(roomId => {
+          client.leave(roomId);
+        });
+        meta.currentRooms.clear();
+      }
+
+      // Join new room
       await client.join(conversationId);
+      meta.currentRooms?.add(conversationId);
+
+      console.log(`[WebSocket] ✅ SUCCESS: User ${meta.userDehiveId} joined channel ${channelId}`);
+      console.log(`[WebSocket] ✅ CONVERSATION ID: ${conversationId}`);
+      console.log(`[WebSocket] ✅ ROOM JOINED: ${conversationId}`);
 
       this.send(client, 'joinedChannel', {
         conversationId,
@@ -212,13 +365,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('joinConversation')
-  handleJoinConversation(
+  async handleJoinConversation(
     @MessageBody()
     payload: string | { conversationId: string },
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
-    if (!meta?.userDehiveId) {
+    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
       return this.send(client, 'error', {
         message:
           'Please identify yourself first by sending an "identity" event.',
@@ -236,57 +389,119 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     }
 
-    console.log(
-      `[WebSocket] User ${meta.userDehiveId} joined conversation room: ${conversationId}`,
-    );
-    void client.join(conversationId);
-    this.send(client, 'joinedConversation', {
-      conversationId,
-      message: `You have successfully joined conversation ${conversationId}`,
-    });
+    try {
+      // Verify user has access to this conversation
+      const conversation = await this.channelConversationModel.findById(conversationId);
+      if (!conversation) {
+        return this.send(client, 'error', {
+          message: 'Conversation not found.',
+        });
+      }
+
+      // Check if user is member of the server that owns this channel
+      const channel = await this.channelModel.findById(conversation.channelId);
+      if (!channel) {
+        return this.send(client, 'error', {
+          message: 'Channel not found.',
+        });
+      }
+
+      const category = await this.categoryModel.findById(channel.category_id);
+      if (!category) {
+        return this.send(client, 'error', {
+          message: 'Category not found.',
+        });
+      }
+
+      const isMember = await this.userDehiveServerModel.findOne({
+        user_dehive_id: new Types.ObjectId(meta.userDehiveId),
+        server_id: category.server_id,
+      });
+
+      if (!isMember) {
+        return this.send(client, 'error', {
+          message: 'Access denied. You are not a member of this server.',
+        });
+      }
+
+      // Leave previous rooms if any
+      if (meta.currentRooms) {
+        meta.currentRooms.forEach(roomId => {
+          client.leave(roomId);
+        });
+        meta.currentRooms.clear();
+      }
+
+      // Join new room
+      await client.join(conversationId);
+      meta.currentRooms?.add(conversationId);
+
+      console.log(
+        `[WebSocket] User ${meta.userDehiveId} joined conversation room: ${conversationId}`,
+      );
+
+      this.send(client, 'joinedConversation', {
+        conversationId,
+        message: `You have successfully joined conversation ${conversationId}`,
+      });
+    } catch (error) {
+      console.error('[WebSocket] Error handling joinConversation:', error);
+      this.send(client, 'error', {
+        message: 'Failed to join conversation.',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   @SubscribeMessage('sendMessage')
   async handleMessage(
-    @MessageBody() data: CreateMessageDto,
+    @MessageBody() data: string | CreateMessageDto,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
-    if (!meta?.userDehiveId) {
+    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
       return this.send(client, 'error', {
         message: 'Please identify yourself before sending a message.',
       });
     }
 
     try {
-      if (!data || typeof data !== 'object') {
+      // Parse JSON string if needed
+      let parsedData: CreateMessageDto;
+      if (typeof data === 'string') {
+        parsedData = JSON.parse(data);
+      } else {
+        parsedData = data;
+      }
+
+      if (!parsedData || typeof parsedData !== 'object') {
         return this.send(client, 'error', {
           message: 'Invalid payload.',
         });
       }
-      const convId = (data as { conversationId?: string }).conversationId;
+      const convId = parsedData.conversationId;
       if (!convId || !Types.ObjectId.isValid(convId)) {
         return this.send(client, 'error', {
           message: 'Invalid conversationId.',
         });
       }
-      if (typeof (data as { content?: unknown }).content !== 'string') {
+      if (typeof parsedData.content !== 'string') {
         return this.send(client, 'error', {
           message: 'Content must be a string (0-2000 chars).',
         });
       }
-      if (String(data.content ?? '').length > 2000) {
+      if (String(parsedData.content ?? '').length > 2000) {
         return this.send(client, 'error', {
           message: 'Content must not exceed 2000 characters.',
         });
       }
-      if (!Array.isArray(data.uploadIds)) {
+      if (!Array.isArray(parsedData.uploadIds)) {
         return this.send(client, 'error', {
           message: 'uploadIds is required and must be an array',
         });
       }
-      if (data.uploadIds.length > 0) {
-        const allValid = data.uploadIds.every((id: unknown) => {
+      if (parsedData.uploadIds.length > 0) {
+        const allValid = parsedData.uploadIds.every((id: unknown) => {
           return typeof id === 'string' && Types.ObjectId.isValid(id);
         });
         if (!allValid) {
@@ -297,30 +512,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       console.log(
-        `[WebSocket] Received message from User ${meta.userDehiveId} for conversation ${convId}`,
+        `[WebSocket] 📨 SEND MESSAGE: User ${meta.userDehiveId} sending to conversation ${convId}`,
       );
+      console.log(`[WebSocket] 📨 MESSAGE CONTENT: "${parsedData.content}"`);
+      console.log(`[WebSocket] 📨 UPLOAD IDS: ${JSON.stringify(parsedData.uploadIds)}`);
+
       const savedMessage = await this.messagingService.createMessage(
-        data,
+        parsedData,
         meta.userDehiveId,
       );
+
+      console.log(`[WebSocket] ✅ MESSAGE SAVED: ${savedMessage._id}`);
 
       const populatedMessage = await savedMessage.populate<{
         senderId: UserDehiveDocument;
       }>({
         path: 'senderId',
         model: 'UserDehive',
-        populate: {
-          path: 'user_id',
-          model: 'User',
-          select: 'username',
-        },
+        select: '_id dehive_role status',
       });
 
       const messageToBroadcast = {
         _id: populatedMessage._id,
         sender: {
-          dehive_id: populatedMessage.senderId._id,
-          username: 'User',
+          dehive_id: (populatedMessage.senderId as any)._id,
+          username: `User_${(populatedMessage.senderId as any)._id.toString().slice(-4)}`,
         },
         content: populatedMessage.content,
         attachments: (
@@ -333,9 +549,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         isEdited: populatedMessage.isEdited,
       };
 
+      // Broadcast to all clients in the conversation room
       this.server
-        .to(String(data.conversationId))
+        .to(String(parsedData.conversationId))
         .emit('newMessage', messageToBroadcast);
+
+      console.log(`[WebSocket] 📢 MESSAGE BROADCASTED to room: ${parsedData.conversationId}`);
+      console.log(`[WebSocket] 📢 BROADCAST DATA:`, JSON.stringify(messageToBroadcast, null, 2));
     } catch (error: unknown) {
       console.error('[WebSocket] Error handling message:', error);
       this.send(client, 'error', {
@@ -348,20 +568,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('editMessage')
   async handleEditMessage(
     @MessageBody()
-    data: { messageId: string; content: string },
+    data: string | { messageId: string; content: string },
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
-    if (!meta?.userDehiveId) {
+    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
       return this.send(client, 'error', {
         message: 'Please identify yourself before editing.',
       });
     }
     try {
+      // Parse JSON string if needed
+      let parsedData: { messageId: string; content: string };
+      if (typeof data === 'string') {
+        parsedData = JSON.parse(data);
+      } else {
+        parsedData = data;
+      }
+
       const updated = await this.messagingService.editMessage(
-        data.messageId,
+        parsedData.messageId,
         meta.userDehiveId,
-        data.content,
+        parsedData.content,
       );
       const payload = {
         _id: updated._id,
@@ -386,18 +614,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('deleteMessage')
   async handleDeleteMessage(
     @MessageBody()
-    data: { messageId: string },
+    data: string | { messageId: string },
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
-    if (!meta?.userDehiveId) {
+    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
       return this.send(client, 'error', {
         message: 'Please identify yourself before deleting.',
       });
     }
     try {
+      // Parse JSON string if needed
+      let parsedData: { messageId: string };
+      if (typeof data === 'string') {
+        parsedData = JSON.parse(data);
+      } else {
+        parsedData = data;
+      }
+
       const updated = await this.messagingService.deleteMessage(
-        data.messageId,
+        parsedData.messageId,
         meta.userDehiveId,
       );
       const payload = {
@@ -416,5 +652,84 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         details: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  @SubscribeMessage('leaveRoom')
+  async handleLeaveRoom(
+    @MessageBody() data: string | { conversationId?: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const meta = this.meta.get(client);
+    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
+      return this.send(client, 'error', {
+        message: 'Please identify yourself first.',
+      });
+    }
+
+    try {
+      // Parse JSON string if needed
+      let parsedData: { conversationId?: string };
+      if (typeof data === 'string') {
+        parsedData = JSON.parse(data);
+      } else {
+        parsedData = data;
+      }
+
+      if (parsedData?.conversationId) {
+        // Leave specific room
+        if (meta.currentRooms?.has(parsedData.conversationId)) {
+          await client.leave(parsedData.conversationId);
+          meta.currentRooms.delete(parsedData.conversationId);
+          this.send(client, 'leftRoom', {
+            conversationId: parsedData.conversationId,
+            message: 'Left room successfully',
+          });
+        } else {
+          this.send(client, 'error', {
+            message: 'You are not in this room.',
+          });
+        }
+      } else {
+        // Leave all rooms
+        if (meta.currentRooms) {
+          meta.currentRooms.forEach(roomId => {
+            client.leave(roomId);
+          });
+          meta.currentRooms.clear();
+        }
+        this.send(client, 'leftAllRooms', {
+          message: 'Left all rooms successfully',
+        });
+      }
+    } catch (error) {
+      console.error('[WebSocket] Error handling leaveRoom:', error);
+      this.send(client, 'error', {
+        message: 'Failed to leave room.',
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  @SubscribeMessage('getCurrentRooms')
+  handleGetCurrentRooms(@ConnectedSocket() client: Socket) {
+    const meta = this.meta.get(client);
+    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
+      return this.send(client, 'error', {
+        message: 'Please identify yourself first.',
+      });
+    }
+
+    this.send(client, 'currentRooms', {
+      rooms: Array.from(meta.currentRooms || []),
+      message: 'Current rooms retrieved successfully',
+    });
+  }
+
+  @SubscribeMessage('ping')
+  handlePing(@ConnectedSocket() client: Socket) {
+    this.send(client, 'pong', {
+      timestamp: new Date().toISOString(),
+      message: 'Pong!',
+    });
   }
 }
