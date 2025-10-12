@@ -2351,26 +2351,26 @@ let MessagingService = class MessagingService {
             return sender?._id?.toString();
         })
             .filter((id) => Boolean(id));
-        console.log('[CHANNEL-MESSAGING] Debug getMessagesByConversationId:', {
+        console.log("[CHANNEL-MESSAGING] Debug getMessagesByConversationId:", {
             userIds,
             sessionId,
             fingerprintHash,
             hasSessionId: !!sessionId,
-            hasFingerprintHash: !!fingerprintHash
+            hasFingerprintHash: !!fingerprintHash,
         });
         const profiles = await this.decodeClient.batchGetProfiles(userIds, sessionId, fingerprintHash);
-        console.log('[CHANNEL-MESSAGING] Profiles received:', {
+        console.log("[CHANNEL-MESSAGING] Profiles received:", {
             requestedUserIds: userIds,
             receivedProfiles: Object.keys(profiles),
-            profiles: profiles
+            profiles: profiles,
         });
-        Object.keys(profiles).forEach(userId => {
+        Object.keys(profiles).forEach((userId) => {
             const profile = profiles[userId];
             console.log(`[CHANNEL-MESSAGING] Profile for ${userId}:`, {
                 username: profile?.username,
                 display_name: profile?.display_name,
                 avatar: profile?.avatar,
-                fullProfile: profile
+                fullProfile: profile,
             });
         });
         const items = messages.map((msg) => {

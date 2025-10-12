@@ -53,3 +53,8 @@ jobs:
             pm2 save
             pm2 startup
             pm2 status
+            echo "🚀 Deployment completed successfully!"
+            echo "📡 Server Host: $(hostname -I | awk '{print $1}')"
+            echo "🌐 Public IP: $(curl -s ifconfig.me)"
+            echo "📋 Services Status:"
+            pm2 list

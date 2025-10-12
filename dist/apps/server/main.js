@@ -13,14 +13,14 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CurrentUser = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 exports.CurrentUser = (0, common_1.createParamDecorator)((data, ctx) => {
-    console.log('🎯 [SERVER CURRENT USER] Decorator called with data:', data);
+    console.log("🎯 [SERVER CURRENT USER] Decorator called with data:", data);
     try {
         const request = ctx
             .switchToHttp()
             .getRequest();
-        console.log('🎯 [SERVER CURRENT USER] Request user:', request.user);
-        console.log('🎯 [SERVER CURRENT USER] Request sessionId:', request.sessionId);
-        if (data === 'sessionId') {
+        console.log("🎯 [SERVER CURRENT USER] Request user:", request.user);
+        console.log("🎯 [SERVER CURRENT USER] Request sessionId:", request.sessionId);
+        if (data === "sessionId") {
             return request.sessionId;
         }
         const user = request.user;
@@ -28,11 +28,11 @@ exports.CurrentUser = (0, common_1.createParamDecorator)((data, ctx) => {
             console.log(`🎯 [SERVER CURRENT USER] Returning user.${data}:`, user[data]);
             return user[data];
         }
-        console.log('🎯 [SERVER CURRENT USER] Returning full user:', user);
+        console.log("🎯 [SERVER CURRENT USER] Returning full user:", user);
         return user;
     }
     catch (error) {
-        console.error('❌ [SERVER CURRENT USER] Error:', error);
+        console.error("❌ [SERVER CURRENT USER] Error:", error);
         return undefined;
     }
 });
@@ -65,85 +65,85 @@ const core_1 = __webpack_require__(/*! @nestjs/core */ "@nestjs/core");
 const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
 const axios_2 = __webpack_require__(/*! axios */ "axios");
 const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
-exports.PUBLIC_KEY = 'public';
+exports.PUBLIC_KEY = "public";
 const Public = () => (0, common_1.SetMetadata)(exports.PUBLIC_KEY, true);
 exports.Public = Public;
 let AuthGuard = AuthGuard_1 = class AuthGuard {
     httpService;
     reflector;
     logger = new common_1.Logger(AuthGuard_1.name);
-    authServiceUrl = 'http://localhost:4006';
+    authServiceUrl = "http://localhost:4006";
     constructor(httpService, reflector) {
         this.httpService = httpService;
         this.reflector = reflector;
-        console.log('🔥 [SERVER AUTH GUARD] Constructor called - This is the server AuthGuard!');
+        console.log("🔥 [SERVER AUTH GUARD] Constructor called - This is the server AuthGuard!");
     }
     async canActivate(context) {
-        console.log('🚨 [SERVER AUTH GUARD] canActivate called - This is the server AuthGuard!');
+        console.log("🚨 [SERVER AUTH GUARD] canActivate called - This is the server AuthGuard!");
         const request = context.switchToHttp().getRequest();
         const isPublic = this.reflector.get(exports.PUBLIC_KEY, context.getHandler());
-        console.log('🚨 [SERVER AUTH GUARD] isPublic:', isPublic);
+        console.log("🚨 [SERVER AUTH GUARD] isPublic:", isPublic);
         if (isPublic) {
-            console.log('🚨 [SERVER AUTH GUARD] Route is public, skipping auth');
+            console.log("🚨 [SERVER AUTH GUARD] Route is public, skipping auth");
             return true;
         }
         const sessionId = this.extractSessionIdFromHeader(request);
-        console.log('🚨 [SERVER AUTH GUARD] sessionId:', sessionId);
+        console.log("🚨 [SERVER AUTH GUARD] sessionId:", sessionId);
         if (!sessionId) {
-            console.log('❌ [SERVER AUTH GUARD] No session ID found!');
+            console.log("❌ [SERVER AUTH GUARD] No session ID found!");
             throw new common_1.UnauthorizedException({
-                message: 'Session ID is required',
-                error: 'MISSING_SESSION_ID',
+                message: "Session ID is required",
+                error: "MISSING_SESSION_ID",
             });
         }
         try {
-            console.log('🔐 [SERVER AUTH GUARD] Calling auth service for session validation');
+            console.log("🔐 [SERVER AUTH GUARD] Calling auth service for session validation");
             const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/session/check`, {
                 headers: {
-                    'x-session-id': sessionId,
-                    'Content-Type': 'application/json',
+                    "x-session-id": sessionId,
+                    "Content-Type": "application/json",
                 },
                 timeout: 5000,
             }));
             if (!response.data.success || !response.data.data) {
                 throw new common_1.UnauthorizedException({
-                    message: response.data.message || 'Invalid session',
-                    error: 'INVALID_SESSION',
+                    message: response.data.message || "Invalid session",
+                    error: "INVALID_SESSION",
                 });
             }
             const session_check_response = response.data;
             if (session_check_response.success && session_check_response.data) {
-                console.log('🔐 [SERVER AUTH GUARD] Using session data directly');
+                console.log("🔐 [SERVER AUTH GUARD] Using session data directly");
                 const sessionData = session_check_response.data;
                 const sessionToken = sessionData.session_token;
                 if (sessionToken) {
-                    const payload = sessionToken.split('.')[1];
-                    const decodedPayload = JSON.parse(Buffer.from(payload, 'base64').toString());
+                    const payload = sessionToken.split(".")[1];
+                    const decodedPayload = JSON.parse(Buffer.from(payload, "base64").toString());
                     const userId = decodedPayload.user_id;
-                    console.log('🔍 [SERVER AUTH GUARD] JWT decodedPayload:', decodedPayload);
-                    console.log('🔍 [SERVER AUTH GUARD] userId from JWT:', userId);
+                    console.log("🔍 [SERVER AUTH GUARD] JWT decodedPayload:", decodedPayload);
+                    console.log("🔍 [SERVER AUTH GUARD] userId from JWT:", userId);
                     if (userId) {
-                        request['user'] = {
+                        request["user"] = {
                             _id: userId,
                             userId: userId,
-                            email: 'user@example.com',
-                            username: 'user',
-                            role: 'user',
+                            email: "user@example.com",
+                            username: "user",
+                            role: "user",
                         };
-                        request['sessionId'] = sessionId;
-                        console.log('✅ [SERVER AUTH GUARD] User attached to request:', request['user']);
+                        request["sessionId"] = sessionId;
+                        console.log("✅ [SERVER AUTH GUARD] User attached to request:", request["user"]);
                     }
                     else {
                         throw new common_1.UnauthorizedException({
-                            message: 'No user_id in JWT token',
-                            error: 'NO_USER_ID_IN_JWT',
+                            message: "No user_id in JWT token",
+                            error: "NO_USER_ID_IN_JWT",
                         });
                     }
                 }
                 else {
                     throw new common_1.UnauthorizedException({
-                        message: 'No session token available',
-                        error: 'NO_SESSION_TOKEN',
+                        message: "No session token available",
+                        error: "NO_SESSION_TOKEN",
                     });
                 }
             }
@@ -153,14 +153,14 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
             if (error instanceof axios_2.AxiosError) {
                 if (error.response?.status === 401) {
                     throw new common_1.UnauthorizedException({
-                        message: 'Invalid or expired session',
-                        error: 'SESSION_EXPIRED',
+                        message: "Invalid or expired session",
+                        error: "SESSION_EXPIRED",
                     });
                 }
-                this.logger.error('Auth service is unavailable');
+                this.logger.error("Auth service is unavailable");
                 throw new common_1.UnauthorizedException({
-                    message: 'Authentication service unavailable',
-                    error: 'SERVICE_UNAVAILABLE',
+                    message: "Authentication service unavailable",
+                    error: "SERVICE_UNAVAILABLE",
                 });
             }
             if (error instanceof common_1.UnauthorizedException) {
@@ -168,13 +168,13 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
             }
             this.logger.error(`Authentication failed: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
             throw new common_1.UnauthorizedException({
-                message: 'Authentication failed',
-                error: 'AUTHENTICATION_ERROR',
+                message: "Authentication failed",
+                error: "AUTHENTICATION_ERROR",
             });
         }
     }
     extractSessionIdFromHeader(request) {
-        return request.headers['x-session-id'];
+        return request.headers["x-session-id"];
     }
 };
 exports.AuthGuard = AuthGuard;
@@ -212,12 +212,12 @@ class CreateCategoryDto {
 exports.CreateCategoryDto = CreateCategoryDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The name of the new category.',
-        example: 'General Channels',
+        description: "The name of the new category.",
+        example: "General Channels",
     }),
-    (0, class_validator_1.IsString)({ message: 'Name must be a string.' }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'Name cannot be empty.' }),
-    (0, class_validator_1.Length)(1, 100, { message: 'Name must be between 1 and 100 characters.' }),
+    (0, class_validator_1.IsString)({ message: "Name must be a string." }),
+    (0, class_validator_1.IsNotEmpty)({ message: "Name cannot be empty." }),
+    (0, class_validator_1.Length)(1, 100, { message: "Name must be between 1 and 100 characters." }),
     __metadata("design:type", String)
 ], CreateCategoryDto.prototype, "name", void 0);
 
@@ -257,33 +257,33 @@ class CreateChannelDto {
 exports.CreateChannelDto = CreateChannelDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The name of the new channel.',
-        example: 'general-chat',
+        description: "The name of the new channel.",
+        example: "general-chat",
     }),
-    (0, class_validator_1.IsString)({ message: 'Name must be a string.' }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'Name cannot be empty.' }),
-    (0, class_validator_1.Length)(1, 100, { message: 'Name must be between 1 and 100 characters.' }),
+    (0, class_validator_1.IsString)({ message: "Name must be a string." }),
+    (0, class_validator_1.IsNotEmpty)({ message: "Name cannot be empty." }),
+    (0, class_validator_1.Length)(1, 100, { message: "Name must be between 1 and 100 characters." }),
     __metadata("design:type", String)
 ], CreateChannelDto.prototype, "name", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The type of the channel.',
+        description: "The type of the channel.",
         enum: ChannelType,
         example: ChannelType.TEXT,
     }),
-    (0, class_validator_1.IsEnum)(ChannelType, { message: 'Type must be either TEXT or VOICE.' }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'Type cannot be empty.' }),
+    (0, class_validator_1.IsEnum)(ChannelType, { message: "Type must be either TEXT or VOICE." }),
+    (0, class_validator_1.IsNotEmpty)({ message: "Type cannot be empty." }),
     __metadata("design:type", String)
 ], CreateChannelDto.prototype, "type", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The topic of the channel (optional).',
-        example: 'General discussion for all members.',
+        description: "The topic of the channel (optional).",
+        example: "General discussion for all members.",
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.Length)(0, 1024, { message: 'Topic must not exceed 1024 characters.' }),
+    (0, class_validator_1.Length)(0, 1024, { message: "Topic must not exceed 1024 characters." }),
     __metadata("design:type", String)
 ], CreateChannelDto.prototype, "topic", void 0);
 
@@ -317,8 +317,8 @@ class CreateServerDto {
 exports.CreateServerDto = CreateServerDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The name of the new server.',
-        example: 'My Awesome Community',
+        description: "The name of the new server.",
+        example: "My Awesome Community",
     }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
@@ -327,8 +327,8 @@ __decorate([
 ], CreateServerDto.prototype, "name", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'A brief description of the server (optional).',
-        example: 'A place to hang out and chat.',
+        description: "A brief description of the server (optional).",
+        example: "A place to hang out and chat.",
         required: false,
     }),
     (0, class_validator_1.IsString)(),
@@ -366,8 +366,8 @@ class UpdateCategoryDto {
 exports.UpdateCategoryDto = UpdateCategoryDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The new name for the category.',
-        example: '💬 Community Channels',
+        description: "The new name for the category.",
+        example: "💬 Community Channels",
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -408,8 +408,8 @@ class UpdateChannelDto {
 exports.UpdateChannelDto = UpdateChannelDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The new name for the channel.',
-        example: 'welcome-and-rules',
+        description: "The new name for the channel.",
+        example: "welcome-and-rules",
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -420,8 +420,8 @@ __decorate([
 ], UpdateChannelDto.prototype, "name", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The new topic for the channel.',
-        example: 'Please read the rules before posting!',
+        description: "The new topic for the channel.",
+        example: "Please read the rules before posting!",
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -431,8 +431,8 @@ __decorate([
 ], UpdateChannelDto.prototype, "topic", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the new category to move this channel to.',
-        example: '68c40af9dfffdf7ae4af2e8c',
+        description: "The ID of the new category to move this channel to.",
+        example: "68c40af9dfffdf7ae4af2e8c",
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -484,7 +484,7 @@ let TransformInterceptor = class TransformInterceptor {
         const response = ctx.getResponse();
         return next.handle().pipe((0, operators_1.map)((data) => {
             const statusCode = response.statusCode;
-            const message = data?.message || 'Operation successful';
+            const message = data?.message || "Operation successful";
             const responseData = data?.message ? null : data;
             return {
                 statusCode,
@@ -534,11 +534,11 @@ __decorate([
     __metadata("design:type", String)
 ], Category.prototype, "name", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Server', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Server", required: true }),
     __metadata("design:type", typeof (_a = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _a : Object)
 ], Category.prototype, "server_id", void 0);
 exports.Category = Category = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'category', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "category", timestamps: true })
 ], Category);
 exports.CategorySchema = mongoose_1.SchemaFactory.createForClass(Category);
 
@@ -580,11 +580,11 @@ __decorate([
     __metadata("design:type", String)
 ], ChannelMessage.prototype, "message", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'UserDehive', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "UserDehive", required: true }),
     __metadata("design:type", typeof (_a = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _a : Object)
 ], ChannelMessage.prototype, "sender", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Channel', required: true, index: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Channel", required: true, index: true }),
     __metadata("design:type", typeof (_b = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _b : Object)
 ], ChannelMessage.prototype, "channel_id", void 0);
 __decorate([
@@ -600,7 +600,7 @@ __decorate([
     __metadata("design:type", Boolean)
 ], ChannelMessage.prototype, "is_edited", void 0);
 exports.ChannelMessage = ChannelMessage = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'channel_message', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "channel_message", timestamps: true })
 ], ChannelMessage);
 exports.ChannelMessageSchema = mongoose_1.SchemaFactory.createForClass(ChannelMessage);
 
@@ -645,7 +645,7 @@ __decorate([
     __metadata("design:type", typeof (_a = typeof create_channel_dto_1.ChannelType !== "undefined" && create_channel_dto_1.ChannelType) === "function" ? _a : Object)
 ], Channel.prototype, "type", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Category', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Category", required: true }),
     __metadata("design:type", typeof (_b = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _b : Object)
 ], Channel.prototype, "category_id", void 0);
 __decorate([
@@ -653,7 +653,7 @@ __decorate([
     __metadata("design:type", String)
 ], Channel.prototype, "topic", void 0);
 exports.Channel = Channel = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'channel', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "channel", timestamps: true })
 ], Channel);
 exports.ChannelSchema = mongoose_1.SchemaFactory.createForClass(Channel);
 
@@ -713,7 +713,7 @@ __decorate([
     __metadata("design:type", Array)
 ], Server.prototype, "tags", void 0);
 exports.Server = Server = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'server', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "server", timestamps: true })
 ], Server);
 exports.ServerSchema = mongoose_1.SchemaFactory.createForClass(Server);
 
@@ -759,10 +759,10 @@ let ServerController = class ServerController {
         this.serverService = serverService;
     }
     createServer(createServerDto, ownerId) {
-        console.log('🎯 [CONTROLLER] createServer called');
-        console.log('🎯 [CONTROLLER] ownerId:', ownerId);
-        console.log('🎯 [CONTROLLER] ownerId type:', typeof ownerId);
-        console.log('🎯 [CONTROLLER] createServerDto:', createServerDto);
+        console.log("🎯 [CONTROLLER] createServer called");
+        console.log("🎯 [CONTROLLER] ownerId:", ownerId);
+        console.log("🎯 [CONTROLLER] ownerId type:", typeof ownerId);
+        console.log("🎯 [CONTROLLER] createServerDto:", createServerDto);
         return this.serverService.createServer(createServerDto, ownerId);
     }
     findAllServers(actorId) {
@@ -805,15 +805,15 @@ let ServerController = class ServerController {
 exports.ServerController = ServerController;
 __decorate([
     (0, common_1.Post)(),
-    (0, swagger_1.ApiOperation)({ summary: 'Create a new server' }),
+    (0, swagger_1.ApiOperation)({ summary: "Create a new server" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiResponse)({ status: 201, description: 'Server created successfully.' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Server created successfully." }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_b = typeof create_server_dto_1.CreateServerDto !== "undefined" && create_server_dto_1.CreateServerDto) === "function" ? _b : Object, String]),
     __metadata("design:returntype", void 0)
@@ -821,211 +821,211 @@ __decorate([
 __decorate([
     (0, common_1.Get)(),
     (0, swagger_1.ApiOperation)({
-        summary: 'Get all servers joined by the user',
-        description: 'Retrieves a list of servers that the authenticated user is a member of.',
+        summary: "Get all servers joined by the user",
+        description: "Retrieves a list of servers that the authenticated user is a member of.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiResponse)({
         status: 200,
-        description: 'Returns a list of joined servers.',
+        description: "Returns a list of joined servers.",
     }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(0, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "findAllServers", null);
 __decorate([
-    (0, common_1.Get)(':id'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get a single server by ID' }),
+    (0, common_1.Get)(":id"),
+    (0, swagger_1.ApiOperation)({ summary: "Get a single server by ID" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'id', description: 'The ID of the server' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns the server details.' }),
-    __param(0, (0, common_1.Param)('id')),
+    (0, swagger_1.ApiParam)({ name: "id", description: "The ID of the server" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Returns the server details." }),
+    __param(0, (0, common_1.Param)("id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "findServerById", null);
 __decorate([
-    (0, common_1.Patch)(':id'),
-    (0, swagger_1.ApiOperation)({ summary: 'Update a server' }),
+    (0, common_1.Patch)(":id"),
+    (0, swagger_1.ApiOperation)({ summary: "Update a server" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'id', description: 'The ID of the server to update' }),
-    __param(0, (0, common_1.Param)('id')),
+    (0, swagger_1.ApiParam)({ name: "id", description: "The ID of the server to update" }),
+    __param(0, (0, common_1.Param)("id")),
     __param(1, (0, common_1.Body)()),
-    __param(2, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, typeof (_c = typeof update_server_dto_1.UpdateServerDto !== "undefined" && update_server_dto_1.UpdateServerDto) === "function" ? _c : Object, String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "updateServer", null);
 __decorate([
-    (0, common_1.Delete)(':id'),
-    (0, swagger_1.ApiOperation)({ summary: 'Delete a server' }),
+    (0, common_1.Delete)(":id"),
+    (0, swagger_1.ApiOperation)({ summary: "Delete a server" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'id', description: 'The ID of the server to delete' }),
-    __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    (0, swagger_1.ApiParam)({ name: "id", description: "The ID of the server to delete" }),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "removeServer", null);
 __decorate([
-    (0, common_1.Post)(':serverId/categories'),
-    (0, swagger_1.ApiOperation)({ summary: 'Create a new category' }),
+    (0, common_1.Post)(":serverId/categories"),
+    (0, swagger_1.ApiOperation)({ summary: "Create a new category" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'serverId', description: 'The ID of the server' }),
-    __param(0, (0, common_1.Param)('serverId')),
+    (0, swagger_1.ApiParam)({ name: "serverId", description: "The ID of the server" }),
+    __param(0, (0, common_1.Param)("serverId")),
     __param(1, (0, common_1.Body)()),
-    __param(2, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, typeof (_d = typeof create_category_dto_1.CreateCategoryDto !== "undefined" && create_category_dto_1.CreateCategoryDto) === "function" ? _d : Object, String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "createCategory", null);
 __decorate([
-    (0, common_1.Get)(':serverId/categories'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get all categories in a server' }),
+    (0, common_1.Get)(":serverId/categories"),
+    (0, swagger_1.ApiOperation)({ summary: "Get all categories in a server" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'serverId', description: 'The ID of the server' }),
-    __param(0, (0, common_1.Param)('serverId')),
+    (0, swagger_1.ApiParam)({ name: "serverId", description: "The ID of the server" }),
+    __param(0, (0, common_1.Param)("serverId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "findAllCategoriesInServer", null);
 __decorate([
-    (0, common_1.Patch)('categories/:categoryId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Update a category' }),
+    (0, common_1.Patch)("categories/:categoryId"),
+    (0, swagger_1.ApiOperation)({ summary: "Update a category" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiParam)({
-        name: 'categoryId',
-        description: 'The ID of the category to update',
+        name: "categoryId",
+        description: "The ID of the category to update",
     }),
-    __param(0, (0, common_1.Param)('categoryId')),
+    __param(0, (0, common_1.Param)("categoryId")),
     __param(1, (0, common_1.Body)()),
-    __param(2, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, typeof (_e = typeof update_category_dto_1.UpdateCategoryDto !== "undefined" && update_category_dto_1.UpdateCategoryDto) === "function" ? _e : Object, String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "updateCategory", null);
 __decorate([
-    (0, common_1.Delete)('categories/:categoryId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Delete a category' }),
+    (0, common_1.Delete)("categories/:categoryId"),
+    (0, swagger_1.ApiOperation)({ summary: "Delete a category" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiParam)({
-        name: 'categoryId',
-        description: 'The ID of the category to delete',
+        name: "categoryId",
+        description: "The ID of the category to delete",
     }),
-    __param(0, (0, common_1.Param)('categoryId')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(0, (0, common_1.Param)("categoryId")),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "removeCategory", null);
 __decorate([
-    (0, common_1.Post)(':serverId/categories/:categoryId/channels'),
-    (0, swagger_1.ApiOperation)({ summary: 'Create a new channel' }),
+    (0, common_1.Post)(":serverId/categories/:categoryId/channels"),
+    (0, swagger_1.ApiOperation)({ summary: "Create a new channel" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'serverId', description: 'The ID of the server' }),
-    (0, swagger_1.ApiParam)({ name: 'categoryId', description: 'The ID of the category' }),
-    __param(0, (0, common_1.Param)('serverId')),
-    __param(1, (0, common_1.Param)('categoryId')),
+    (0, swagger_1.ApiParam)({ name: "serverId", description: "The ID of the server" }),
+    (0, swagger_1.ApiParam)({ name: "categoryId", description: "The ID of the category" }),
+    __param(0, (0, common_1.Param)("serverId")),
+    __param(1, (0, common_1.Param)("categoryId")),
     __param(2, (0, common_1.Body)()),
-    __param(3, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(3, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String, typeof (_f = typeof create_channel_dto_1.CreateChannelDto !== "undefined" && create_channel_dto_1.CreateChannelDto) === "function" ? _f : Object, String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "createChannel", null);
 __decorate([
-    (0, common_1.Get)('channels/:channelId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get a single channel by ID' }),
+    (0, common_1.Get)("channels/:channelId"),
+    (0, swagger_1.ApiOperation)({ summary: "Get a single channel by ID" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'channelId', description: 'The ID of the channel' }),
-    __param(0, (0, common_1.Param)('channelId')),
+    (0, swagger_1.ApiParam)({ name: "channelId", description: "The ID of the channel" }),
+    __param(0, (0, common_1.Param)("channelId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "findChannelById", null);
 __decorate([
-    (0, common_1.Patch)('channels/:channelId'),
+    (0, common_1.Patch)("channels/:channelId"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Update a channel',
-        description: 'Update channel properties including name, topic, or move it to a different category within the same server.'
+        summary: "Update a channel",
+        description: "Update channel properties including name, topic, or move it to a different category within the same server.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiParam)({
-        name: 'channelId',
-        description: 'The ID of the channel to update',
+        name: "channelId",
+        description: "The ID of the channel to update",
     }),
-    __param(0, (0, common_1.Param)('channelId')),
+    __param(0, (0, common_1.Param)("channelId")),
     __param(1, (0, common_1.Body)()),
-    __param(2, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, typeof (_g = typeof update_channel_dto_1.UpdateChannelDto !== "undefined" && update_channel_dto_1.UpdateChannelDto) === "function" ? _g : Object, String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "updateChannel", null);
 __decorate([
-    (0, common_1.Delete)('channels/:channelId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Delete a channel' }),
+    (0, common_1.Delete)("channels/:channelId"),
+    (0, swagger_1.ApiOperation)({ summary: "Delete a channel" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiParam)({
-        name: 'channelId',
-        description: 'The ID of the channel to delete',
+        name: "channelId",
+        description: "The ID of the channel to delete",
     }),
-    __param(0, (0, common_1.Param)('channelId')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(0, (0, common_1.Param)("channelId")),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], ServerController.prototype, "removeChannel", null);
 exports.ServerController = ServerController = __decorate([
-    (0, swagger_1.ApiTags)('Servers, Categories & Channels'),
-    (0, common_1.Controller)('servers'),
+    (0, swagger_1.ApiTags)("Servers, Categories & Channels"),
+    (0, common_1.Controller)("servers"),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
     __metadata("design:paramtypes", [typeof (_a = typeof server_service_1.ServerService !== "undefined" && server_service_1.ServerService) === "function" ? _a : Object])
 ], ServerController);
@@ -1080,8 +1080,8 @@ exports.ServerModule = ServerModule = __decorate([
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],
                 useFactory: (configService) => ({
-                    uri: configService.get('MONGODB_URI'),
-                    dbName: 'dehive_db',
+                    uri: configService.get("MONGODB_URI"),
+                    dbName: "dehive_db",
                 }),
             }),
             user_dehive_server_module_1.UserDehiveServerModule,
@@ -1153,12 +1153,12 @@ let ServerService = class ServerService {
         this.httpService = httpService;
     }
     async createServer(createServerDto, ownerBaseId) {
-        console.log('🚀 [CREATE SERVER] Starting with ownerBaseId:', ownerBaseId);
+        console.log("🚀 [CREATE SERVER] Starting with ownerBaseId:", ownerBaseId);
         if (!ownerBaseId) {
-            throw new common_1.BadRequestException('Owner ID is required');
+            throw new common_1.BadRequestException("Owner ID is required");
         }
         const ownerDehiveId = ownerBaseId;
-        console.log('🔍 [CREATE SERVER] ownerDehiveId:', ownerDehiveId);
+        console.log("🔍 [CREATE SERVER] ownerDehiveId:", ownerDehiveId);
         const session = await this.serverModel.db.startSession();
         session.startTransaction();
         try {
@@ -1182,9 +1182,9 @@ let ServerService = class ServerService {
             await this.userDehiveModel.findByIdAndUpdate(ownerDehiveId, {
                 $inc: { server_count: 1 },
                 $setOnInsert: {
-                    dehive_role: 'USER',
-                    status: 'ACTIVE',
-                    bio: '',
+                    dehive_role: "USER",
+                    status: "ACTIVE",
+                    bio: "",
                     banner_color: null,
                     is_banned: false,
                     banned_by_servers: [],
@@ -1198,7 +1198,7 @@ let ServerService = class ServerService {
         }
         catch (error) {
             await session.abortTransaction();
-            throw new common_1.BadRequestException('Could not create server.', error.message);
+            throw new common_1.BadRequestException("Could not create server.", error.message);
         }
         finally {
             void session.endSession();
@@ -1208,7 +1208,7 @@ let ServerService = class ServerService {
         const actorDehiveId = actorBaseId;
         const memberships = await this.userDehiveServerModel
             .find({ user_dehive_id: actorDehiveId })
-            .select('server_id')
+            .select("server_id")
             .lean();
         const serverIds = memberships.map((m) => m.server_id);
         return this.serverModel.find({ _id: { $in: serverIds } }).exec();
@@ -1223,7 +1223,7 @@ let ServerService = class ServerService {
     async updateServer(id, updateServerDto, actorId) {
         const server = await this.findServerById(id);
         if (server.owner_id.toString() !== actorId) {
-            throw new common_1.ForbiddenException('You do not have permission to edit this server.');
+            throw new common_1.ForbiddenException("You do not have permission to edit this server.");
         }
         const updatedServer = await this.serverModel
             .findByIdAndUpdate(id, updateServerDto, { new: true })
@@ -1236,7 +1236,7 @@ let ServerService = class ServerService {
     async removeServer(id, actorId) {
         const server = await this.findServerById(id);
         if (server.owner_id.toString() !== actorId) {
-            throw new common_1.ForbiddenException('You do not have permission to delete this server.');
+            throw new common_1.ForbiddenException("You do not have permission to delete this server.");
         }
         const session = await this.serverModel.db.startSession();
         session.startTransaction();
@@ -1244,13 +1244,13 @@ let ServerService = class ServerService {
             const serverId = new mongoose_2.Types.ObjectId(id);
             const members = await this.userDehiveServerModel
                 .find({ server_id: serverId })
-                .select('user_dehive_id')
+                .select("user_dehive_id")
                 .session(session);
             const memberIds = members.map((m) => m.user_dehive_id);
             await this.serverModel.findByIdAndDelete(serverId, { session });
             const categories = await this.categoryModel
                 .find({ server_id: serverId })
-                .select('_id')
+                .select("_id")
                 .session(session);
             const categoryIds = categories.map((c) => c._id);
             if (categoryIds.length > 0) {
@@ -1266,7 +1266,7 @@ let ServerService = class ServerService {
         }
         catch (error) {
             await session.abortTransaction();
-            throw new common_1.BadRequestException('Could not delete server and its related data.', error.message);
+            throw new common_1.BadRequestException("Could not delete server and its related data.", error.message);
         }
         finally {
             void session.endSession();
@@ -1275,7 +1275,7 @@ let ServerService = class ServerService {
     async createCategory(serverId, actorId, createCategoryDto) {
         const server = await this.findServerById(serverId);
         if (server.owner_id.toString() !== actorId) {
-            throw new common_1.ForbiddenException('Only the server owner can create categories.');
+            throw new common_1.ForbiddenException("Only the server owner can create categories.");
         }
         const newCategory = new this.categoryModel({
             ...createCategoryDto,
@@ -1292,12 +1292,12 @@ let ServerService = class ServerService {
             },
             {
                 $lookup: {
-                    from: 'channel',
-                    localField: '_id',
-                    foreignField: 'category_id',
-                    as: 'channels',
+                    from: "channel",
+                    localField: "_id",
+                    foreignField: "category_id",
+                    as: "channels",
                 },
-            }
+            },
         ]);
     }
     async updateCategory(categoryId, actorId, updateCategoryDto) {
@@ -1307,7 +1307,7 @@ let ServerService = class ServerService {
         }
         const server = await this.findServerById(category.server_id.toString());
         if (server.owner_id.toString() !== actorId) {
-            throw new common_1.ForbiddenException('You do not have permission to edit this category.');
+            throw new common_1.ForbiddenException("You do not have permission to edit this category.");
         }
         Object.assign(category, updateCategoryDto);
         return category.save();
@@ -1320,7 +1320,7 @@ let ServerService = class ServerService {
         }
         const server = await this.findServerById(category.server_id.toString());
         if (server.owner_id.toString() !== actorId) {
-            throw new common_1.ForbiddenException('You do not have permission to delete this category.');
+            throw new common_1.ForbiddenException("You do not have permission to delete this category.");
         }
         const session = await this.categoryModel.db.startSession();
         session.startTransaction();
@@ -1332,24 +1332,24 @@ let ServerService = class ServerService {
         }
         catch (error) {
             await session.abortTransaction();
-            throw new common_1.BadRequestException('Could not delete category and its channels.', error.message);
+            throw new common_1.BadRequestException("Could not delete category and its channels.", error.message);
         }
         finally {
             void session.endSession();
         }
     }
     async createChannel(serverId, categoryId, actorId, createChannelDto) {
-        console.log('🎯 [CREATE CHANNEL] Starting channel creation...');
-        console.log('🎯 [CREATE CHANNEL] serverId:', serverId);
-        console.log('🎯 [CREATE CHANNEL] categoryId:', categoryId);
-        console.log('🎯 [CREATE CHANNEL] actorId:', actorId);
-        console.log('🎯 [CREATE CHANNEL] actorId type:', typeof actorId);
+        console.log("🎯 [CREATE CHANNEL] Starting channel creation...");
+        console.log("🎯 [CREATE CHANNEL] serverId:", serverId);
+        console.log("🎯 [CREATE CHANNEL] categoryId:", categoryId);
+        console.log("🎯 [CREATE CHANNEL] actorId:", actorId);
+        console.log("🎯 [CREATE CHANNEL] actorId type:", typeof actorId);
         const serverObjectId = new mongoose_2.Types.ObjectId(serverId);
         const categoryObjectId = new mongoose_2.Types.ObjectId(categoryId);
         const actorObjectId = new mongoose_2.Types.ObjectId(actorId);
-        console.log('🎯 [CREATE CHANNEL] serverObjectId:', serverObjectId);
-        console.log('🎯 [CREATE CHANNEL] categoryObjectId:', categoryObjectId);
-        console.log('🎯 [CREATE CHANNEL] actorObjectId:', actorObjectId);
+        console.log("🎯 [CREATE CHANNEL] serverObjectId:", serverObjectId);
+        console.log("🎯 [CREATE CHANNEL] categoryObjectId:", categoryObjectId);
+        console.log("🎯 [CREATE CHANNEL] actorObjectId:", actorObjectId);
         const [server, category, actorMembership] = await Promise.all([
             this.findServerById(serverId),
             this.categoryModel.findById(categoryObjectId).lean(),
@@ -1360,32 +1360,32 @@ let ServerService = class ServerService {
             })
                 .lean(),
         ]);
-        console.log('🎯 [CREATE CHANNEL] server:', server);
-        console.log('🎯 [CREATE CHANNEL] server.owner_id:', server.owner_id);
-        console.log('🎯 [CREATE CHANNEL] server.owner_id type:', typeof server.owner_id);
-        console.log('🎯 [CREATE CHANNEL] category:', category);
-        console.log('🎯 [CREATE CHANNEL] actorMembership:', actorMembership);
+        console.log("🎯 [CREATE CHANNEL] server:", server);
+        console.log("🎯 [CREATE CHANNEL] server.owner_id:", server.owner_id);
+        console.log("🎯 [CREATE CHANNEL] server.owner_id type:", typeof server.owner_id);
+        console.log("🎯 [CREATE CHANNEL] category:", category);
+        console.log("🎯 [CREATE CHANNEL] actorMembership:", actorMembership);
         if (!category)
             throw new common_1.NotFoundException(`Category with ID ${categoryId} not found.`);
         if (category.server_id.toString() !== serverId)
-            throw new common_1.BadRequestException('Category does not belong to this server.');
+            throw new common_1.BadRequestException("Category does not belong to this server.");
         const isOwner = server.owner_id.toString() === actorId;
-        console.log('🎯 [CREATE CHANNEL] isOwner:', isOwner);
-        console.log('🎯 [CREATE CHANNEL] server.owner_id.toString():', server.owner_id.toString());
-        console.log('🎯 [CREATE CHANNEL] actorId:', actorId);
-        console.log('🎯 [CREATE CHANNEL] owner comparison:', server.owner_id.toString() === actorId);
+        console.log("🎯 [CREATE CHANNEL] isOwner:", isOwner);
+        console.log("🎯 [CREATE CHANNEL] server.owner_id.toString():", server.owner_id.toString());
+        console.log("🎯 [CREATE CHANNEL] actorId:", actorId);
+        console.log("🎯 [CREATE CHANNEL] owner comparison:", server.owner_id.toString() === actorId);
         const hasPermission = isOwner ||
             (actorMembership &&
                 (actorMembership.role === enum_1.ServerRole.OWNER ||
                     actorMembership.role === enum_1.ServerRole.MODERATOR));
-        console.log('🎯 [CREATE CHANNEL] hasPermission:', hasPermission);
-        console.log('🎯 [CREATE CHANNEL] actorMembership?.role:', actorMembership?.role);
+        console.log("🎯 [CREATE CHANNEL] hasPermission:", hasPermission);
+        console.log("🎯 [CREATE CHANNEL] actorMembership?.role:", actorMembership?.role);
         if (!hasPermission) {
-            console.log('❌ [CREATE CHANNEL] Permission denied!');
-            console.log('❌ [CREATE CHANNEL] isOwner:', isOwner);
-            console.log('❌ [CREATE CHANNEL] actorMembership exists:', !!actorMembership);
-            console.log('❌ [CREATE CHANNEL] actorMembership role:', actorMembership?.role);
-            throw new common_1.ForbiddenException('Only server owners and moderators can create channels.');
+            console.log("❌ [CREATE CHANNEL] Permission denied!");
+            console.log("❌ [CREATE CHANNEL] isOwner:", isOwner);
+            console.log("❌ [CREATE CHANNEL] actorMembership exists:", !!actorMembership);
+            console.log("❌ [CREATE CHANNEL] actorMembership role:", actorMembership?.role);
+            throw new common_1.ForbiddenException("Only server owners and moderators can create channels.");
         }
         const newChannel = new this.channelModel({
             ...createChannelDto,
@@ -1401,59 +1401,59 @@ let ServerService = class ServerService {
         return channel;
     }
     async updateChannel(channelId, actorId, updateChannelDto) {
-        console.log('🎯 [UPDATE CHANNEL] Starting channel update...');
-        console.log('🎯 [UPDATE CHANNEL] channelId:', channelId);
-        console.log('🎯 [UPDATE CHANNEL] actorId:', actorId);
+        console.log("🎯 [UPDATE CHANNEL] Starting channel update...");
+        console.log("🎯 [UPDATE CHANNEL] channelId:", channelId);
+        console.log("🎯 [UPDATE CHANNEL] actorId:", actorId);
         const channel = await this.findChannelById(channelId);
         const category = await this.categoryModel
             .findById(channel.category_id)
             .lean();
         if (!category)
-            throw new common_1.NotFoundException('Category containing this channel not found.');
+            throw new common_1.NotFoundException("Category containing this channel not found.");
         const server = await this.findServerById(category.server_id.toString());
-        console.log('🎯 [UPDATE CHANNEL] server:', server);
-        console.log('🎯 [UPDATE CHANNEL] server.owner_id:', server.owner_id);
+        console.log("🎯 [UPDATE CHANNEL] server:", server);
+        console.log("🎯 [UPDATE CHANNEL] server.owner_id:", server.owner_id);
         const isOwner = server.owner_id.toString() === actorId;
-        console.log('🎯 [UPDATE CHANNEL] isOwner:', isOwner);
+        console.log("🎯 [UPDATE CHANNEL] isOwner:", isOwner);
         const actorMembership = await this.userDehiveServerModel
             .findOne({
             server_id: category.server_id,
             user_dehive_id: new mongoose_2.Types.ObjectId(actorId),
         })
             .lean();
-        console.log('🎯 [UPDATE CHANNEL] actorMembership:', actorMembership);
+        console.log("🎯 [UPDATE CHANNEL] actorMembership:", actorMembership);
         const hasPermission = isOwner ||
             (actorMembership &&
                 (actorMembership.role === enum_1.ServerRole.OWNER ||
                     actorMembership.role === enum_1.ServerRole.MODERATOR));
-        console.log('🎯 [UPDATE CHANNEL] hasPermission:', hasPermission);
+        console.log("🎯 [UPDATE CHANNEL] hasPermission:", hasPermission);
         if (!hasPermission) {
-            console.log('❌ [UPDATE CHANNEL] Permission denied!');
-            console.log('❌ [UPDATE CHANNEL] isOwner:', isOwner);
-            console.log('❌ [UPDATE CHANNEL] actorMembership exists:', !!actorMembership);
-            console.log('❌ [UPDATE CHANNEL] actorMembership role:', actorMembership?.role);
-            throw new common_1.ForbiddenException('You do not have permission to edit channels in this server.');
+            console.log("❌ [UPDATE CHANNEL] Permission denied!");
+            console.log("❌ [UPDATE CHANNEL] isOwner:", isOwner);
+            console.log("❌ [UPDATE CHANNEL] actorMembership exists:", !!actorMembership);
+            console.log("❌ [UPDATE CHANNEL] actorMembership role:", actorMembership?.role);
+            throw new common_1.ForbiddenException("You do not have permission to edit channels in this server.");
         }
         if (updateChannelDto.category_id) {
-            console.log('🎯 [UPDATE CHANNEL] Moving channel to new category...');
-            console.log('🎯 [UPDATE CHANNEL] Current category:', category._id);
-            console.log('🎯 [UPDATE CHANNEL] New category:', updateChannelDto.category_id);
+            console.log("🎯 [UPDATE CHANNEL] Moving channel to new category...");
+            console.log("🎯 [UPDATE CHANNEL] Current category:", category._id);
+            console.log("🎯 [UPDATE CHANNEL] New category:", updateChannelDto.category_id);
             const newCategory = await this.categoryModel.findById(updateChannelDto.category_id);
             if (!newCategory) {
                 throw new common_1.NotFoundException(`Category with ID "${updateChannelDto.category_id}" not found.`);
             }
             if (newCategory.server_id.toString() !== category.server_id.toString()) {
-                throw new common_1.BadRequestException('The new category does not belong to the same server.');
+                throw new common_1.BadRequestException("The new category does not belong to the same server.");
             }
             if (channel.category_id.toString() === updateChannelDto.category_id) {
-                throw new common_1.BadRequestException('Channel is already in the specified category.');
+                throw new common_1.BadRequestException("Channel is already in the specified category.");
             }
-            console.log('✅ [UPDATE CHANNEL] Category validation passed');
+            console.log("✅ [UPDATE CHANNEL] Category validation passed");
         }
         const updateData = { ...updateChannelDto };
         if (updateChannelDto.category_id) {
             updateData.category_id = new mongoose_2.Types.ObjectId(updateChannelDto.category_id);
-            console.log('🎯 [UPDATE CHANNEL] Converted category_id to ObjectId:', updateData.category_id);
+            console.log("🎯 [UPDATE CHANNEL] Converted category_id to ObjectId:", updateData.category_id);
         }
         const updatedChannel = await this.channelModel
             .findByIdAndUpdate(channelId, { $set: updateData }, { new: true })
@@ -1464,39 +1464,39 @@ let ServerService = class ServerService {
         return updatedChannel;
     }
     async removeChannel(channelId, actorId) {
-        console.log('🎯 [DELETE CHANNEL] Starting channel deletion...');
-        console.log('🎯 [DELETE CHANNEL] channelId:', channelId);
-        console.log('🎯 [DELETE CHANNEL] actorId:', actorId);
+        console.log("🎯 [DELETE CHANNEL] Starting channel deletion...");
+        console.log("🎯 [DELETE CHANNEL] channelId:", channelId);
+        console.log("🎯 [DELETE CHANNEL] actorId:", actorId);
         const channelObjectId = new mongoose_2.Types.ObjectId(channelId);
         const channel = await this.findChannelById(channelId);
         const category = await this.categoryModel
             .findById(channel.category_id)
             .lean();
         if (!category)
-            throw new common_1.NotFoundException('Category containing this channel not found.');
+            throw new common_1.NotFoundException("Category containing this channel not found.");
         const server = await this.findServerById(category.server_id.toString());
-        console.log('🎯 [DELETE CHANNEL] server:', server);
-        console.log('🎯 [DELETE CHANNEL] server.owner_id:', server.owner_id);
+        console.log("🎯 [DELETE CHANNEL] server:", server);
+        console.log("🎯 [DELETE CHANNEL] server.owner_id:", server.owner_id);
         const isOwner = server.owner_id.toString() === actorId;
-        console.log('🎯 [DELETE CHANNEL] isOwner:', isOwner);
+        console.log("🎯 [DELETE CHANNEL] isOwner:", isOwner);
         const actorMembership = await this.userDehiveServerModel
             .findOne({
             server_id: category.server_id,
             user_dehive_id: new mongoose_2.Types.ObjectId(actorId),
         })
             .lean();
-        console.log('🎯 [DELETE CHANNEL] actorMembership:', actorMembership);
+        console.log("🎯 [DELETE CHANNEL] actorMembership:", actorMembership);
         const hasPermission = isOwner ||
             (actorMembership &&
                 (actorMembership.role === enum_1.ServerRole.OWNER ||
                     actorMembership.role === enum_1.ServerRole.MODERATOR));
-        console.log('🎯 [DELETE CHANNEL] hasPermission:', hasPermission);
+        console.log("🎯 [DELETE CHANNEL] hasPermission:", hasPermission);
         if (!hasPermission) {
-            console.log('❌ [DELETE CHANNEL] Permission denied!');
-            console.log('❌ [DELETE CHANNEL] isOwner:', isOwner);
-            console.log('❌ [DELETE CHANNEL] actorMembership exists:', !!actorMembership);
-            console.log('❌ [DELETE CHANNEL] actorMembership role:', actorMembership?.role);
-            throw new common_1.ForbiddenException('You do not have permission to delete channels in this server.');
+            console.log("❌ [DELETE CHANNEL] Permission denied!");
+            console.log("❌ [DELETE CHANNEL] isOwner:", isOwner);
+            console.log("❌ [DELETE CHANNEL] actorMembership exists:", !!actorMembership);
+            console.log("❌ [DELETE CHANNEL] actorMembership role:", actorMembership?.role);
+            throw new common_1.ForbiddenException("You do not have permission to delete channels in this server.");
         }
         const session = await this.channelModel.db.startSession();
         session.startTransaction();
@@ -1508,7 +1508,7 @@ let ServerService = class ServerService {
         }
         catch (error) {
             await session.abortTransaction();
-            throw new common_1.BadRequestException('Could not delete channel and its messages.', error.message);
+            throw new common_1.BadRequestException("Could not delete channel and its messages.", error.message);
         }
         finally {
             void session.endSession();
@@ -1569,10 +1569,10 @@ let DecodeApiClient = DecodeApiClient_1 = class DecodeApiClient {
         this.httpService = httpService;
         this.configService = configService;
         this.redis = redis;
-        const host = this.configService.get('DECODE_API_GATEWAY_HOST');
-        const port = this.configService.get('DECODE_API_GATEWAY_PORT');
+        const host = this.configService.get("DECODE_API_GATEWAY_HOST");
+        const port = this.configService.get("DECODE_API_GATEWAY_PORT");
         if (!host || !port) {
-            throw new Error('DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!');
+            throw new Error("DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!");
         }
         this.decodeApiUrl = `http://${host}:${port}`;
     }
@@ -1585,7 +1585,7 @@ let DecodeApiClient = DecodeApiClient_1 = class DecodeApiClient {
             }
             const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.decodeApiUrl}/users/profile/${userId}`, {
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`,
+                    Authorization: `Bearer ${accessToken}`,
                 },
             }));
             return response.data.data;
@@ -1604,7 +1604,7 @@ let DecodeApiClient = DecodeApiClient_1 = class DecodeApiClient {
             const sessionData = JSON.parse(sessionRaw);
             return sessionData?.access_token || null;
         }
-        catch (e) {
+        catch {
             this.logger.error(`Failed to parse session data for key ${sessionKey}`);
             return null;
         }
@@ -1631,22 +1631,22 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CurrentUser = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 exports.CurrentUser = (0, common_1.createParamDecorator)((data, ctx) => {
-    console.log('🎯 [USER-DEHIVE CURRENT USER] Decorator called with data:', data);
+    console.log("🎯 [USER-DEHIVE CURRENT USER] Decorator called with data:", data);
     try {
         const request = ctx
             .switchToHttp()
             .getRequest();
         const user = request.user;
-        console.log('🎯 [USER-DEHIVE CURRENT USER] Request user:', user);
+        console.log("🎯 [USER-DEHIVE CURRENT USER] Request user:", user);
         if (data && user) {
             console.log(`🎯 [USER-DEHIVE CURRENT USER] Returning user.${data}:`, user[data]);
             return user[data];
         }
-        console.log('🎯 [USER-DEHIVE CURRENT USER] Returning full user:', user);
+        console.log("🎯 [USER-DEHIVE CURRENT USER] Returning full user:", user);
         return user;
     }
     catch (error) {
-        console.error('❌ [USER-DEHIVE CURRENT USER] Error:', error);
+        console.error("❌ [USER-DEHIVE CURRENT USER] Error:", error);
         return undefined;
     }
 });
@@ -1684,7 +1684,7 @@ const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
 const ioredis_1 = __webpack_require__(/*! @nestjs-modules/ioredis */ "@nestjs-modules/ioredis");
 const ioredis_2 = __webpack_require__(/*! ioredis */ "ioredis");
 const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
-exports.PUBLIC_KEY = 'public';
+exports.PUBLIC_KEY = "public";
 const Public = () => (0, common_1.SetMetadata)(exports.PUBLIC_KEY, true);
 exports.Public = Public;
 let AuthGuard = AuthGuard_1 = class AuthGuard {
@@ -1699,10 +1699,10 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
         this.reflector = reflector;
         this.configService = configService;
         this.redis = redis;
-        const host = this.configService.get('DECODE_API_GATEWAY_HOST');
-        const port = this.configService.get('DECODE_API_GATEWAY_PORT');
+        const host = this.configService.get("DECODE_API_GATEWAY_HOST");
+        const port = this.configService.get("DECODE_API_GATEWAY_PORT");
         if (!host || !port) {
-            throw new Error('DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!');
+            throw new Error("DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!");
         }
         this.authServiceUrl = `http://${host}:${port}`;
     }
@@ -1711,9 +1711,9 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
         if (isPublic)
             return true;
         const request = context.switchToHttp().getRequest();
-        const sessionId = request.headers['x-session-id'];
+        const sessionId = request.headers["x-session-id"];
         if (!sessionId) {
-            throw new common_1.UnauthorizedException('Session ID is required');
+            throw new common_1.UnauthorizedException("Session ID is required");
         }
         try {
             const sessionKey = `session:${sessionId}`;
@@ -1721,24 +1721,27 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
             if (cachedSessionRaw) {
                 const cachedSession = JSON.parse(cachedSessionRaw);
                 if (cachedSession.user) {
-                    const authenticatedUser = { ...cachedSession.user, session_id: sessionId };
-                    request['user'] = authenticatedUser;
+                    const authenticatedUser = {
+                        ...cachedSession.user,
+                        session_id: sessionId,
+                    };
+                    request["user"] = authenticatedUser;
                     return true;
                 }
             }
             const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/sso/validate`, {
-                headers: { 'x-session-id': sessionId },
+                headers: { "x-session-id": sessionId },
             }));
             const sessionData = response.data.data;
             if (!sessionData || !sessionData.access_token) {
-                throw new common_1.UnauthorizedException('Invalid session data from auth service');
+                throw new common_1.UnauthorizedException("Invalid session data from auth service");
             }
             const profileResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/users/profile/me`, {
-                headers: { 'Authorization': `Bearer ${sessionData.access_token}` },
+                headers: { Authorization: `Bearer ${sessionData.access_token}` },
             }));
             const userProfile = profileResponse.data.data;
             if (!userProfile) {
-                throw new common_1.UnauthorizedException('Could not retrieve user profile');
+                throw new common_1.UnauthorizedException("Could not retrieve user profile");
             }
             const cacheData = {
                 session_token: sessionData.session_token,
@@ -1748,15 +1751,18 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
             };
             const ttl = Math.ceil((new Date(sessionData.expires_at).getTime() - Date.now()) / 1000);
             if (ttl > 0) {
-                await this.redis.set(sessionKey, JSON.stringify(cacheData), 'EX', ttl);
+                await this.redis.set(sessionKey, JSON.stringify(cacheData), "EX", ttl);
             }
-            const authenticatedUser = { ...userProfile, session_id: sessionId };
-            request['user'] = authenticatedUser;
+            const authenticatedUser = {
+                ...userProfile,
+                session_id: sessionId,
+            };
+            request["user"] = authenticatedUser;
             return true;
         }
         catch (error) {
             this.logger.error(`Authentication failed for session ${sessionId}:`, error.stack);
-            throw new common_1.UnauthorizedException('Authentication failed or invalid session');
+            throw new common_1.UnauthorizedException("Authentication failed or invalid session");
         }
     }
 };
@@ -1800,8 +1806,8 @@ class AssignRoleDto {
 exports.AssignRoleDto = AssignRoleDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the server.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The ID of the server.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -1809,8 +1815,8 @@ __decorate([
 ], AssignRoleDto.prototype, "server_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The user_dehive_id of the target user to assign role.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The user_dehive_id of the target user to assign role.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -1818,7 +1824,7 @@ __decorate([
 ], AssignRoleDto.prototype, "target_user_dehive_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The new role to assign.',
+        description: "The new role to assign.",
         enum: enum_1.ServerRole,
         example: enum_1.ServerRole.MODERATOR,
     }),
@@ -1856,8 +1862,8 @@ class GenerateInviteDto {
 exports.GenerateInviteDto = GenerateInviteDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the server to create an invite for.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The ID of the server to create an invite for.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -1893,11 +1899,11 @@ class GetServerMembersDto {
 exports.GetServerMembersDto = GetServerMembersDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the server to get members from',
-        example: '68e09f0f8f924bd8b03d957a',
+        description: "The ID of the server to get members from",
+        example: "68e09f0f8f924bd8b03d957a",
     }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'server_id should not be empty' }),
-    (0, class_validator_1.IsMongoId)({ message: 'server_id must be a mongodb id' }),
+    (0, class_validator_1.IsNotEmpty)({ message: "server_id should not be empty" }),
+    (0, class_validator_1.IsMongoId)({ message: "server_id must be a mongodb id" }),
     __metadata("design:type", String)
 ], GetServerMembersDto.prototype, "serverId", void 0);
 
@@ -1930,8 +1936,8 @@ class JoinServerDto {
 exports.JoinServerDto = JoinServerDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the server to join.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The ID of the server to join.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -1969,8 +1975,8 @@ class KickBanDto {
 exports.KickBanDto = KickBanDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the server.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The ID of the server.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -1978,8 +1984,8 @@ __decorate([
 ], KickBanDto.prototype, "server_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The user_dehive_id of the target user to kick/ban.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The user_dehive_id of the target user to kick/ban.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -1987,8 +1993,8 @@ __decorate([
 ], KickBanDto.prototype, "target_user_dehive_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The reason for the action (optional).',
-        example: 'Breaking rule #3.',
+        description: "The reason for the action (optional).",
+        example: "Breaking rule #3.",
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -2026,8 +2032,8 @@ class TransferOwnershipDto {
 exports.TransferOwnershipDto = TransferOwnershipDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the server.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The ID of the server.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -2035,8 +2041,8 @@ __decorate([
 ], TransferOwnershipDto.prototype, "server_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The user_dehive_id of the new owner to transfer ownership to.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The user_dehive_id of the new owner to transfer ownership to.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -2073,8 +2079,8 @@ class UnbanDto {
 exports.UnbanDto = UnbanDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the server.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The ID of the server.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -2082,8 +2088,8 @@ __decorate([
 ], UnbanDto.prototype, "server_id", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The user_dehive_id of the user to unban.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The user_dehive_id of the user to unban.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
@@ -2120,15 +2126,15 @@ class UpdateNotificationDto {
 exports.UpdateNotificationDto = UpdateNotificationDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the server where notification settings are being changed.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The ID of the server where notification settings are being changed.",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
 ], UpdateNotificationDto.prototype, "server_id", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'The new mute status.', example: true }),
+    (0, swagger_1.ApiProperty)({ description: "The new mute status.", example: true }),
     (0, class_validator_1.IsNotEmpty)(),
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)
@@ -2227,7 +2233,7 @@ __decorate([
     __metadata("design:type", String)
 ], InviteLink.prototype, "code", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, required: true, ref: 'Server' }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, required: true, ref: "Server" }),
     __metadata("design:type", typeof (_a = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _a : Object)
 ], InviteLink.prototype, "server_id", void 0);
 __decorate([
@@ -2235,7 +2241,7 @@ __decorate([
     __metadata("design:type", typeof (_b = typeof Date !== "undefined" && Date) === "function" ? _b : Object)
 ], InviteLink.prototype, "expiredAt", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, required: true, ref: 'UserDehive' }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, required: true, ref: "UserDehive" }),
     __metadata("design:type", typeof (_c = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _c : Object)
 ], InviteLink.prototype, "creator_id", void 0);
 __decorate([
@@ -2243,7 +2249,7 @@ __decorate([
     __metadata("design:type", Boolean)
 ], InviteLink.prototype, "isUsed", void 0);
 exports.InviteLink = InviteLink = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'invite_link', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "invite_link", timestamps: true })
 ], InviteLink);
 exports.InviteLinkSchema = mongoose_1.SchemaFactory.createForClass(InviteLink);
 
@@ -2282,15 +2288,15 @@ let ServerAuditLog = class ServerAuditLog {
 };
 exports.ServerAuditLog = ServerAuditLog;
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Server', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Server", required: true }),
     __metadata("design:type", typeof (_a = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _a : Object)
 ], ServerAuditLog.prototype, "server_id", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'UserDehive', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "UserDehive", required: true }),
     __metadata("design:type", typeof (_b = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _b : Object)
 ], ServerAuditLog.prototype, "actor_id", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'UserDehive', required: false }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "UserDehive", required: false }),
     __metadata("design:type", typeof (_c = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _c : Object)
 ], ServerAuditLog.prototype, "target_id", void 0);
 __decorate([
@@ -2306,7 +2312,7 @@ __decorate([
     __metadata("design:type", String)
 ], ServerAuditLog.prototype, "reason", void 0);
 exports.ServerAuditLog = ServerAuditLog = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'server_audit_log', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "server_audit_log", timestamps: true })
 ], ServerAuditLog);
 exports.ServerAuditLogSchema = mongoose_1.SchemaFactory.createForClass(ServerAuditLog);
 
@@ -2343,15 +2349,15 @@ let ServerBan = class ServerBan {
 };
 exports.ServerBan = ServerBan;
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Server', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Server", required: true }),
     __metadata("design:type", typeof (_a = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _a : Object)
 ], ServerBan.prototype, "server_id", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'UserDehive', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "UserDehive", required: true }),
     __metadata("design:type", typeof (_b = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _b : Object)
 ], ServerBan.prototype, "user_dehive_id", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'UserDehive', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "UserDehive", required: true }),
     __metadata("design:type", typeof (_c = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _c : Object)
 ], ServerBan.prototype, "banned_by", void 0);
 __decorate([
@@ -2363,7 +2369,7 @@ __decorate([
     __metadata("design:type", typeof (_d = typeof Date !== "undefined" && Date) === "function" ? _d : Object)
 ], ServerBan.prototype, "expires_at", void 0);
 exports.ServerBan = ServerBan = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'server_ban', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "server_ban", timestamps: true })
 ], ServerBan);
 exports.ServerBanSchema = mongoose_1.SchemaFactory.createForClass(ServerBan);
 exports.ServerBanSchema.index({ server_id: 1, user_dehive_id: 1 }, { unique: true });
@@ -2410,7 +2416,7 @@ __decorate([
     __metadata("design:type", String)
 ], Server.prototype, "description", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'UserDehive', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "UserDehive", required: true }),
     __metadata("design:type", typeof (_a = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _a : Object)
 ], Server.prototype, "owner_id", void 0);
 __decorate([
@@ -2426,7 +2432,7 @@ __decorate([
     __metadata("design:type", Array)
 ], Server.prototype, "tags", void 0);
 exports.Server = Server = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'server', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "server", timestamps: true })
 ], Server);
 exports.ServerSchema = mongoose_1.SchemaFactory.createForClass(Server);
 
@@ -2467,14 +2473,14 @@ exports.UserDehiveServer = UserDehiveServer;
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'UserDehive',
+        ref: "UserDehive",
         required: true,
         index: true,
     }),
     __metadata("design:type", typeof (_a = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _a : Object)
 ], UserDehiveServer.prototype, "user_dehive_id", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Server', required: true, index: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Server", required: true, index: true }),
     __metadata("design:type", typeof (_b = typeof mongoose_2.Types !== "undefined" && mongoose_2.Types.ObjectId) === "function" ? _b : Object)
 ], UserDehiveServer.prototype, "server_id", void 0);
 __decorate([
@@ -2494,7 +2500,7 @@ __decorate([
     __metadata("design:type", typeof (_d = typeof Date !== "undefined" && Date) === "function" ? _d : Object)
 ], UserDehiveServer.prototype, "joined_at", void 0);
 exports.UserDehiveServer = UserDehiveServer = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'user_dehive_server', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "user_dehive_server", timestamps: true })
 ], UserDehiveServer);
 exports.UserDehiveServerSchema = mongoose_1.SchemaFactory.createForClass(UserDehiveServer);
 exports.UserDehiveServerSchema.index({
@@ -2543,7 +2549,7 @@ __decorate([
     (0, mongoose_1.Prop)({
         type: String,
         enum: enum_1.enumUserRole,
-        default: 'USER',
+        default: "USER",
     }),
     __metadata("design:type", String)
 ], UserDehive.prototype, "dehive_role", void 0);
@@ -2554,8 +2560,8 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: String,
-        enum: ['ACTIVE', 'INACTIVE', 'BANNED'],
-        default: 'ACTIVE',
+        enum: ["ACTIVE", "INACTIVE", "BANNED"],
+        default: "ACTIVE",
     }),
     __metadata("design:type", String)
 ], UserDehive.prototype, "status", void 0);
@@ -2568,7 +2574,7 @@ __decorate([
     __metadata("design:type", typeof (_b = typeof Date !== "undefined" && Date) === "function" ? _b : Object)
 ], UserDehive.prototype, "last_login", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: String, default: '' }),
+    (0, mongoose_1.Prop)({ type: String, default: "" }),
     __metadata("design:type", String)
 ], UserDehive.prototype, "bio", void 0);
 __decorate([
@@ -2585,7 +2591,7 @@ __decorate([
 ], UserDehive.prototype, "banned_by_servers", void 0);
 exports.UserDehive = UserDehive = __decorate([
     (0, mongoose_1.Schema)({
-        collection: 'user_dehive',
+        collection: "user_dehive",
         timestamps: true,
     })
 ], UserDehive);
@@ -2651,10 +2657,10 @@ let UserDehiveServerController = class UserDehiveServerController {
         return this.service.useInvite(code, actorBaseId);
     }
     kickMember(dto, actorBaseId) {
-        return this.service.kickOrBan(dto, 'kick', actorBaseId);
+        return this.service.kickOrBan(dto, "kick", actorBaseId);
     }
     banMember(dto, actorBaseId) {
-        return this.service.kickOrBan(dto, 'ban', actorBaseId);
+        return this.service.kickOrBan(dto, "ban", actorBaseId);
     }
     unbanMember(dto, actorBaseId) {
         return this.service.unbanMember(dto, actorBaseId);
@@ -2677,255 +2683,258 @@ let UserDehiveServerController = class UserDehiveServerController {
 };
 exports.UserDehiveServerController = UserDehiveServerController;
 __decorate([
-    (0, common_1.Post)('join'),
+    (0, common_1.Post)("join"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Join a server',
-        description: 'Allows a user to become a member of a server.',
+        summary: "Join a server",
+        description: "Allows a user to become a member of a server.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiResponse)({
         status: 201,
-        description: 'Successfully joined the server.',
+        description: "Successfully joined the server.",
     }),
     (0, swagger_1.ApiResponse)({
         status: 400,
-        description: 'Bad Request (e.g., already a member).',
+        description: "Bad Request (e.g., already a member).",
     }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'Forbidden (e.g., user is banned).',
+        description: "Forbidden (e.g., user is banned).",
     }),
     (0, swagger_1.ApiResponse)({
         status: 404,
-        description: 'Server or Dehive Profile not found.',
+        description: "Server or Dehive Profile not found.",
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_b = typeof join_server_dto_1.JoinServerDto !== "undefined" && join_server_dto_1.JoinServerDto) === "function" ? _b : Object, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "joinServer", null);
 __decorate([
-    (0, common_1.Delete)('server/:serverId/leave'),
+    (0, common_1.Delete)("server/:serverId/leave"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Leave a server',
-        description: 'Allows a user to leave a server they are a member of.',
+        summary: "Leave a server",
+        description: "Allows a user to leave a server they are a member of.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'serverId', description: 'The ID of the server to leave' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Successfully left the server.' }),
+    (0, swagger_1.ApiParam)({ name: "serverId", description: "The ID of the server to leave" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Successfully left the server." }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'Forbidden (e.g., owner cannot leave).',
+        description: "Forbidden (e.g., owner cannot leave).",
     }),
-    __param(0, (0, common_1.Param)('serverId')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(0, (0, common_1.Param)("serverId")),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "leaveServer", null);
 __decorate([
-    (0, common_1.Post)('invite/generate'),
+    (0, common_1.Post)("invite/generate"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Generate an invite link',
-        description: 'Generates a new invite link for a server.',
+        summary: "Generate an invite link",
+        description: "Generates a new invite link for a server.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiResponse)({
         status: 201,
-        description: 'Invite link created successfully.',
+        description: "Invite link created successfully.",
     }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'Forbidden (e.g., user is not a member).',
+        description: "Forbidden (e.g., user is not a member).",
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_c = typeof generate_invite_dto_1.GenerateInviteDto !== "undefined" && generate_invite_dto_1.GenerateInviteDto) === "function" ? _c : Object, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "generateInvite", null);
 __decorate([
-    (0, common_1.Post)('invite/use/:code'),
+    (0, common_1.Post)("invite/use/:code"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Use an invite link',
-        description: 'Allows a user to join a server using an invite code.',
+        summary: "Use an invite link",
+        description: "Allows a user to join a server using an invite code.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'code', description: 'The unique invite code' }),
+    (0, swagger_1.ApiParam)({ name: "code", description: "The unique invite code" }),
     (0, swagger_1.ApiResponse)({
         status: 201,
-        description: 'Successfully joined the server via invite.',
+        description: "Successfully joined the server via invite.",
     }),
     (0, swagger_1.ApiResponse)({
         status: 404,
-        description: 'Invite link is invalid or has expired.',
+        description: "Invite link is invalid or has expired.",
     }),
-    __param(0, (0, common_1.Param)('code')),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(0, (0, common_1.Param)("code")),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "useInvite", null);
 __decorate([
-    (0, common_1.Post)('kick'),
+    (0, common_1.Post)("kick"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Kick a member',
-        description: 'Kicks a member from a server. Requires moderator or owner permissions.',
+        summary: "Kick a member",
+        description: "Kicks a member from a server. Requires moderator or owner permissions.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiResponse)({ status: 201, description: 'User successfully kicked.' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "User successfully kicked." }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'Forbidden (insufficient permissions).',
+        description: "Forbidden (insufficient permissions).",
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_d = typeof kick_ban_dto_1.KickBanDto !== "undefined" && kick_ban_dto_1.KickBanDto) === "function" ? _d : Object, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "kickMember", null);
 __decorate([
-    (0, common_1.Post)('ban'),
+    (0, common_1.Post)("ban"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Ban a member',
-        description: 'Bans a member from a server. Requires moderator or owner permissions.',
+        summary: "Ban a member",
+        description: "Bans a member from a server. Requires moderator or owner permissions.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiResponse)({ status: 201, description: 'User successfully banned.' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "User successfully banned." }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'Forbidden (insufficient permissions).',
+        description: "Forbidden (insufficient permissions).",
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_e = typeof kick_ban_dto_1.KickBanDto !== "undefined" && kick_ban_dto_1.KickBanDto) === "function" ? _e : Object, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "banMember", null);
 __decorate([
-    (0, common_1.Post)('unban'),
+    (0, common_1.Post)("unban"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Unban a member',
-        description: 'Unbans a previously banned member. Requires moderator or owner permissions.',
+        summary: "Unban a member",
+        description: "Unbans a previously banned member. Requires moderator or owner permissions.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiResponse)({ status: 201, description: 'User successfully unbanned.' }),
-    (0, swagger_1.ApiResponse)({ status: 404, description: 'Ban record not found.' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "User successfully unbanned." }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Ban record not found." }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_f = typeof unban_dto_1.UnbanDto !== "undefined" && unban_dto_1.UnbanDto) === "function" ? _f : Object, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "unbanMember", null);
 __decorate([
-    (0, common_1.Patch)('role'),
+    (0, common_1.Patch)("role"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Assign a role to a member',
-        description: 'Changes role of member. Requires owner permissions.',
+        summary: "Assign a role to a member",
+        description: "Changes role of member. Requires owner permissions.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Role updated successfully.' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Role updated successfully." }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'Forbidden (only owner can assign roles).',
+        description: "Forbidden (only owner can assign roles).",
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_g = typeof assign_role_dto_1.AssignRoleDto !== "undefined" && assign_role_dto_1.AssignRoleDto) === "function" ? _g : Object, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "assignRole", null);
 __decorate([
-    (0, common_1.Patch)('transfer-ownership'),
+    (0, common_1.Patch)("transfer-ownership"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Transfer server ownership',
-        description: 'Transfers ownership of server to another member. Only current owner can do this.',
+        summary: "Transfer server ownership",
+        description: "Transfers ownership of server to another member. Only current owner can do this.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of current owner',
+        name: "x-session-id",
+        description: "Session ID of current owner",
         required: true,
     }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Ownership transferred successfully.' }),
+    (0, swagger_1.ApiResponse)({
+        status: 200,
+        description: "Ownership transferred successfully.",
+    }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'Forbidden (only current owner can transfer ownership).',
+        description: "Forbidden (only current owner can transfer ownership).",
     }),
     (0, swagger_1.ApiResponse)({
         status: 404,
-        description: 'New owner is not a member of this server.',
+        description: "New owner is not a member of this server.",
     }),
     (0, swagger_1.ApiResponse)({
         status: 400,
-        description: 'Bad Request (e.g., cannot transfer to yourself).',
+        description: "Bad Request (e.g., cannot transfer to yourself).",
     }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_h = typeof transfer_ownership_dto_1.TransferOwnershipDto !== "undefined" && transfer_ownership_dto_1.TransferOwnershipDto) === "function" ? _h : Object, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "transferOwnership", null);
 __decorate([
-    (0, common_1.Patch)('notification'),
+    (0, common_1.Patch)("notification"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Update notification settings',
-        description: 'Mutes or unmutes notifications for a user in a specific server.',
+        summary: "Update notification settings",
+        description: "Mutes or unmutes notifications for a user in a specific server.",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Notification settings updated.' }),
-    (0, swagger_1.ApiResponse)({ status: 404, description: 'Membership not found.' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Notification settings updated." }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Membership not found." }),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)("_id")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [typeof (_j = typeof update_notification_dto_1.UpdateNotificationDto !== "undefined" && update_notification_dto_1.UpdateNotificationDto) === "function" ? _j : Object, String]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "updateNotification", null);
 __decorate([
-    (0, common_1.Get)('server/:serverId/members'),
+    (0, common_1.Get)("server/:serverId/members"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Get all members in a server',
-        description: 'Retrieves a list of all members for a specific server.',
+        summary: "Get all members in a server",
+        description: "Retrieves a list of all members for a specific server.",
     }),
-    (0, swagger_1.ApiHeader)({ name: 'x-session-id', required: true }),
-    (0, swagger_1.ApiParam)({ name: 'serverId', description: 'The ID of the server' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns a list of members.' }),
+    (0, swagger_1.ApiHeader)({ name: "x-session-id", required: true }),
+    (0, swagger_1.ApiParam)({ name: "serverId", description: "The ID of the server" }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Returns a list of members." }),
     __param(0, (0, common_1.Param)()),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
@@ -2933,24 +2942,27 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "getMembersInServer", null);
 __decorate([
-    (0, common_1.Get)('profile/:userId'),
+    (0, common_1.Get)("profile/:userId"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Get enriched user profile',
-        description: 'Retrieves a full user profile, including mutual servers, from the perspective of the current user.',
+        summary: "Get enriched user profile",
+        description: "Retrieves a full user profile, including mutual servers, from the perspective of the current user.",
     }),
-    (0, swagger_1.ApiHeader)({ name: 'x-session-id', required: true }),
-    (0, swagger_1.ApiParam)({ name: '_id', description: 'The ID of the user profile to view' }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns the enriched user profile.' }),
-    (0, swagger_1.ApiResponse)({ status: 404, description: 'User not found.' }),
-    __param(0, (0, common_1.Param)('userId')),
+    (0, swagger_1.ApiHeader)({ name: "x-session-id", required: true }),
+    (0, swagger_1.ApiParam)({ name: "_id", description: "The ID of the user profile to view" }),
+    (0, swagger_1.ApiResponse)({
+        status: 200,
+        description: "Returns the enriched user profile.",
+    }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "User not found." }),
+    __param(0, (0, common_1.Param)("userId")),
     __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, typeof (_m = typeof authenticated_user_interface_1.AuthenticatedUser !== "undefined" && authenticated_user_interface_1.AuthenticatedUser) === "function" ? _m : Object]),
     __metadata("design:returntype", void 0)
 ], UserDehiveServerController.prototype, "getEnrichedUserProfile", null);
 exports.UserDehiveServerController = UserDehiveServerController = __decorate([
-    (0, swagger_1.ApiTags)('Memberships & Profiles'),
-    (0, common_1.Controller)('memberships'),
+    (0, swagger_1.ApiTags)("Memberships & Profiles"),
+    (0, common_1.Controller)("memberships"),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
     __metadata("design:paramtypes", [typeof (_a = typeof user_dehive_server_service_1.UserDehiveServerService !== "undefined" && user_dehive_server_service_1.UserDehiveServerService) === "function" ? _a : Object])
 ], UserDehiveServerController);
@@ -2989,11 +3001,11 @@ const server_ban_schema_1 = __webpack_require__(/*! ../schemas/server-ban.schema
 const user_dehive_server_schema_1 = __webpack_require__(/*! ../schemas/user-dehive-server.schema */ "./apps/user-dehive-server/schemas/user-dehive-server.schema.ts");
 const auth_guard_1 = __webpack_require__(/*! ../common/guards/auth.guard */ "./apps/user-dehive-server/common/guards/auth.guard.ts");
 const MONGOOSE_MODELS = mongoose_1.MongooseModule.forFeature([
-    { name: 'UserDehive', schema: user_dehive_schema_1.UserDehiveSchema },
-    { name: 'UserDehiveServer', schema: user_dehive_server_schema_1.UserDehiveServerSchema },
-    { name: 'Server', schema: server_schema_1.ServerSchema },
-    { name: 'ServerBan', schema: server_ban_schema_1.ServerBanSchema },
-    { name: 'InviteLink', schema: invite_link_schema_1.InviteLinkSchema },
+    { name: "UserDehive", schema: user_dehive_schema_1.UserDehiveSchema },
+    { name: "UserDehiveServer", schema: user_dehive_server_schema_1.UserDehiveServerSchema },
+    { name: "Server", schema: server_schema_1.ServerSchema },
+    { name: "ServerBan", schema: server_ban_schema_1.ServerBanSchema },
+    { name: "InviteLink", schema: invite_link_schema_1.InviteLinkSchema },
 ]);
 let UserDehiveServerModule = class UserDehiveServerModule {
 };
@@ -3003,7 +3015,7 @@ exports.UserDehiveServerModule = UserDehiveServerModule = __decorate([
         imports: [
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
-                envFilePath: '.env',
+                envFilePath: ".env",
             }),
             axios_1.HttpModule.register({
                 timeout: 5000,
@@ -3012,8 +3024,8 @@ exports.UserDehiveServerModule = UserDehiveServerModule = __decorate([
             ioredis_1.RedisModule.forRootAsync({
                 imports: [config_1.ConfigModule],
                 useFactory: (config) => ({
-                    type: 'single',
-                    url: config.get('REDIS_URI'),
+                    type: "single",
+                    url: config.get("REDIS_URI"),
                 }),
                 inject: [config_1.ConfigService],
             }),
@@ -3022,8 +3034,8 @@ exports.UserDehiveServerModule = UserDehiveServerModule = __decorate([
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],
                 useFactory: (configService) => ({
-                    uri: configService.get('MONGODB_URI'),
-                    dbName: 'dehive_db',
+                    uri: configService.get("MONGODB_URI"),
+                    dbName: "dehive_db",
                 }),
             }),
             mongoose_1.MongooseModule.forFeature([
@@ -3036,11 +3048,7 @@ exports.UserDehiveServerModule = UserDehiveServerModule = __decorate([
             ]),
         ],
         controllers: [user_dehive_server_controller_1.UserDehiveServerController],
-        providers: [
-            user_dehive_server_service_1.UserDehiveServerService,
-            decode_api_client_1.DecodeApiClient,
-            auth_guard_1.AuthGuard,
-        ],
+        providers: [user_dehive_server_service_1.UserDehiveServerService, decode_api_client_1.DecodeApiClient, auth_guard_1.AuthGuard],
         exports: [user_dehive_server_service_1.UserDehiveServerService, MONGOOSE_MODELS],
     })
 ], UserDehiveServerModule);
@@ -3109,7 +3117,7 @@ let UserDehiveServerService = class UserDehiveServerService {
             .findById(userId)
             .lean();
         if (!userDehiveProfile) {
-            throw new common_1.NotFoundException('UserDehive profile not found.');
+            throw new common_1.NotFoundException("UserDehive profile not found.");
         }
         const isBannedFromServer = userDehiveProfile.banned_by_servers?.includes(serverId.toString());
         const [server, isAlreadyMember] = await Promise.all([
@@ -3122,9 +3130,9 @@ let UserDehiveServerService = class UserDehiveServerService {
         if (!server)
             throw new common_1.NotFoundException(`Server not found.`);
         if (isAlreadyMember)
-            throw new common_1.BadRequestException('User is already a member.');
+            throw new common_1.BadRequestException("User is already a member.");
         if (isBannedFromServer)
-            throw new common_1.ForbiddenException('You are banned from this server.');
+            throw new common_1.ForbiddenException("You are banned from this server.");
         const session = await this.serverModel.db.startSession();
         session.startTransaction();
         try {
@@ -3137,11 +3145,11 @@ let UserDehiveServerService = class UserDehiveServerService {
             await this.serverModel.findByIdAndUpdate(serverId, { $inc: { member_count: 1 } }, { session });
             await session.commitTransaction();
             await this.invalidateMemberListCache(dto.server_id);
-            return { message: 'Successfully joined server.' };
+            return { message: "Successfully joined server." };
         }
         catch (error) {
             await session.abortTransaction();
-            throw new common_1.BadRequestException('Failed to join server.');
+            throw new common_1.BadRequestException("Failed to join server.");
         }
         finally {
             void session.endSession();
@@ -3151,7 +3159,7 @@ let UserDehiveServerService = class UserDehiveServerService {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
         const userDehive = await this.findUserDehiveProfile(userId);
         if (!userDehive) {
-            throw new common_1.NotFoundException('UserDehive profile not found.');
+            throw new common_1.NotFoundException("UserDehive profile not found.");
         }
         const userDehiveId = userId;
         const membership = await this.userDehiveServerModel.findOne({
@@ -3159,9 +3167,9 @@ let UserDehiveServerService = class UserDehiveServerService {
             server_id: serverId,
         });
         if (!membership)
-            throw new common_1.BadRequestException('User is not a member of this server.');
+            throw new common_1.BadRequestException("User is not a member of this server.");
         if (membership.role === enum_1.ServerRole.OWNER)
-            throw new common_1.ForbiddenException('Server owner cannot leave. Transfer ownership first.');
+            throw new common_1.ForbiddenException("Server owner cannot leave. Transfer ownership first.");
         const session = await this.userDehiveServerModel.db.startSession();
         session.startTransaction();
         try {
@@ -3172,11 +3180,11 @@ let UserDehiveServerService = class UserDehiveServerService {
             await this.serverModel.findByIdAndUpdate(serverId, { $inc: { member_count: -1 } }, { session });
             await session.commitTransaction();
             await this.invalidateMemberListCache(dto.server_id);
-            return { message: 'Successfully left server.' };
+            return { message: "Successfully left server." };
         }
         catch (error) {
             await session.abortTransaction();
-            throw new common_1.BadRequestException('Failed to leave server.');
+            throw new common_1.BadRequestException("Failed to leave server.");
         }
         finally {
             void session.endSession();
@@ -3186,7 +3194,7 @@ let UserDehiveServerService = class UserDehiveServerService {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
-            .select('_id')
+            .select("_id")
             .lean();
         if (!actorDehiveProfile)
             throw new common_1.NotFoundException(`Dehive profile not found for actor.`);
@@ -3196,9 +3204,9 @@ let UserDehiveServerService = class UserDehiveServerService {
             user_dehive_id: actorBaseId,
         });
         if (!isMember)
-            throw new common_1.ForbiddenException('Only server members can generate invites.');
+            throw new common_1.ForbiddenException("Only server members can generate invites.");
         const { customAlphabet } = await Promise.resolve().then(() => __webpack_require__(/*! nanoid */ "nanoid"));
-        const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890', 10);
+        const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", 10);
         const code = nanoid();
         const expiredAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         const newInvite = new this.inviteLinkModel({
@@ -3212,77 +3220,83 @@ let UserDehiveServerService = class UserDehiveServerService {
     async useInvite(code, actorBaseId) {
         const invite = await this.inviteLinkModel.findOne({ code });
         if (!invite || invite.expiredAt < new Date())
-            throw new common_1.NotFoundException('Invite link is invalid or has expired.');
+            throw new common_1.NotFoundException("Invite link is invalid or has expired.");
         return this.joinServer({
             server_id: invite.server_id.toString(),
         }, actorBaseId);
     }
     async kickOrBan(dto, action, actorBaseId) {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
-        console.log('🎯 [KICK/BAN] target_user_dehive_id:', dto.target_user_dehive_id);
+        console.log("🎯 [KICK/BAN] target_user_dehive_id:", dto.target_user_dehive_id);
         const targetDehiveId = new mongoose_2.Types.ObjectId(dto.target_user_dehive_id);
-        console.log('🎯 [KICK/BAN] targetDehiveId resolved:', targetDehiveId);
+        console.log("🎯 [KICK/BAN] targetDehiveId resolved:", targetDehiveId);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
-            .select('_id')
+            .select("_id")
             .lean();
         if (!actorDehiveProfile)
             throw new common_1.NotFoundException(`Dehive profile not found for actor.`);
         const actorDehiveId = actorDehiveProfile._id;
-        console.log('🎯 [KICK/BAN] serverId:', serverId);
-        console.log('🎯 [KICK/BAN] targetDehiveId:', targetDehiveId);
-        console.log('🎯 [KICK/BAN] actorDehiveId:', actorDehiveId);
-        console.log('🔍 [KICK/BAN] Querying for targetMembership with:');
-        console.log('🔍 [KICK/BAN] - server_id:', serverId);
-        console.log('🔍 [KICK/BAN] - user_dehive_id:', targetDehiveId);
-        console.log('🔍 [KICK/BAN] - server_id type:', typeof serverId);
-        console.log('🔍 [KICK/BAN] - user_dehive_id type:', typeof targetDehiveId);
-        const allMemberships = await this.userDehiveServerModel.find({
+        console.log("🎯 [KICK/BAN] serverId:", serverId);
+        console.log("🎯 [KICK/BAN] targetDehiveId:", targetDehiveId);
+        console.log("🎯 [KICK/BAN] actorDehiveId:", actorDehiveId);
+        console.log("🔍 [KICK/BAN] Querying for targetMembership with:");
+        console.log("🔍 [KICK/BAN] - server_id:", serverId);
+        console.log("🔍 [KICK/BAN] - user_dehive_id:", targetDehiveId);
+        console.log("🔍 [KICK/BAN] - server_id type:", typeof serverId);
+        console.log("🔍 [KICK/BAN] - user_dehive_id type:", typeof targetDehiveId);
+        const allMemberships = await this.userDehiveServerModel
+            .find({
             server_id: serverId,
-        }).lean();
-        console.log('🔍 [KICK/BAN] All memberships in server:', allMemberships.length);
-        console.log('🔍 [KICK/BAN] All user_dehive_ids in server:', allMemberships.map(m => m.user_dehive_id.toString()));
-        console.log('🔍 [KICK/BAN] Looking for targetDehiveId:', targetDehiveId.toString());
-        console.log('🔍 [KICK/BAN] Looking for actorDehiveId:', actorDehiveId.toString());
+        })
+            .lean();
+        console.log("🔍 [KICK/BAN] All memberships in server:", allMemberships.length);
+        console.log("🔍 [KICK/BAN] All user_dehive_ids in server:", allMemberships.map((m) => m.user_dehive_id.toString()));
+        console.log("🔍 [KICK/BAN] Looking for targetDehiveId:", targetDehiveId.toString());
+        console.log("🔍 [KICK/BAN] Looking for actorDehiveId:", actorDehiveId.toString());
         const [targetMembership, actorMembership] = await Promise.all([
-            this.userDehiveServerModel.findOne({
+            this.userDehiveServerModel
+                .findOne({
                 server_id: serverId,
                 $or: [
                     { user_dehive_id: targetDehiveId },
-                    { user_dehive_id: targetDehiveId.toString() }
-                ]
-            }).lean(),
-            this.userDehiveServerModel.findOne({
+                    { user_dehive_id: targetDehiveId.toString() },
+                ],
+            })
+                .lean(),
+            this.userDehiveServerModel
+                .findOne({
                 server_id: serverId,
                 $or: [
                     { user_dehive_id: actorDehiveId },
-                    { user_dehive_id: actorDehiveId.toString() }
-                ]
-            }).lean(),
+                    { user_dehive_id: actorDehiveId.toString() },
+                ],
+            })
+                .lean(),
         ]);
-        console.log('🔍 [KICK/BAN] targetMembership found:', !!targetMembership);
-        console.log('🔍 [KICK/BAN] actorMembership found:', !!actorMembership);
+        console.log("🔍 [KICK/BAN] targetMembership found:", !!targetMembership);
+        console.log("🔍 [KICK/BAN] actorMembership found:", !!actorMembership);
         if (targetMembership) {
-            console.log('🔍 [KICK/BAN] targetMembership data:', JSON.stringify(targetMembership, null, 2));
+            console.log("🔍 [KICK/BAN] targetMembership data:", JSON.stringify(targetMembership, null, 2));
         }
         if (actorMembership) {
-            console.log('🔍 [KICK/BAN] actorMembership data:', JSON.stringify(actorMembership, null, 2));
+            console.log("🔍 [KICK/BAN] actorMembership data:", JSON.stringify(actorMembership, null, 2));
         }
         if (!targetMembership)
-            throw new common_1.NotFoundException('Target user is not a member of this server.');
+            throw new common_1.NotFoundException("Target user is not a member of this server.");
         if (!actorMembership)
-            throw new common_1.ForbiddenException('You are not a member of this server.');
+            throw new common_1.ForbiddenException("You are not a member of this server.");
         if (actorDehiveId.toString() === targetDehiveId.toString())
-            throw new common_1.BadRequestException('You cannot perform this action on yourself.');
+            throw new common_1.BadRequestException("You cannot perform this action on yourself.");
         const hasPermission = actorMembership.role === enum_1.ServerRole.OWNER ||
             actorMembership.role === enum_1.ServerRole.MODERATOR;
         if (!hasPermission)
-            throw new common_1.ForbiddenException('You do not have permission.');
+            throw new common_1.ForbiddenException("You do not have permission.");
         if (targetMembership.role === enum_1.ServerRole.OWNER)
-            throw new common_1.ForbiddenException('Cannot kick or ban the server owner.');
+            throw new common_1.ForbiddenException("Cannot kick or ban the server owner.");
         if (targetMembership.role === enum_1.ServerRole.MODERATOR &&
             actorMembership.role !== enum_1.ServerRole.OWNER)
-            throw new common_1.ForbiddenException('Moderators cannot kick or ban other moderators.');
+            throw new common_1.ForbiddenException("Moderators cannot kick or ban other moderators.");
         const session = await this.userDehiveServerModel.db.startSession();
         session.startTransaction();
         try {
@@ -3291,7 +3305,7 @@ let UserDehiveServerService = class UserDehiveServerService {
                 .session(session);
             await this.userDehiveModel.findByIdAndUpdate(targetDehiveId, { $inc: { server_count: -1 } }, { session });
             await this.serverModel.findByIdAndUpdate(serverId, { $inc: { member_count: -1 } }, { session });
-            if (action === 'ban') {
+            if (action === "ban") {
                 await this.userDehiveModel.findByIdAndUpdate(targetDehiveId, {
                     $addToSet: { banned_by_servers: serverId.toString() },
                     $set: { is_banned: true },
@@ -3322,7 +3336,7 @@ let UserDehiveServerService = class UserDehiveServerService {
         const targetDehiveId = new mongoose_2.Types.ObjectId(dto.target_user_dehive_id);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
-            .select('_id')
+            .select("_id")
             .lean();
         if (!actorDehiveProfile)
             throw new common_1.NotFoundException(`Dehive profile not found for actor.`);
@@ -3331,17 +3345,17 @@ let UserDehiveServerService = class UserDehiveServerService {
             server_id: serverId,
             $or: [
                 { user_dehive_id: actorDehiveId },
-                { user_dehive_id: actorDehiveId.toString() }
+                { user_dehive_id: actorDehiveId.toString() },
             ],
             role: { $in: [enum_1.ServerRole.OWNER, enum_1.ServerRole.MODERATOR] },
         });
         if (!hasPermission)
-            throw new common_1.ForbiddenException('You do not have permission to unban members.');
+            throw new common_1.ForbiddenException("You do not have permission to unban members.");
         const result = await this.userDehiveModel.findByIdAndUpdate(targetDehiveId, {
             $pull: { banned_by_servers: serverId.toString() },
         });
         if (!result) {
-            throw new common_1.NotFoundException('User not found.');
+            throw new common_1.NotFoundException("User not found.");
         }
         const updatedUser = await this.userDehiveModel.findById(targetDehiveId);
         if (updatedUser && updatedUser.banned_by_servers.length === 0) {
@@ -3353,14 +3367,14 @@ let UserDehiveServerService = class UserDehiveServerService {
             server_id: serverId,
             user_dehive_id: targetDehiveId,
         });
-        return { message: 'User successfully unbanned.' };
+        return { message: "User successfully unbanned." };
     }
     async assignRole(dto, actorBaseId) {
         const serverId = new mongoose_2.Types.ObjectId(dto.server_id);
         const targetDehiveId = new mongoose_2.Types.ObjectId(dto.target_user_dehive_id);
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
-            .select('_id')
+            .select("_id")
             .lean();
         if (!actorDehiveProfile)
             throw new common_1.NotFoundException(`Dehive profile not found for actor.`);
@@ -3370,27 +3384,27 @@ let UserDehiveServerService = class UserDehiveServerService {
                 server_id: serverId,
                 $or: [
                     { user_dehive_id: targetDehiveId },
-                    { user_dehive_id: targetDehiveId.toString() }
-                ]
+                    { user_dehive_id: targetDehiveId.toString() },
+                ],
             }),
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
                 $or: [
                     { user_dehive_id: actorDehiveId },
-                    { user_dehive_id: actorDehiveId.toString() }
-                ]
+                    { user_dehive_id: actorDehiveId.toString() },
+                ],
             }),
         ]);
         if (!targetMembership)
-            throw new common_1.NotFoundException('Target user is not a member of this server.');
+            throw new common_1.NotFoundException("Target user is not a member of this server.");
         if (!actorMembership)
-            throw new common_1.ForbiddenException('You are not a member of this server.');
+            throw new common_1.ForbiddenException("You are not a member of this server.");
         if (actorDehiveId.toString() === targetDehiveId.toString())
-            throw new common_1.BadRequestException('You cannot change your own role.');
+            throw new common_1.BadRequestException("You cannot change your own role.");
         if (actorMembership.role !== enum_1.ServerRole.OWNER)
-            throw new common_1.ForbiddenException('Only the server owner can assign roles.');
+            throw new common_1.ForbiddenException("Only the server owner can assign roles.");
         if (dto.role === enum_1.ServerRole.OWNER)
-            throw new common_1.BadRequestException('Ownership can only be transferred, not assigned.');
+            throw new common_1.BadRequestException("Ownership can only be transferred, not assigned.");
         targetMembership.role = dto.role;
         return targetMembership.save();
     }
@@ -3399,7 +3413,7 @@ let UserDehiveServerService = class UserDehiveServerService {
         const newOwnerDehiveId = new mongoose_2.Types.ObjectId(dto.user_dehive_id);
         const currentOwnerProfile = await this.userDehiveModel
             .findById(currentOwnerId)
-            .select('_id')
+            .select("_id")
             .lean();
         if (!currentOwnerProfile)
             throw new common_1.NotFoundException(`Dehive profile not found for current owner.`);
@@ -3409,25 +3423,25 @@ let UserDehiveServerService = class UserDehiveServerService {
                 server_id: serverId,
                 $or: [
                     { user_dehive_id: currentOwnerDehiveId },
-                    { user_dehive_id: currentOwnerDehiveId.toString() }
-                ]
+                    { user_dehive_id: currentOwnerDehiveId.toString() },
+                ],
             }),
             this.userDehiveServerModel.findOne({
                 server_id: serverId,
                 $or: [
                     { user_dehive_id: newOwnerDehiveId },
-                    { user_dehive_id: newOwnerDehiveId.toString() }
-                ]
+                    { user_dehive_id: newOwnerDehiveId.toString() },
+                ],
             }),
         ]);
         if (!currentOwnerMembership)
-            throw new common_1.ForbiddenException('You are not a member of this server.');
+            throw new common_1.ForbiddenException("You are not a member of this server.");
         if (currentOwnerMembership.role !== enum_1.ServerRole.OWNER)
-            throw new common_1.ForbiddenException('Only the server owner can transfer ownership.');
+            throw new common_1.ForbiddenException("Only the server owner can transfer ownership.");
         if (!newOwnerMembership)
-            throw new common_1.NotFoundException('New owner is not a member of this server.');
+            throw new common_1.NotFoundException("New owner is not a member of this server.");
         if (currentOwnerDehiveId.toString() === newOwnerDehiveId.toString())
-            throw new common_1.BadRequestException('You cannot transfer ownership to yourself.');
+            throw new common_1.BadRequestException("You cannot transfer ownership to yourself.");
         const session = await this.userDehiveServerModel.db.startSession();
         session.startTransaction();
         try {
@@ -3435,11 +3449,11 @@ let UserDehiveServerService = class UserDehiveServerService {
             await this.userDehiveServerModel.updateOne({ _id: newOwnerMembership._id }, { $set: { role: enum_1.ServerRole.OWNER } }, { session });
             await session.commitTransaction();
             await this.invalidateMemberListCache(dto.server_id);
-            return { message: 'Ownership transferred successfully.' };
+            return { message: "Ownership transferred successfully." };
         }
-        catch (error) {
+        catch {
             await session.abortTransaction();
-            throw new common_1.BadRequestException('Failed to transfer ownership.');
+            throw new common_1.BadRequestException("Failed to transfer ownership.");
         }
         finally {
             void session.endSession();
@@ -3448,7 +3462,7 @@ let UserDehiveServerService = class UserDehiveServerService {
     async updateNotification(dto, actorBaseId) {
         const actorDehiveProfile = await this.userDehiveModel
             .findById(actorBaseId)
-            .select('_id')
+            .select("_id")
             .lean();
         if (!actorDehiveProfile)
             throw new common_1.NotFoundException(`Dehive profile not found for user.`);
@@ -3457,21 +3471,26 @@ let UserDehiveServerService = class UserDehiveServerService {
             server_id: new mongoose_2.Types.ObjectId(dto.server_id),
             $or: [
                 { user_dehive_id: actorDehiveId },
-                { user_dehive_id: actorDehiveId.toString() }
-            ]
+                { user_dehive_id: actorDehiveId.toString() },
+            ],
         }, { $set: { is_muted: dto.is_muted } });
         if (result.matchedCount === 0)
-            throw new common_1.NotFoundException('Membership not found.');
-        return { message: 'Notification settings updated successfully.' };
+            throw new common_1.NotFoundException("Membership not found.");
+        return { message: "Notification settings updated successfully." };
     }
     async _getEnrichedUser(userId, sessionIdOfRequester) {
         const userDecodeData = await this.decodeApiClient.getUserById(userId, sessionIdOfRequester);
         if (!userDecodeData) {
             throw new common_1.NotFoundException(`User with ID ${userId} not found in Decode service`);
         }
-        let userDehiveData = await this.userDehiveModel.findById(userId).lean();
+        let userDehiveData = await this.userDehiveModel
+            .findById(userId)
+            .lean();
         if (!userDehiveData) {
-            const newUser = new this.userDehiveModel({ _id: userId, status: 'ACTIVE' });
+            const newUser = new this.userDehiveModel({
+                _id: userId,
+                status: "ACTIVE",
+            });
             const savedDocument = await newUser.save();
             userDehiveData = savedDocument.toObject();
         }
@@ -3487,7 +3506,7 @@ let UserDehiveServerService = class UserDehiveServerService {
             server_count: dehiveData.server_count,
             bio: dehiveData.bio,
             banner_color: dehiveData.banner_color,
-            is_banned: dehiveData.is_banned
+            is_banned: dehiveData.is_banned,
         };
     }
     async getMembersInServer(serverId, currentUser) {
@@ -3524,13 +3543,19 @@ let UserDehiveServerService = class UserDehiveServerService {
         const targetUserProfile = await this._getEnrichedUser(targetUserId, currentUser.session_id);
         console.log(`[SERVICE] getEnrichedUserProfile called with targetUserId: ${targetUserId}`);
         const [targetServers, viewerServers] = await Promise.all([
-            this.userDehiveServerModel.find({ user_dehive_id: targetUserId }).select('server_id').lean(),
-            this.userDehiveServerModel.find({ user_dehive_id: currentUser._id }).select('server_id').lean(),
+            this.userDehiveServerModel
+                .find({ user_dehive_id: targetUserId })
+                .select("server_id")
+                .lean(),
+            this.userDehiveServerModel
+                .find({ user_dehive_id: currentUser._id })
+                .select("server_id")
+                .lean(),
         ]);
-        const viewerServerIds = new Set(viewerServers.map(s => s.server_id.toString()));
+        const viewerServerIds = new Set(viewerServers.map((s) => s.server_id.toString()));
         const mutualServers = targetServers
-            .filter(s => viewerServerIds.has(s.server_id.toString()))
-            .map(s => s.server_id);
+            .filter((s) => viewerServerIds.has(s.server_id.toString()))
+            .map((s) => s.server_id);
         return {
             ...targetUserProfile,
             mutual_servers_count: mutualServers.length,
@@ -3742,11 +3767,11 @@ async function bootstrap() {
     const app = await core_1.NestFactory.create(server_module_1.ServerModule);
     const configService = app.get(config_1.ConfigService);
     app.enableCors({
-        origin: 'http://localhost:4002',
-        methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+        origin: "http://localhost:4002",
+        methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
         credentials: true,
     });
-    app.setGlobalPrefix('api');
+    app.setGlobalPrefix("api");
     app.useGlobalInterceptors(new transform_interface_1.TransformInterceptor());
     app.useGlobalPipes(new common_1.ValidationPipe({
         whitelist: true,
@@ -3754,17 +3779,17 @@ async function bootstrap() {
         transform: true,
     }));
     const config = new swagger_1.DocumentBuilder()
-        .setTitle('Dehive - Server Service')
-        .setDescription('API documentation for managing servers, categories, and channels.')
-        .setVersion('1.0')
-        .addTag('servers')
+        .setTitle("Dehive - Server Service")
+        .setDescription("API documentation for managing servers, categories, and channels.")
+        .setVersion("1.0")
+        .addTag("servers")
         .build();
     const document = swagger_1.SwaggerModule.createDocument(app, config, {
         include: [server_module_1.ServerModule],
     });
-    swagger_1.SwaggerModule.setup('api-docs', app, document);
-    const port = configService.get('SERVER_PORT') || 4002;
-    const host = configService.get('CLOUD_HOST') || 'localhost';
+    swagger_1.SwaggerModule.setup("api-docs", app, document);
+    const port = configService.get("SERVER_PORT") || 4002;
+    const host = configService.get("CLOUD_HOST") || "localhost";
     await app.listen(port, host);
     console.log(`[Dehive] Server service is running on: ${await app.getUrl()}`);
     console.log(`[Dehive] Swagger UI available at: http://localhost:${port}/api-docs`);
