@@ -42,6 +42,7 @@ import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
 import { SessionCacheDoc } from "../interfaces/session-doc.interface";
+import { UserProfile } from "../interfaces/user-profile.interface";
 
 @Injectable()
 export class DirectMessagingService {
@@ -442,6 +443,8 @@ export class DirectMessagingService {
     selfId: string,
     conversationId: string,
     dto: ListDirectMessagesDto,
+    sessionId?: string,
+    fingerprintHash?: string,
   ) {
     if (!Types.ObjectId.isValid(selfId))
       throw new BadRequestException("Invalid self id");
@@ -474,11 +477,43 @@ export class DirectMessagingService {
     const totalPages = Math.ceil(total / limit);
     const isLastPage = page >= totalPages - 1;
 
-    // Ensure each message has replyTo field (null if no reply)
-    const formattedItems = items.map((item) => ({
-      ...item,
-      replyTo: item.replyTo || null,
-    }));
+    // Format messages with sender information and avatar
+    const formattedItems = await Promise.all(
+      items.map(async (item) => {
+        // Get user profile for sender - use decode API if session ID is available
+        this.logger.log(`Getting profile for sender ${item.senderId}, sessionId: ${sessionId}, fingerprintHash: ${fingerprintHash}`);
+        let userProfile;
+        if (sessionId && fingerprintHash) {
+          userProfile = await this.getUserProfileFromDecode(String(item.senderId), sessionId, fingerprintHash);
+          if (!userProfile) {
+            this.logger.warn(`Failed to get profile from decode API for ${item.senderId}, using fallback`);
+            userProfile = await this.getUserProfile(String(item.senderId));
+          }
+        } else {
+          userProfile = await this.getUserProfile(String(item.senderId));
+        }
+
+        return {
+          _id: item._id,
+          conversationId: item.conversationId,
+          sender: {
+            dehive_id: item.senderId,
+            username: userProfile.username || `User_${String(item.senderId)}`,
+            display_name: userProfile.display_name || `User_${String(item.senderId)}`,
+            avatar_ipfs_hash: userProfile.avatar_ipfs_hash || null,
+          },
+          content: item.content,
+          attachments: item.attachments || [],
+          isEdited: item.isEdited || false,
+          editedAt: item.editedAt || null,
+          isDeleted: item.isDeleted || false,
+          replyTo: item.replyTo || null,
+          createdAt: (item as any).createdAt,
+          updatedAt: (item as any).updatedAt,
+          __v: item.__v,
+        };
+      })
+    );
 
     return {
       items: formattedItems,
@@ -633,4 +668,98 @@ export class DirectMessagingService {
       },
     };
   }
+
+  /**
+   * Cache user profile in Redis
+   * This should be called when user authenticates or profile is updated
+   */
+  async cacheUserProfile(userDehiveId: string, profile: Partial<UserProfile>): Promise<void> {
+    try {
+      const cacheKey = `user_profile:${userDehiveId}`;
+      const cacheData = {
+        _id: userDehiveId,
+        username: profile.username || `User_${userDehiveId}`,
+        display_name: profile.display_name || `User_${userDehiveId}`,
+        avatar_ipfs_hash: profile.avatar_ipfs_hash || undefined,
+        bio: profile.bio || null,
+        is_verified: (profile as any).is_verified || false,
+      };
+
+      // Cache for 1 hour (3600 seconds)
+      await this.redis.setex(cacheKey, 3600, JSON.stringify(cacheData));
+      this.logger.log(`Cached user profile for ${userDehiveId}`);
+    } catch (error) {
+      this.logger.error(`Error caching user profile for ${userDehiveId}:`, error);
+    }
+  }
+
+  /**
+   * Get user profile from cache or fallback
+   * This is used by WebSocket when no session info is available
+   */
+  async getUserProfile(userDehiveId: string): Promise<Partial<UserProfile>> {
+    try {
+      // First check cache for any previously fetched profile
+      const cacheKey = `user_profile:${userDehiveId}`;
+      const cachedData = await this.redis.get(cacheKey);
+
+      if (cachedData) {
+        const profile = JSON.parse(cachedData);
+        this.logger.log(`Retrieved cached profile for ${userDehiveId} in WebSocket`);
+        return profile;
+      }
+
+      // Fallback to basic profile if no cache
+      this.logger.log(`No cached profile found for ${userDehiveId}, using fallback in WebSocket`);
+      return {
+        _id: userDehiveId,
+        username: `User_${userDehiveId}`,
+        display_name: `User_${userDehiveId}`,
+        avatar_ipfs_hash: undefined,
+      };
+    } catch (error) {
+      this.logger.error(`Error getting user profile for ${userDehiveId}:`, error);
+      return {
+        _id: userDehiveId,
+        username: `User_${userDehiveId}`,
+        display_name: `User_${userDehiveId}`,
+        avatar_ipfs_hash: undefined,
+      };
+    }
+  }
+
+  /**
+   * Get user profile from decode API with session ID
+   * This method should be called when we have session ID (e.g., from HTTP requests)
+   */
+  async getUserProfileFromDecode(
+    userDehiveId: string,
+    sessionId: string,
+    fingerprintHash: string,
+  ): Promise<Partial<UserProfile> | null> {
+    try {
+      // Try to get from decode API using session ID (no cache check)
+      this.logger.log(`Fetching profile for ${userDehiveId} from decode API using session ${sessionId}`);
+      const profile = await this.decodeApiClient.getUserProfile(
+        sessionId,
+        fingerprintHash,
+        userDehiveId,
+      );
+
+      if (profile) {
+        // Cache the profile for future use
+        await this.cacheUserProfile(userDehiveId, profile);
+        this.logger.log(`Successfully fetched and cached profile for ${userDehiveId}:`, profile);
+        return profile;
+      }
+
+      // If decode API fails, return null to force fallback in calling method
+      this.logger.warn(`Failed to get profile from decode API for ${userDehiveId}`);
+      return null;
+    } catch (error) {
+      this.logger.error(`Error getting user profile from decode API for ${userDehiveId}:`, error);
+      return null;
+    }
+  }
+
 }

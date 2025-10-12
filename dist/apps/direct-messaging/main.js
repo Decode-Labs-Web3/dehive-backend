@@ -18,6 +18,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 var DecodeApiClient_1;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DecodeApiClient = void 0;
@@ -25,18 +28,22 @@ const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
 const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
 const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
+const ioredis_1 = __webpack_require__(/*! @nestjs-modules/ioredis */ "@nestjs-modules/ioredis");
+const ioredis_2 = __webpack_require__(/*! ioredis */ "ioredis");
 let DecodeApiClient = DecodeApiClient_1 = class DecodeApiClient {
     httpService;
     configService;
+    redis;
     logger = new common_1.Logger(DecodeApiClient_1.name);
     decodeApiUrl;
-    constructor(httpService, configService) {
+    constructor(httpService, configService, redis) {
         this.httpService = httpService;
         this.configService = configService;
-        const host = this.configService.get('DECODE_API_GATEWAY_HOST');
-        const port = this.configService.get('DECODE_API_GATEWAY_PORT');
+        this.redis = redis;
+        const host = this.configService.get("DECODE_API_GATEWAY_HOST");
+        const port = this.configService.get("DECODE_API_GATEWAY_PORT");
         if (!host || !port) {
-            throw new Error('DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!');
+            throw new Error("DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!");
         }
         this.decodeApiUrl = `http://${host}:${port}`;
     }
@@ -45,8 +52,8 @@ let DecodeApiClient = DecodeApiClient_1 = class DecodeApiClient {
             this.logger.log(`Calling Decode API: GET ${this.decodeApiUrl}/relationship/follow/followings/me`);
             const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.decodeApiUrl}/relationship/follow/followings/me`, {
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'x-fingerprint-hashed': fingerprintHash,
+                    Authorization: `Bearer ${accessToken}`,
+                    "x-fingerprint-hashed": fingerprintHash,
                 },
                 params: {
                     page,
@@ -64,12 +71,52 @@ let DecodeApiClient = DecodeApiClient_1 = class DecodeApiClient {
             return null;
         }
     }
+    async getUserProfile(sessionId, fingerprintHash, userDehiveId) {
+        try {
+            const accessToken = await this.getAccessTokenFromSession(sessionId);
+            if (!accessToken) {
+                this.logger.warn(`Access token not found for session: ${sessionId}`);
+                return null;
+            }
+            this.logger.log(`Calling Decode API: GET ${this.decodeApiUrl}/users/profile/${userDehiveId}`);
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.decodeApiUrl}/users/profile/${userDehiveId}`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "x-fingerprint-hashed": fingerprintHash,
+                },
+            }));
+            this.logger.log(`Decode API response: ${JSON.stringify(response.data, null, 2)}`);
+            this.logger.log(`Successfully retrieved user profile from Decode API.`);
+            return response.data.data;
+        }
+        catch (error) {
+            this.logger.error(`Error Response Status: ${error.response?.status}`);
+            this.logger.error(`Error Response Data: ${JSON.stringify(error.response?.data)}`);
+            return null;
+        }
+    }
+    async getAccessTokenFromSession(sessionId) {
+        try {
+            const sessionKey = `session:${sessionId}`;
+            const sessionRaw = await this.redis.get(sessionKey);
+            if (!sessionRaw)
+                return null;
+            const sessionData = JSON.parse(sessionRaw);
+            return sessionData?.access_token || null;
+        }
+        catch (error) {
+            this.logger.error(`Failed to parse session data for key session:${sessionId}`);
+            return null;
+        }
+    }
 };
 exports.DecodeApiClient = DecodeApiClient;
 exports.DecodeApiClient = DecodeApiClient = DecodeApiClient_1 = __decorate([
     (0, common_1.Injectable)(),
+    __param(2, (0, ioredis_1.InjectRedis)()),
     __metadata("design:paramtypes", [axios_1.HttpService,
-        config_1.ConfigService])
+        config_1.ConfigService,
+        ioredis_2.Redis])
 ], DecodeApiClient);
 
 
@@ -86,14 +133,14 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CurrentUser = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 exports.CurrentUser = (0, common_1.createParamDecorator)((data, ctx) => {
-    console.log('🎯 [DIRECT-MESSAGING CURRENT USER] Decorator called with data:', data);
+    console.log("🎯 [DIRECT-MESSAGING CURRENT USER] Decorator called with data:", data);
     try {
         const request = ctx
             .switchToHttp()
             .getRequest();
-        console.log('🎯 [DIRECT-MESSAGING CURRENT USER] Request user:', request.user);
-        console.log('🎯 [DIRECT-MESSAGING CURRENT USER] Request sessionId:', request.sessionId);
-        if (data === 'sessionId') {
+        console.log("🎯 [DIRECT-MESSAGING CURRENT USER] Request user:", request.user);
+        console.log("🎯 [DIRECT-MESSAGING CURRENT USER] Request sessionId:", request.sessionId);
+        if (data === "sessionId") {
             return request.sessionId;
         }
         const user = request.user;
@@ -101,11 +148,11 @@ exports.CurrentUser = (0, common_1.createParamDecorator)((data, ctx) => {
             console.log(`🎯 [DIRECT-MESSAGING CURRENT USER] Returning user.${data}:`, user[data]);
             return user[data];
         }
-        console.log('🎯 [DIRECT-MESSAGING CURRENT USER] Returning full user:', user);
+        console.log("🎯 [DIRECT-MESSAGING CURRENT USER] Returning full user:", user);
         return user;
     }
     catch (error) {
-        console.error('❌ [DIRECT-MESSAGING CURRENT USER] Error:', error);
+        console.error("❌ [DIRECT-MESSAGING CURRENT USER] Error:", error);
         return undefined;
     }
 });
@@ -142,8 +189,8 @@ let MethodNotAllowedFilter = class MethodNotAllowedFilter {
                 response.status(405).json({
                     success: false,
                     statusCode: 405,
-                    message: `Method ${request.method} not allowed for this endpoint. Allowed methods: ${allowedMethods.join(', ')}`,
-                    error: 'Method Not Allowed',
+                    message: `Method ${request.method} not allowed for this endpoint. Allowed methods: ${allowedMethods.join(", ")}`,
+                    error: "Method Not Allowed",
                     path: request.url,
                     method: request.method,
                     allowedMethods,
@@ -163,27 +210,27 @@ let MethodNotAllowedFilter = class MethodNotAllowedFilter {
         response.status(500).json({
             success: false,
             statusCode: 500,
-            message: 'Internal server error',
-            error: 'Internal Server Error',
+            message: "Internal server error",
+            error: "Internal Server Error",
             path: request.url,
             method: request.method,
         });
     }
     getAllowedMethods(url) {
         const endpointMethods = {
-            '/api/dm/send': ['POST'],
-            '/api/dm/conversation': ['POST'],
-            '/api/dm/messages': ['GET'],
-            '/api/dm/files/upload': ['POST'],
-            '/api/dm/files/list': ['GET'],
-            '/api/dm/following': ['GET'],
+            "/api/dm/send": ["POST"],
+            "/api/dm/conversation": ["POST"],
+            "/api/dm/messages": ["GET"],
+            "/api/dm/files/upload": ["POST"],
+            "/api/dm/files/list": ["GET"],
+            "/api/dm/following": ["GET"],
         };
         for (const [endpoint, methods] of Object.entries(endpointMethods)) {
             if (url.startsWith(endpoint)) {
                 return methods;
             }
         }
-        return ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+        return ["GET", "POST", "PUT", "DELETE", "PATCH"];
     }
 };
 exports.MethodNotAllowedFilter = MethodNotAllowedFilter;
@@ -223,7 +270,7 @@ const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
 const ioredis_1 = __webpack_require__(/*! @nestjs-modules/ioredis */ "@nestjs-modules/ioredis");
 const ioredis_2 = __webpack_require__(/*! ioredis */ "ioredis");
 const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
-exports.PUBLIC_KEY = 'public';
+exports.PUBLIC_KEY = "public";
 const Public = () => (0, common_1.SetMetadata)(exports.PUBLIC_KEY, true);
 exports.Public = Public;
 let AuthGuard = AuthGuard_1 = class AuthGuard {
@@ -238,10 +285,10 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
         this.reflector = reflector;
         this.configService = configService;
         this.redis = redis;
-        const host = this.configService.get('DECODE_API_GATEWAY_HOST');
-        const port = this.configService.get('DECODE_API_GATEWAY_PORT');
+        const host = this.configService.get("DECODE_API_GATEWAY_HOST");
+        const port = this.configService.get("DECODE_API_GATEWAY_PORT");
         if (!host || !port) {
-            throw new Error('DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!');
+            throw new Error("DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!");
         }
         this.authServiceUrl = `http://${host}:${port}`;
     }
@@ -250,13 +297,13 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
         if (isPublic)
             return true;
         const request = context.switchToHttp().getRequest();
-        const sessionId = request.headers['x-session-id'];
-        const fingerprintHash = request.headers['x-fingerprint-hashed'];
+        const sessionId = request.headers["x-session-id"];
+        const fingerprintHash = request.headers["x-fingerprint-hashed"];
         if (!sessionId) {
-            throw new common_1.UnauthorizedException('Session ID is required');
+            throw new common_1.UnauthorizedException("Session ID is required");
         }
         if (!fingerprintHash) {
-            throw new common_1.UnauthorizedException('Fingerprint hash is required in headers (x-fingerprint-hashed)');
+            throw new common_1.UnauthorizedException("Fingerprint hash is required in headers (x-fingerprint-hashed)");
         }
         try {
             const sessionKey = `session:${sessionId}`;
@@ -269,23 +316,23 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
                         session_id: sessionId,
                         fingerprint_hash: fingerprintHash,
                     };
-                    request['user'] = authenticatedUser;
+                    request["user"] = authenticatedUser;
                     return true;
                 }
             }
             const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/sso/validate`, {
-                headers: { 'x-session-id': sessionId },
+                headers: { "x-session-id": sessionId },
             }));
             const sessionData = response.data.data;
             if (!sessionData || !sessionData.access_token) {
-                throw new common_1.UnauthorizedException('Invalid session data from auth service');
+                throw new common_1.UnauthorizedException("Invalid session data from auth service");
             }
             const profileResponse = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/users/profile/me`, {
-                headers: { 'Authorization': `Bearer ${sessionData.access_token}` },
+                headers: { Authorization: `Bearer ${sessionData.access_token}` },
             }));
             const userProfile = profileResponse.data.data;
             if (!userProfile) {
-                throw new common_1.UnauthorizedException('Could not retrieve user profile');
+                throw new common_1.UnauthorizedException("Could not retrieve user profile");
             }
             const cacheData = {
                 session_token: sessionData.session_token,
@@ -295,15 +342,19 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
             };
             const ttl = Math.ceil((new Date(sessionData.expires_at).getTime() - Date.now()) / 1000);
             if (ttl > 0) {
-                await this.redis.set(sessionKey, JSON.stringify(cacheData), 'EX', ttl);
+                await this.redis.set(sessionKey, JSON.stringify(cacheData), "EX", ttl);
             }
-            const authenticatedUser = { ...userProfile, session_id: sessionId, fingerprint_hash: fingerprintHash };
-            request['user'] = authenticatedUser;
+            const authenticatedUser = {
+                ...userProfile,
+                session_id: sessionId,
+                fingerprint_hash: fingerprintHash,
+            };
+            request["user"] = authenticatedUser;
             return true;
         }
         catch (error) {
             this.logger.error(`Authentication failed for session ${sessionId}:`, error.stack);
-            throw new common_1.UnauthorizedException('Authentication failed or invalid session');
+            throw new common_1.UnauthorizedException("Authentication failed or invalid session");
         }
     }
 };
@@ -349,7 +400,7 @@ class CreateOrGetConversationDto {
 }
 exports.CreateOrGetConversationDto = CreateOrGetConversationDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'UserDehiveId of the other participant' }),
+    (0, swagger_1.ApiProperty)({ description: "UserDehiveId of the other participant" }),
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
 ], CreateOrGetConversationDto.prototype, "otherUserDehiveId", void 0);
@@ -388,8 +439,8 @@ class DirectUploadInitDto {
 exports.DirectUploadInitDto = DirectUploadInitDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the direct conversation the file belongs to',
-        example: '68da1234abcd5678efgh9012',
+        description: "The ID of the direct conversation the file belongs to",
+        example: "68da1234abcd5678efgh9012",
     }),
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
@@ -412,15 +463,15 @@ class DirectUploadResponseDto {
 exports.DirectUploadResponseDto = DirectUploadResponseDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The unique ID of the upload record (MongoId)',
-        example: '68db1234abcd5678efgh9013',
+        description: "The unique ID of the upload record (MongoId)",
+        example: "68db1234abcd5678efgh9013",
     }),
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
 ], DirectUploadResponseDto.prototype, "uploadId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The type of the attachment, detected by the server.',
+        description: "The type of the attachment, detected by the server.",
         enum: enum_1.AttachmentType,
         example: enum_1.AttachmentType.IMAGE,
     }),
@@ -429,23 +480,23 @@ __decorate([
 ], DirectUploadResponseDto.prototype, "type", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The public URL to access the uploaded file.',
-        example: 'http://localhost:4004/uploads/uuid-filename.jpg',
+        description: "The public URL to access the uploaded file.",
+        example: "http://localhost:4004/uploads/uuid-filename.jpg",
     }),
     (0, class_validator_1.IsUrl)(),
     __metadata("design:type", String)
 ], DirectUploadResponseDto.prototype, "url", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The original name of the file.',
-        example: 'my-vacation-photo.jpg',
+        description: "The original name of the file.",
+        example: "my-vacation-photo.jpg",
     }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], DirectUploadResponseDto.prototype, "name", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The size of the file in bytes.',
+        description: "The size of the file in bytes.",
         example: 1048576,
     }),
     (0, class_validator_1.IsInt)(),
@@ -454,15 +505,15 @@ __decorate([
 ], DirectUploadResponseDto.prototype, "size", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The MIME type of the file.',
-        example: 'image/jpeg',
+        description: "The MIME type of the file.",
+        example: "image/jpeg",
     }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], DirectUploadResponseDto.prototype, "mimeType", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The width of the image or video in pixels.',
+        description: "The width of the image or video in pixels.",
         example: 1920,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -472,7 +523,7 @@ __decorate([
 ], DirectUploadResponseDto.prototype, "width", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The height of the image or video in pixels.',
+        description: "The height of the image or video in pixels.",
         example: 1080,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -482,7 +533,7 @@ __decorate([
 ], DirectUploadResponseDto.prototype, "height", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The duration of the video or audio in milliseconds.',
+        description: "The duration of the video or audio in milliseconds.",
         example: 15000,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -492,8 +543,8 @@ __decorate([
 ], DirectUploadResponseDto.prototype, "durationMs", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The public URL to a thumbnail generated for a video.',
-        example: 'http://localhost:4004/uploads/uuid-filename_thumb.jpg',
+        description: "The public URL to a thumbnail generated for a video.",
+        example: "http://localhost:4004/uploads/uuid-filename_thumb.jpg",
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsUrl)(),
@@ -535,7 +586,7 @@ class GetFollowingDto {
 exports.GetFollowingDto = GetFollowingDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'Page number for pagination',
+        description: "Page number for pagination",
         example: 0,
         default: 0,
         minimum: 0,
@@ -549,7 +600,7 @@ __decorate([
 ], GetFollowingDto.prototype, "page", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'Number of items per page',
+        description: "Number of items per page",
         example: 10,
         default: 10,
         minimum: 1,
@@ -599,7 +650,7 @@ class ListDirectMessagesDto {
 exports.ListDirectMessagesDto = ListDirectMessagesDto;
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The page number to retrieve, starting from 0',
+        description: "The page number to retrieve, starting from 0",
         default: 0,
         type: Number,
     }),
@@ -611,7 +662,7 @@ __decorate([
 ], ListDirectMessagesDto.prototype, "page", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The number of messages to retrieve per page (max 100)',
+        description: "The number of messages to retrieve per page (max 100)",
         default: 10,
         type: Number,
     }),
@@ -660,9 +711,9 @@ class ListDirectUploadsDto {
 exports.ListDirectUploadsDto = ListDirectUploadsDto;
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'Filter uploads by a specific type.',
+        description: "Filter uploads by a specific type.",
         enum: enum_1.AttachmentType,
-        example: 'image',
+        example: "image",
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsEnum)(enum_1.AttachmentType),
@@ -670,7 +721,7 @@ __decorate([
 ], ListDirectUploadsDto.prototype, "type", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The page number to retrieve, starting from 0',
+        description: "The page number to retrieve, starting from 0",
         default: 0,
         type: Number,
     }),
@@ -682,7 +733,7 @@ __decorate([
 ], ListDirectUploadsDto.prototype, "page", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'The number of uploads to retrieve per page (max 100)',
+        description: "The number of uploads to retrieve per page (max 100)",
         default: 10,
         type: Number,
     }),
@@ -730,18 +781,18 @@ class SendDirectMessageDto {
 exports.SendDirectMessageDto = SendDirectMessageDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the direct conversation',
-        example: '68da1234abcd5678efgh9012',
+        description: "The ID of the direct conversation",
+        example: "68da1234abcd5678efgh9012",
     }),
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
 ], SendDirectMessageDto.prototype, "conversationId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The text content of the message (empty string if only sending files)',
+        description: "The text content of the message (empty string if only sending files)",
         maxLength: 2000,
-        example: 'Hello there!',
-        default: '',
+        example: "Hello there!",
+        default: "",
     }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.Length)(0, 2000),
@@ -750,23 +801,23 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         type: [String],
-        description: 'List of upload IDs to attach to the message (empty array if no files)',
-        example: ['68db1234abcd5678efgh9013'],
+        description: "List of upload IDs to attach to the message (empty array if no files)",
+        example: ["68db1234abcd5678efgh9013"],
         default: [],
     }),
     (0, class_validator_1.IsArray)(),
-    (0, class_validator_1.IsMongoId)({ each: true, message: 'Each uploadId must be a valid MongoId' }),
+    (0, class_validator_1.IsMongoId)({ each: true, message: "Each uploadId must be a valid MongoId" }),
     __metadata("design:type", Array)
 ], SendDirectMessageDto.prototype, "uploadIds", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'ID of the message being replied to (optional)',
-        example: '68dc1234abcd5678efgh9014',
+        description: "ID of the message being replied to (optional)",
+        example: "68dc1234abcd5678efgh9014",
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.ValidateIf)((o) => o.replyTo !== null && o.replyTo !== undefined),
-    (0, class_validator_1.IsMongoId)({ message: 'replyTo must be a valid MongoId' }),
+    (0, class_validator_1.IsMongoId)({ message: "replyTo must be a valid MongoId" }),
     __metadata("design:type", Object)
 ], SendDirectMessageDto.prototype, "replyTo", void 0);
 
@@ -837,11 +888,17 @@ let DmGateway = class DmGateway {
         const serializedData = JSON.parse(JSON.stringify(data));
         client.emit(event, serializedData);
     }
-    formatMessageData(message) {
+    async formatMessageData(message) {
+        const userProfile = await this.service.getUserProfile(String(message.senderId));
         return {
             _id: message._id,
             conversationId: message.conversationId,
-            senderId: message.senderId,
+            sender: {
+                dehive_id: message.senderId,
+                username: userProfile.username || `User_${String(message.senderId)}`,
+                display_name: userProfile.display_name || `User_${String(message.senderId)}`,
+                avatar_ipfs_hash: userProfile.avatar_ipfs_hash || null,
+            },
             content: message.content,
             attachments: message.attachments || [],
             isEdited: message.isEdited || false,
@@ -853,7 +910,7 @@ let DmGateway = class DmGateway {
         };
     }
     handleConnection(client) {
-        console.log('[DM-WS] Client connected. Awaiting identity.');
+        console.log("[DM-WS] Client connected. Awaiting identity.");
         this.meta.set(client, {});
     }
     handleDisconnect(client) {
@@ -867,27 +924,27 @@ let DmGateway = class DmGateway {
         console.log(`[DM-WS] Identity request received:`, data);
         console.log(`[DM-WS] Identity data type:`, typeof data);
         let userDehiveId;
-        if (typeof data === 'string') {
+        if (typeof data === "string") {
             userDehiveId = data;
         }
-        else if (typeof data === 'object' && data?.userDehiveId) {
+        else if (typeof data === "object" && data?.userDehiveId) {
             userDehiveId = data.userDehiveId;
         }
         else {
             console.log(`[DM-WS] Invalid identity format:`, data);
-            return this.send(client, 'error', {
-                message: 'Invalid identity format. Send userDehiveId as string or {userDehiveId: string}',
-                code: 'INVALID_FORMAT',
-                timestamp: new Date().toISOString()
+            return this.send(client, "error", {
+                message: "Invalid identity format. Send userDehiveId as string or {userDehiveId: string}",
+                code: "INVALID_FORMAT",
+                timestamp: new Date().toISOString(),
             });
         }
         console.log(`[DM-WS] Extracted userDehiveId: ${userDehiveId}`);
         if (!userDehiveId || !mongoose_1.Types.ObjectId.isValid(userDehiveId)) {
             console.log(`[DM-WS] Invalid userDehiveId: ${userDehiveId}`);
-            return this.send(client, 'error', {
-                message: 'Invalid userDehiveId',
-                code: 'INVALID_USER_ID',
-                timestamp: new Date().toISOString()
+            return this.send(client, "error", {
+                message: "Invalid userDehiveId",
+                code: "INVALID_USER_ID",
+                timestamp: new Date().toISOString(),
             });
         }
         console.log(`[DM-WS] Checking if user exists: ${userDehiveId}`);
@@ -897,10 +954,10 @@ let DmGateway = class DmGateway {
         console.log(`[DM-WS] User exists result: ${exists}`);
         if (!exists) {
             console.log(`[DM-WS] User not found in database: ${userDehiveId}`);
-            return this.send(client, 'error', {
-                message: 'User not found',
-                code: 'USER_NOT_FOUND',
-                timestamp: new Date().toISOString()
+            return this.send(client, "error", {
+                message: "User not found",
+                code: "USER_NOT_FOUND",
+                timestamp: new Date().toISOString(),
             });
         }
         const meta = this.meta.get(client);
@@ -908,10 +965,10 @@ let DmGateway = class DmGateway {
             meta.userDehiveId = userDehiveId;
             void client.join(`user:${userDehiveId}`);
             console.log(`[DM-WS] User identified as ${userDehiveId}`);
-            this.send(client, 'identityConfirmed', {
+            this.send(client, "identityConfirmed", {
                 userDehiveId,
-                status: 'success',
-                timestamp: new Date().toISOString()
+                status: "success",
+                timestamp: new Date().toISOString(),
             });
         }
     }
@@ -922,66 +979,68 @@ let DmGateway = class DmGateway {
         console.log(`[DM-WS] SendMessage data type:`, typeof data);
         console.log(`[DM-WS] SendMessage data:`, JSON.stringify(data, null, 2));
         if (!selfId) {
-            return this.send(client, 'error', {
-                message: 'Please identify first',
-                code: 'AUTHENTICATION_REQUIRED',
-                timestamp: new Date().toISOString()
+            return this.send(client, "error", {
+                message: "Please identify first",
+                code: "AUTHENTICATION_REQUIRED",
+                timestamp: new Date().toISOString(),
             });
         }
         try {
             let parsedData = data;
-            if (typeof data === 'string') {
+            if (typeof data === "string") {
                 try {
                     parsedData = JSON.parse(data);
                 }
                 catch (parseError) {
-                    console.error('[DM-WS] Failed to parse JSON data:', parseError);
-                    return this.send(client, 'error', {
-                        message: 'Invalid JSON format',
-                        code: 'INVALID_JSON',
-                        timestamp: new Date().toISOString()
+                    console.error("[DM-WS] Failed to parse JSON data:", parseError);
+                    return this.send(client, "error", {
+                        message: "Invalid JSON format",
+                        code: "INVALID_JSON",
+                        timestamp: new Date().toISOString(),
                     });
                 }
             }
-            if (!parsedData || typeof parsedData !== 'object') {
-                return this.send(client, 'error', {
-                    message: 'Invalid message data format',
+            if (!parsedData || typeof parsedData !== "object") {
+                return this.send(client, "error", {
+                    message: "Invalid message data format",
                 });
             }
-            if (!parsedData.conversationId || !mongoose_1.Types.ObjectId.isValid(parsedData.conversationId)) {
-                return this.send(client, 'error', {
-                    message: 'Invalid conversationId',
+            if (!parsedData.conversationId ||
+                !mongoose_1.Types.ObjectId.isValid(parsedData.conversationId)) {
+                return this.send(client, "error", {
+                    message: "Invalid conversationId",
                 });
             }
-            if (typeof parsedData.content !== 'string') {
-                return this.send(client, 'error', {
-                    message: 'Content must be a string',
+            if (typeof parsedData.content !== "string") {
+                return this.send(client, "error", {
+                    message: "Content must be a string",
                 });
             }
             if (parsedData.content.length > 2000) {
-                return this.send(client, 'error', {
-                    message: 'Content must not exceed 2000 characters',
+                return this.send(client, "error", {
+                    message: "Content must not exceed 2000 characters",
                 });
             }
             if (!Array.isArray(parsedData.uploadIds)) {
-                return this.send(client, 'error', {
-                    message: 'uploadIds must be an array',
+                return this.send(client, "error", {
+                    message: "uploadIds must be an array",
                 });
             }
             if (parsedData.uploadIds.length > 0) {
                 const allValid = parsedData.uploadIds.every((id) => {
-                    return typeof id === 'string' && mongoose_1.Types.ObjectId.isValid(id);
+                    return typeof id === "string" && mongoose_1.Types.ObjectId.isValid(id);
                 });
                 if (!allValid) {
-                    return this.send(client, 'error', {
-                        message: 'One or more uploadIds are invalid',
+                    return this.send(client, "error", {
+                        message: "One or more uploadIds are invalid",
                     });
                 }
             }
             if (parsedData.replyTo !== undefined && parsedData.replyTo !== null) {
-                if (typeof parsedData.replyTo !== 'string' || !mongoose_1.Types.ObjectId.isValid(parsedData.replyTo)) {
-                    return this.send(client, 'error', {
-                        message: 'replyTo must be a valid message ID',
+                if (typeof parsedData.replyTo !== "string" ||
+                    !mongoose_1.Types.ObjectId.isValid(parsedData.replyTo)) {
+                    return this.send(client, "error", {
+                        message: "replyTo must be a valid message ID",
                     });
                 }
             }
@@ -990,23 +1049,23 @@ let DmGateway = class DmGateway {
                 .findById(parsedData.conversationId)
                 .lean();
             if (!conv) {
-                return this.send(client, 'error', {
-                    message: 'Conversation not found',
+                return this.send(client, "error", {
+                    message: "Conversation not found",
                 });
             }
             const recipientId = String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
-            const messageToBroadcast = this.formatMessageData(savedMessage);
+            const messageToBroadcast = await this.formatMessageData(savedMessage);
             const serializedMessage = JSON.parse(JSON.stringify(messageToBroadcast));
             this.server
                 .to(`user:${recipientId}`)
                 .to(`user:${selfId}`)
-                .emit('newMessage', serializedMessage);
+                .emit("newMessage", serializedMessage);
         }
         catch (error) {
-            console.error('[DM-WS] Error handling message:', error);
-            console.error('[DM-WS] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-            this.send(client, 'error', {
-                message: 'Failed to send message',
+            console.error("[DM-WS] Error handling message:", error);
+            console.error("[DM-WS] Error stack:", error instanceof Error ? error.stack : "No stack trace");
+            this.send(client, "error", {
+                message: "Failed to send message",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -1015,9 +1074,9 @@ let DmGateway = class DmGateway {
         const meta = this.meta.get(client);
         const selfId = meta?.userDehiveId;
         if (!selfId)
-            return this.send(client, 'error', { message: 'Please identify first' });
+            return this.send(client, "error", { message: "Please identify first" });
         try {
-            const updated = await this.service.editMessage(selfId, data?.messageId, data?.content ?? '');
+            const updated = await this.service.editMessage(selfId, data?.messageId, data?.content ?? "");
             const conv = await this.conversationModel
                 .findById(updated.conversationId)
                 .lean();
@@ -1025,18 +1084,18 @@ let DmGateway = class DmGateway {
                 return;
             const recipientId = String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
             const payload = {
-                ...this.formatMessageData(updated),
+                ...(await this.formatMessageData(updated)),
                 messageId: updated._id,
             };
             const serializedPayload = JSON.parse(JSON.stringify(payload));
             this.server
                 .to(`user:${recipientId}`)
                 .to(`user:${selfId}`)
-                .emit('messageEdited', serializedPayload);
+                .emit("messageEdited", serializedPayload);
         }
         catch (error) {
-            this.send(client, 'error', {
-                message: 'Failed to edit message',
+            this.send(client, "error", {
+                message: "Failed to edit message",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -1045,7 +1104,7 @@ let DmGateway = class DmGateway {
         const meta = this.meta.get(client);
         const selfId = meta?.userDehiveId;
         if (!selfId)
-            return this.send(client, 'error', { message: 'Please identify first' });
+            return this.send(client, "error", { message: "Please identify first" });
         try {
             const updated = await this.service.deleteMessage(selfId, data?.messageId);
             const conv = await this.conversationModel
@@ -1055,7 +1114,7 @@ let DmGateway = class DmGateway {
                 return;
             const recipientId = String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
             const payload = {
-                ...this.formatMessageData(updated),
+                ...(await this.formatMessageData(updated)),
                 messageId: updated._id,
                 isDeleted: true,
             };
@@ -1063,11 +1122,11 @@ let DmGateway = class DmGateway {
             this.server
                 .to(`user:${recipientId}`)
                 .to(`user:${selfId}`)
-                .emit('messageDeleted', serializedPayload);
+                .emit("messageDeleted", serializedPayload);
         }
         catch (error) {
-            this.send(client, 'error', {
-                message: 'Failed to delete message',
+            this.send(client, "error", {
+                message: "Failed to delete message",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -1079,7 +1138,7 @@ __decorate([
     __metadata("design:type", socket_io_1.Server)
 ], DmGateway.prototype, "server", void 0);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('identity'),
+    (0, websockets_1.SubscribeMessage)("identity"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1087,7 +1146,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], DmGateway.prototype, "handleIdentity", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('sendMessage'),
+    (0, websockets_1.SubscribeMessage)("sendMessage"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1096,7 +1155,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], DmGateway.prototype, "handleSendMessage", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('editMessage'),
+    (0, websockets_1.SubscribeMessage)("editMessage"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1104,7 +1163,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], DmGateway.prototype, "handleEditMessage", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('deleteMessage'),
+    (0, websockets_1.SubscribeMessage)("deleteMessage"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1113,7 +1172,7 @@ __decorate([
 ], DmGateway.prototype, "handleDeleteMessage", null);
 exports.DmGateway = DmGateway = __decorate([
     (0, websockets_1.WebSocketGateway)({
-        cors: { origin: '*' },
+        cors: { origin: "*" },
     }),
     __param(1, (0, mongoose_2.InjectModel)(user_dehive_schema_1.UserDehive.name)),
     __param(2, (0, mongoose_2.InjectModel)(direct_conversation_schema_1.DirectConversation.name)),
@@ -1154,7 +1213,7 @@ exports.DirectConversation = DirectConversation;
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'UserDehive',
+        ref: "UserDehive",
         required: true,
         index: true,
     }),
@@ -1163,7 +1222,7 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'UserDehive',
+        ref: "UserDehive",
         required: true,
         index: true,
     }),
@@ -1174,10 +1233,10 @@ __decorate([
     __metadata("design:type", Boolean)
 ], DirectConversation.prototype, "is_encrypted", void 0);
 exports.DirectConversation = DirectConversation = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'direct_conversation', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "direct_conversation", timestamps: true })
 ], DirectConversation);
 exports.DirectConversationSchema = mongoose_1.SchemaFactory.createForClass(DirectConversation);
-exports.DirectConversationSchema.pre('save', function (next) {
+exports.DirectConversationSchema.pre("save", function (next) {
     if (this.userA.toString() > this.userB.toString()) {
         const temp = this.userA;
         this.userA = this.userB;
@@ -1224,7 +1283,7 @@ exports.DirectMessage = DirectMessage;
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'DirectConversation',
+        ref: "DirectConversation",
         required: true,
         index: true,
     }),
@@ -1233,7 +1292,7 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'UserDehive',
+        ref: "UserDehive",
         required: true,
         index: true,
     }),
@@ -1262,14 +1321,14 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'DirectMessage',
+        ref: "DirectMessage",
         required: false,
         default: null,
     }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], DirectMessage.prototype, "replyTo", void 0);
 exports.DirectMessage = DirectMessage = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'direct_message', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "direct_message", timestamps: true })
 ], DirectMessage);
 exports.DirectMessageSchema = mongoose_1.SchemaFactory.createForClass(DirectMessage);
 
@@ -1313,7 +1372,7 @@ exports.DirectUpload = DirectUpload;
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'UserDehive',
+        ref: "UserDehive",
         required: true,
         index: true,
     }),
@@ -1322,7 +1381,7 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'DirectConversation',
+        ref: "DirectConversation",
         required: true,
         index: true,
     }),
@@ -1365,7 +1424,7 @@ __decorate([
     __metadata("design:type", String)
 ], DirectUpload.prototype, "thumbnailUrl", void 0);
 exports.DirectUpload = DirectUpload = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'direct_upload', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "direct_upload", timestamps: true })
 ], DirectUpload);
 exports.DirectUploadSchema = mongoose_1.SchemaFactory.createForClass(DirectUpload);
 
@@ -1412,52 +1471,60 @@ let DirectMessagingController = class DirectMessagingController {
         this.service = service;
     }
     async sendMessage(selfId, body, req) {
-        if (req.method !== 'POST') {
+        if (req.method !== "POST") {
             throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only POST is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
         }
         const newMessage = await this.service.sendMessage(selfId, body);
         return {
             success: true,
             statusCode: 201,
-            message: 'Message sent successfully',
+            message: "Message sent successfully",
             data: newMessage,
         };
     }
     async createOrGet(selfId, body, req) {
-        if (req.method !== 'POST') {
+        if (req.method !== "POST") {
             throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only POST is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
         }
         const conv = await this.service.createOrGetConversation(selfId, body);
-        return { success: true, statusCode: 200, message: 'OK', data: conv };
+        return { success: true, statusCode: 200, message: "OK", data: conv };
     }
     async list(selfId, conversationId, query, req) {
-        if (req.method !== 'GET') {
+        if (req.method !== "GET") {
             throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only GET is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
         }
-        const data = await this.service.listMessages(selfId, conversationId, query);
-        return { success: true, statusCode: 200, message: 'OK', data };
+        const sessionId = req.headers['x-session-id'];
+        const fingerprintHash = req.headers['x-fingerprint-hashed'];
+        console.log(`[DM-CONTROLLER] Headers:`, {
+            'x-session-id': req.headers['x-session-id'],
+            'x-fingerprint-hashed': req.headers['x-fingerprint-hashed'],
+            sessionId,
+            fingerprintHash
+        });
+        const data = await this.service.listMessages(selfId, conversationId, query, sessionId, fingerprintHash);
+        return { success: true, statusCode: 200, message: "OK", data };
     }
     async uploadFile(file, body, selfId, req) {
-        if (req.method !== 'POST') {
+        if (req.method !== "POST") {
             throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only POST is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
         }
         const result = await this.service.handleUpload(selfId, file, body);
         return {
             success: true,
             statusCode: 201,
-            message: 'File uploaded successfully',
+            message: "File uploaded successfully",
             data: result,
         };
     }
     async listUploads(selfId, query, req) {
-        if (req.method !== 'GET') {
+        if (req.method !== "GET") {
             throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only GET is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
         }
         const data = await this.service.listUploads(selfId, query);
-        return { success: true, statusCode: 200, message: 'OK', data };
+        return { success: true, statusCode: 200, message: "OK", data };
     }
     async getFollowing(currentUser, query, req) {
-        if (req.method !== 'GET') {
+        if (req.method !== "GET") {
             throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only GET is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
         }
         const result = await this.service.getFollowing(currentUser, query);
@@ -1466,28 +1533,27 @@ let DirectMessagingController = class DirectMessagingController {
 };
 exports.DirectMessagingController = DirectMessagingController;
 __decorate([
-    (0, common_1.Post)('send'),
-    (0, swagger_1.ApiOperation)({ summary: 'Send a message to a direct conversation' }),
+    (0, common_1.Post)("send"),
+    (0, swagger_1.ApiOperation)({ summary: "Send a message to a direct conversation" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'The session ID of the authenticated user',
+        name: "x-session-id",
+        description: "The session ID of the authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-fingerprint-hashed',
-        description: 'The hashed fingerprint of the client device',
+        name: "x-fingerprint-hashed",
+        description: "The hashed fingerprint of the client device",
         required: true,
     }),
     (0, swagger_1.ApiBody)({ type: send_direct_message_dto_1.SendDirectMessageDto }),
-    (0, swagger_1.ApiResponse)({ status: 201, description: 'Message sent successfully.' }),
-    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid input or missing fields.' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Message sent successfully." }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Invalid input or missing fields." }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'User is not a participant of this conversation.',
+        description: "User is not a participant of this conversation.",
     }),
-    (0, swagger_1.ApiResponse)({ status: 404, description: 'Conversation not found.' }),
-    openapi.ApiResponse({ status: 201 }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Conversation not found." }),
+    __param(0, (0, current_user_decorator_1.CurrentUser)("_id")),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -1495,20 +1561,20 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "sendMessage", null);
 __decorate([
-    (0, common_1.Post)('conversation'),
-    (0, swagger_1.ApiOperation)({ summary: 'Create or get a 1:1 conversation' }),
+    (0, common_1.Post)("conversation"),
+    (0, swagger_1.ApiOperation)({ summary: "Create or get a 1:1 conversation" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-fingerprint-hashed',
-        description: 'The hashed fingerprint of the client device',
+        name: "x-fingerprint-hashed",
+        description: "The hashed fingerprint of the client device",
         required: true,
     }),
     openapi.ApiResponse({ status: 201 }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(0, (0, current_user_decorator_1.CurrentUser)("_id")),
     __param(1, (0, common_1.Body)()),
     __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -1516,21 +1582,21 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "createOrGet", null);
 __decorate([
-    (0, common_1.Get)('messages/:conversationId'),
-    (0, swagger_1.ApiOperation)({ summary: 'List messages in a conversation' }),
+    (0, common_1.Get)("messages/:conversationId"),
+    (0, swagger_1.ApiOperation)({ summary: "List messages in a conversation" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-fingerprint-hashed',
-        description: 'The hashed fingerprint of the client device',
+        name: "x-fingerprint-hashed",
+        description: "The hashed fingerprint of the client device",
         required: true,
     }),
-    (0, swagger_1.ApiParam)({ name: 'conversationId' }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
-    __param(1, (0, common_1.Param)('conversationId')),
+    (0, swagger_1.ApiParam)({ name: "conversationId" }),
+    __param(0, (0, current_user_decorator_1.CurrentUser)("_id")),
+    __param(1, (0, common_1.Param)("conversationId")),
     __param(2, (0, common_1.Query)()),
     __param(3, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -1538,83 +1604,83 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "list", null);
 __decorate([
-    (0, common_1.Post)('files/upload'),
-    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file')),
-    (0, swagger_1.ApiOperation)({ summary: 'Upload a file to a direct conversation' }),
+    (0, common_1.Post)("files/upload"),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)("file")),
+    (0, swagger_1.ApiOperation)({ summary: "Upload a file to a direct conversation" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-fingerprint-hashed',
-        description: 'The hashed fingerprint of the client device',
+        name: "x-fingerprint-hashed",
+        description: "The hashed fingerprint of the client device",
         required: true,
     }),
-    (0, swagger_1.ApiConsumes)('multipart/form-data'),
+    (0, swagger_1.ApiConsumes)("multipart/form-data"),
     (0, swagger_1.ApiBody)({
         schema: {
-            type: 'object',
+            type: "object",
             properties: {
                 file: {
-                    type: 'string',
-                    format: 'binary',
-                    description: 'The file to upload.',
+                    type: "string",
+                    format: "binary",
+                    description: "The file to upload.",
                 },
                 conversationId: {
-                    type: 'string',
-                    description: 'The ID of the direct conversation the file belongs to.',
+                    type: "string",
+                    description: "The ID of the direct conversation the file belongs to.",
                 },
             },
-            required: ['file', 'conversationId'],
+            required: ["file", "conversationId"],
         },
     }),
     (0, swagger_1.ApiResponse)({
         status: 201,
-        description: 'File uploaded successfully and metadata returned.',
+        description: "File uploaded successfully and metadata returned.",
         type: direct_upload_dto_1.DirectUploadResponseDto,
     }),
     (0, swagger_1.ApiResponse)({
         status: 400,
-        description: 'Bad request, missing file, invalid ID, or file size exceeds limit.',
+        description: "Bad request, missing file, invalid ID, or file size exceeds limit.",
     }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'User is not a participant of the conversation.',
+        description: "User is not a participant of the conversation.",
     }),
-    (0, swagger_1.ApiResponse)({ status: 404, description: 'Conversation not found.' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Conversation not found." }),
     openapi.ApiResponse({ status: 201 }),
     __param(0, (0, common_1.UploadedFile)()),
     __param(1, (0, common_1.Body)()),
-    __param(2, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)("_id")),
     __param(3, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, direct_upload_dto_1.DirectUploadInitDto, String, Object]),
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "uploadFile", null);
 __decorate([
-    (0, common_1.Get)('files/list'),
-    (0, swagger_1.ApiOperation)({ summary: 'List files uploaded by the current user in DMs' }),
+    (0, common_1.Get)("files/list"),
+    (0, swagger_1.ApiOperation)({ summary: "List files uploaded by the current user in DMs" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-fingerprint-hashed',
-        description: 'The hashed fingerprint of the client device',
+        name: "x-fingerprint-hashed",
+        description: "The hashed fingerprint of the client device",
         required: true,
     }),
     (0, swagger_1.ApiResponse)({
         status: 200,
-        description: 'Successfully returned a list of uploaded files.',
+        description: "Successfully returned a list of uploaded files.",
     }),
     (0, swagger_1.ApiResponse)({
         status: 400,
-        description: 'Invalid user ID or pagination parameters.',
+        description: "Invalid user ID or pagination parameters.",
     }),
     openapi.ApiResponse({ status: 200 }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('_id')),
+    __param(0, (0, current_user_decorator_1.CurrentUser)("_id")),
     __param(1, (0, common_1.Query)()),
     __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -1622,28 +1688,28 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "listUploads", null);
 __decorate([
-    (0, common_1.Get)('following'),
+    (0, common_1.Get)("following"),
     (0, swagger_1.ApiOperation)({
-        summary: 'Get following list',
-        description: 'Retrieves the list of users that the current user is following from Decode service'
+        summary: "Get following list",
+        description: "Retrieves the list of users that the current user is following from Decode service",
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-fingerprint-hashed',
-        description: 'The hashed fingerprint of the client device',
+        name: "x-fingerprint-hashed",
+        description: "The hashed fingerprint of the client device",
         required: true,
     }),
     (0, swagger_1.ApiResponse)({
         status: 200,
-        description: 'Successfully returned following list.',
+        description: "Successfully returned following list.",
     }),
     (0, swagger_1.ApiResponse)({
         status: 404,
-        description: 'Could not retrieve following list from Decode service.',
+        description: "Could not retrieve following list from Decode service.",
     }),
     openapi.ApiResponse({ status: 200 }),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
@@ -1654,8 +1720,8 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], DirectMessagingController.prototype, "getFollowing", null);
 exports.DirectMessagingController = DirectMessagingController = __decorate([
-    (0, swagger_1.ApiTags)('Direct Messages'),
-    (0, common_1.Controller)('dm'),
+    (0, swagger_1.ApiTags)("Direct Messages"),
+    (0, common_1.Controller)("dm"),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
     __metadata("design:paramtypes", [direct_messaging_service_1.DirectMessagingService])
 ], DirectMessagingController);
@@ -1698,7 +1764,7 @@ exports.DirectMessagingModule = DirectMessagingModule;
 exports.DirectMessagingModule = DirectMessagingModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            config_1.ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
+            config_1.ConfigModule.forRoot({ isGlobal: true, envFilePath: ".env" }),
             axios_1.HttpModule.register({
                 timeout: 5000,
                 maxRedirects: 5,
@@ -1707,16 +1773,16 @@ exports.DirectMessagingModule = DirectMessagingModule = __decorate([
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],
                 useFactory: (config) => ({
-                    type: 'single',
-                    url: config.get('REDIS_URI'),
+                    type: "single",
+                    url: config.get("REDIS_URI"),
                 }),
             }),
             mongoose_1.MongooseModule.forRootAsync({
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],
                 useFactory: (config) => ({
-                    uri: config.get('MONGODB_URI'),
-                    dbName: 'dehive_db',
+                    uri: config.get("MONGODB_URI"),
+                    dbName: "dehive_db",
                 }),
             }),
             mongoose_1.MongooseModule.forFeature([
@@ -1791,20 +1857,20 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
         this.redis = redis;
     }
     detectAttachmentType(mime) {
-        if (mime.startsWith('image/'))
+        if (mime.startsWith("image/"))
             return enum_1.AttachmentType.IMAGE;
-        if (mime.startsWith('video/'))
+        if (mime.startsWith("video/"))
             return enum_1.AttachmentType.VIDEO;
-        if (mime.startsWith('audio/'))
+        if (mime.startsWith("audio/"))
             return enum_1.AttachmentType.AUDIO;
         return enum_1.AttachmentType.FILE;
     }
     getLimits() {
-        const toBytes = (mb, def) => (parseInt(mb || '', 10) || def) * 1024 * 1024;
+        const toBytes = (mb, def) => (parseInt(mb || "", 10) || def) * 1024 * 1024;
         return {
-            image: toBytes(this.configService.get('MAX_IMAGE_MB') ?? '10', 10),
-            video: toBytes(this.configService.get('MAX_VIDEO_MB') ?? '100', 100),
-            file: toBytes(this.configService.get('MAX_FILE_MB') ?? '25', 25),
+            image: toBytes(this.configService.get("MAX_IMAGE_MB") ?? "10", 10),
+            video: toBytes(this.configService.get("MAX_VIDEO_MB") ?? "100", 100),
+            file: toBytes(this.configService.get("MAX_FILE_MB") ?? "25", 25),
         };
     }
     validateUploadSize(mime, size) {
@@ -1822,7 +1888,7 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
     async createOrGetConversation(selfId, dto) {
         if (!mongoose_2.Types.ObjectId.isValid(selfId) ||
             !mongoose_2.Types.ObjectId.isValid(dto.otherUserDehiveId)) {
-            throw new common_1.BadRequestException('Invalid participant id');
+            throw new common_1.BadRequestException("Invalid participant id");
         }
         const existing = await this.conversationModel.findOne({
             $or: [
@@ -1845,53 +1911,53 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
         return doc;
     }
     async handleUpload(selfId, file, body) {
-        if (!file || typeof file !== 'object') {
-            throw new common_1.BadRequestException('File is required');
+        if (!file || typeof file !== "object") {
+            throw new common_1.BadRequestException("File is required");
         }
         const uploaded = file;
         if (!selfId || !mongoose_2.Types.ObjectId.isValid(selfId)) {
-            throw new common_1.BadRequestException('Invalid or missing user_dehive_id');
+            throw new common_1.BadRequestException("Invalid or missing user_dehive_id");
         }
         if (!body.conversationId || !mongoose_2.Types.ObjectId.isValid(body.conversationId)) {
-            throw new common_1.BadRequestException('Invalid conversationId');
+            throw new common_1.BadRequestException("Invalid conversationId");
         }
         const conv = await this.conversationModel
             .findById(body.conversationId)
             .lean();
         if (!conv) {
-            throw new common_1.NotFoundException('Conversation not found');
+            throw new common_1.NotFoundException("Conversation not found");
         }
         const isParticipant = [
             conv.userA.toString(),
             conv.userB.toString(),
         ].includes(selfId);
         if (!isParticipant) {
-            throw new common_1.BadRequestException('You are not a participant of this conversation');
+            throw new common_1.BadRequestException("You are not a participant of this conversation");
         }
-        const mime = uploaded.mimetype || 'application/octet-stream';
+        const mime = uploaded.mimetype || "application/octet-stream";
         const size = uploaded.size ?? 0;
         this.validateUploadSize(mime, size);
-        const storage = (this.configService.get('STORAGE') || 'local').toLowerCase();
-        const port = this.configService.get('DIRECT_MESSAGING_PORT') || 4004;
-        const cdnBase = this.configService.get('CDN_BASE_URL_DM') ||
+        const storage = (this.configService.get("STORAGE") || "local").toLowerCase();
+        const port = this.configService.get("DIRECT_MESSAGING_PORT") || 4004;
+        const cdnBase = this.configService.get("CDN_BASE_URL_DM") ||
             `http://localhost:${port}/uploads`;
-        let fileUrl = '';
-        const originalName = uploaded.originalname || 'upload.bin';
-        const ext = path.extname(originalName) || '';
+        let fileUrl = "";
+        const originalName = uploaded.originalname || "upload.bin";
+        const ext = path.extname(originalName) || "";
         const safeName = `${(0, crypto_1.randomUUID)()}${ext}`;
-        const uploadDir = path.resolve(process.cwd(), 'uploads');
-        if (storage === 'local') {
+        const uploadDir = path.resolve(process.cwd(), "uploads");
+        if (storage === "local") {
             if (!fs.existsSync(uploadDir))
                 fs.mkdirSync(uploadDir, { recursive: true });
             const dest = path.join(uploadDir, safeName);
             const buffer = Buffer.isBuffer(uploaded.buffer)
                 ? uploaded.buffer
-                : Buffer.from('');
+                : Buffer.from("");
             fs.writeFileSync(dest, buffer);
-            fileUrl = `${cdnBase.replace(/\/$/, '')}/${safeName}`;
+            fileUrl = `${cdnBase.replace(/\/$/, "")}/${safeName}`;
         }
         else {
-            throw new common_1.BadRequestException('S3/MinIO storage is not implemented yet');
+            throw new common_1.BadRequestException("S3/MinIO storage is not implemented yet");
         }
         const type = this.detectAttachmentType(mime);
         let width, height, durationMs, thumbnailUrl;
@@ -1904,30 +1970,30 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
             else if (type === enum_1.AttachmentType.VIDEO ||
                 type === enum_1.AttachmentType.AUDIO) {
                 const tmpFilePath = path.join(uploadDir, safeName);
-                const probeBin = (typeof ffprobe_static_1.default === 'object' && 'path' in ffprobe_static_1.default
+                const probeBin = (typeof ffprobe_static_1.default === "object" && "path" in ffprobe_static_1.default
                     ? ffprobe_static_1.default.path
-                    : undefined) || 'ffprobe';
+                    : undefined) || "ffprobe";
                 const probe = childProcess.spawnSync(probeBin, [
-                    '-v',
-                    'error',
-                    '-print_format',
-                    'json',
-                    '-show_format',
-                    '-show_streams',
+                    "-v",
+                    "error",
+                    "-print_format",
+                    "json",
+                    "-show_format",
+                    "-show_streams",
                     tmpFilePath,
-                ], { encoding: 'utf-8' });
+                ], { encoding: "utf-8" });
                 if (probe.status === 0 && probe.stdout) {
                     const info = JSON.parse(probe.stdout);
                     const videoStream = Array.isArray(info.streams)
-                        ? info.streams.find((s) => s && s.codec_type === 'video')
+                        ? info.streams.find((s) => s && s.codec_type === "video")
                         : undefined;
                     if (videoStream) {
                         width =
-                            typeof videoStream.width === 'number'
+                            typeof videoStream.width === "number"
                                 ? videoStream.width
                                 : undefined;
                         height =
-                            typeof videoStream.height === 'number'
+                            typeof videoStream.height === "number"
                                 ? videoStream.height
                                 : undefined;
                     }
@@ -1940,26 +2006,26 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
                         !Number.isNaN(Number(info.format.duration))) {
                         dur = parseFloat(info.format.duration);
                     }
-                    if (typeof dur === 'number' && !Number.isNaN(dur))
+                    if (typeof dur === "number" && !Number.isNaN(dur))
                         durationMs = Math.round(dur * 1000);
                     if (type === enum_1.AttachmentType.VIDEO) {
                         const thumbName = `${path.parse(safeName).name}_thumb.jpg`;
                         const thumbPath = path.join(uploadDir, thumbName);
-                        const ffmpegBin = ffmpeg_static_1.default || 'ffmpeg';
+                        const ffmpegBin = ffmpeg_static_1.default || "ffmpeg";
                         const ffmpeg = childProcess.spawnSync(ffmpegBin, [
-                            '-i',
+                            "-i",
                             tmpFilePath,
-                            '-ss',
-                            '00:00:00.000',
-                            '-vframes',
-                            '1',
-                            '-vf',
-                            'scale=640:-1',
+                            "-ss",
+                            "00:00:00.000",
+                            "-vframes",
+                            "1",
+                            "-vf",
+                            "scale=640:-1",
                             thumbPath,
-                            '-y',
-                        ], { encoding: 'utf-8' });
+                            "-y",
+                        ], { encoding: "utf-8" });
                         if (ffmpeg.status === 0) {
-                            thumbnailUrl = `${cdnBase.replace(/\/$/, '')}/${thumbName}`;
+                            thumbnailUrl = `${cdnBase.replace(/\/$/, "")}/${thumbName}`;
                         }
                     }
                 }
@@ -1996,21 +2062,21 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
     }
     async sendMessage(selfId, dto) {
         if (!mongoose_2.Types.ObjectId.isValid(selfId)) {
-            throw new common_1.BadRequestException('Invalid sender id');
+            throw new common_1.BadRequestException("Invalid sender id");
         }
         if (!mongoose_2.Types.ObjectId.isValid(dto.conversationId)) {
-            throw new common_1.BadRequestException('Invalid conversation id');
+            throw new common_1.BadRequestException("Invalid conversation id");
         }
         const conv = await this.conversationModel
             .findById(dto.conversationId)
             .lean();
         if (!conv)
-            throw new common_1.NotFoundException('Conversation not found');
+            throw new common_1.NotFoundException("Conversation not found");
         const isParticipant = [conv.userA, conv.userB]
             .map((x) => String(x))
             .includes(selfId);
         if (!isParticipant)
-            throw new common_1.BadRequestException('Not a participant');
+            throw new common_1.BadRequestException("Not a participant");
         let attachments = [];
         if (Array.isArray(dto.uploadIds) && dto.uploadIds.length > 0) {
             const ids = dto.uploadIds.map((id) => new mongoose_2.Types.ObjectId(id));
@@ -2018,7 +2084,7 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
                 .find({ _id: { $in: ids }, ownerId: new mongoose_2.Types.ObjectId(selfId) })
                 .lean();
             if (uploads.length !== ids.length) {
-                throw new common_1.BadRequestException('You can only attach your own uploads');
+                throw new common_1.BadRequestException("You can only attach your own uploads");
             }
             attachments = uploads.map((u) => ({
                 type: u.type,
@@ -2035,14 +2101,16 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
         let replyToMessageId;
         if (dto.replyTo) {
             if (!mongoose_2.Types.ObjectId.isValid(dto.replyTo)) {
-                throw new common_1.BadRequestException('Invalid replyTo message id');
+                throw new common_1.BadRequestException("Invalid replyTo message id");
             }
-            const replyToMessage = await this.messageModel.findById(dto.replyTo).lean();
+            const replyToMessage = await this.messageModel
+                .findById(dto.replyTo)
+                .lean();
             if (!replyToMessage) {
-                throw new common_1.NotFoundException('Message being replied to not found');
+                throw new common_1.NotFoundException("Message being replied to not found");
             }
             if (String(replyToMessage.conversationId) !== dto.conversationId) {
-                throw new common_1.BadRequestException('Cannot reply to a message from a different conversation');
+                throw new common_1.BadRequestException("Cannot reply to a message from a different conversation");
             }
             replyToMessageId = new mongoose_2.Types.ObjectId(dto.replyTo);
         }
@@ -2053,28 +2121,36 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
             attachments,
             replyTo: replyToMessageId || null,
         });
-        return message;
+        const populatedMessage = await this.messageModel
+            .findById(message._id)
+            .populate("replyTo", "content senderId createdAt")
+            .lean();
+        const formattedMessage = {
+            ...populatedMessage,
+            replyTo: populatedMessage?.replyTo || null,
+        };
+        return formattedMessage;
     }
-    async listMessages(selfId, conversationId, dto) {
+    async listMessages(selfId, conversationId, dto, sessionId, fingerprintHash) {
         if (!mongoose_2.Types.ObjectId.isValid(selfId))
-            throw new common_1.BadRequestException('Invalid self id');
+            throw new common_1.BadRequestException("Invalid self id");
         if (!mongoose_2.Types.ObjectId.isValid(conversationId))
-            throw new common_1.BadRequestException('Invalid conversation id');
+            throw new common_1.BadRequestException("Invalid conversation id");
         const conv = await this.conversationModel.findById(conversationId).lean();
         if (!conv)
-            throw new common_1.NotFoundException('Conversation not found');
+            throw new common_1.NotFoundException("Conversation not found");
         const isParticipant = [conv.userA, conv.userB]
             .map((x) => String(x))
             .includes(selfId);
         if (!isParticipant)
-            throw new common_1.BadRequestException('Not a participant');
+            throw new common_1.BadRequestException("Not a participant");
         const page = dto.page || 0;
         const limit = dto.limit || 10;
         const skip = page * limit;
         const [items, total] = await Promise.all([
             this.messageModel
                 .find({ conversationId: new mongoose_2.Types.ObjectId(conversationId) })
-                .populate('replyTo', 'content senderId createdAt')
+                .populate("replyTo", "content senderId createdAt")
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
@@ -2084,10 +2160,39 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
             }),
         ]);
         const totalPages = Math.ceil(total / limit);
-        const isLastPage = page >= (totalPages - 1);
-        const formattedItems = items.map(item => ({
-            ...item,
-            replyTo: item.replyTo || null
+        const isLastPage = page >= totalPages - 1;
+        const formattedItems = await Promise.all(items.map(async (item) => {
+            this.logger.log(`Getting profile for sender ${item.senderId}, sessionId: ${sessionId}, fingerprintHash: ${fingerprintHash}`);
+            let userProfile;
+            if (sessionId && fingerprintHash) {
+                userProfile = await this.getUserProfileFromDecode(String(item.senderId), sessionId, fingerprintHash);
+                if (!userProfile) {
+                    this.logger.warn(`Failed to get profile from decode API for ${item.senderId}, using fallback`);
+                    userProfile = await this.getUserProfile(String(item.senderId));
+                }
+            }
+            else {
+                userProfile = await this.getUserProfile(String(item.senderId));
+            }
+            return {
+                _id: item._id,
+                conversationId: item.conversationId,
+                sender: {
+                    dehive_id: item.senderId,
+                    username: userProfile.username || `User_${String(item.senderId)}`,
+                    display_name: userProfile.display_name || `User_${String(item.senderId)}`,
+                    avatar_ipfs_hash: userProfile.avatar_ipfs_hash || null,
+                },
+                content: item.content,
+                attachments: item.attachments || [],
+                isEdited: item.isEdited || false,
+                editedAt: item.editedAt || null,
+                isDeleted: item.isDeleted || false,
+                replyTo: item.replyTo || null,
+                createdAt: item.createdAt,
+                updatedAt: item.updatedAt,
+                __v: item.__v,
+            };
         }));
         return {
             items: formattedItems,
@@ -2095,24 +2200,24 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
                 page,
                 limit,
                 total: items.length,
-                is_last_page: isLastPage
-            }
+                is_last_page: isLastPage,
+            },
         };
     }
     async editMessage(selfId, messageId, content) {
         if (!mongoose_2.Types.ObjectId.isValid(selfId))
-            throw new common_1.BadRequestException('Invalid self id');
+            throw new common_1.BadRequestException("Invalid self id");
         if (!mongoose_2.Types.ObjectId.isValid(messageId))
-            throw new common_1.BadRequestException('Invalid message id');
-        if (typeof content !== 'string')
-            throw new common_1.BadRequestException('Content must be a string');
+            throw new common_1.BadRequestException("Invalid message id");
+        if (typeof content !== "string")
+            throw new common_1.BadRequestException("Content must be a string");
         const message = await this.messageModel.findById(messageId);
         if (!message)
-            throw new common_1.NotFoundException('Message not found');
+            throw new common_1.NotFoundException("Message not found");
         if (String(message.senderId) !== selfId)
-            throw new common_1.BadRequestException('You can only edit your own message');
+            throw new common_1.BadRequestException("You can only edit your own message");
         if (message.isDeleted)
-            throw new common_1.BadRequestException('Cannot edit a deleted message');
+            throw new common_1.BadRequestException("Cannot edit a deleted message");
         message.content = content;
         message.isEdited = true;
         message.editedAt = new Date();
@@ -2121,25 +2226,25 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
     }
     async deleteMessage(selfId, messageId) {
         if (!mongoose_2.Types.ObjectId.isValid(selfId))
-            throw new common_1.BadRequestException('Invalid self id');
+            throw new common_1.BadRequestException("Invalid self id");
         if (!mongoose_2.Types.ObjectId.isValid(messageId))
-            throw new common_1.BadRequestException('Invalid message id');
+            throw new common_1.BadRequestException("Invalid message id");
         const message = await this.messageModel.findById(messageId);
         if (!message)
-            throw new common_1.NotFoundException('Message not found');
+            throw new common_1.NotFoundException("Message not found");
         if (String(message.senderId) !== selfId)
-            throw new common_1.BadRequestException('You can only delete your own message');
+            throw new common_1.BadRequestException("You can only delete your own message");
         if (message.isDeleted)
             return message.toJSON();
         message.isDeleted = true;
-        message.content = '[deleted]';
+        message.content = "[deleted]";
         message.attachments = [];
         await message.save();
         return message.toJSON();
     }
     async listUploads(selfId, dto) {
         if (!selfId || !mongoose_2.Types.ObjectId.isValid(selfId)) {
-            throw new common_1.BadRequestException('Invalid user id');
+            throw new common_1.BadRequestException("Invalid user id");
         }
         const page = dto.page >= 0 ? dto.page : 0;
         const limit = dto.limit > 0 ? Math.min(dto.limit, 100) : 10;
@@ -2160,15 +2265,15 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
             this.directuploadModel.countDocuments(query),
         ]);
         const totalPages = Math.ceil(total / limit);
-        const isLastPage = page >= (totalPages - 1);
+        const isLastPage = page >= totalPages - 1;
         return {
             items,
             metadata: {
                 page,
                 limit,
                 total: items.length,
-                is_last_page: isLastPage
-            }
+                is_last_page: isLastPage,
+            },
         };
     }
     async getFollowing(currentUser, dto) {
@@ -2176,42 +2281,104 @@ let DirectMessagingService = DirectMessagingService_1 = class DirectMessagingSer
         const limit = dto.limit || 10;
         const sessionId = currentUser.session_id;
         if (!sessionId) {
-            throw new common_1.UnauthorizedException('Session ID not found in user session.');
+            throw new common_1.UnauthorizedException("Session ID not found in user session.");
         }
         const sessionKey = `session:${sessionId}`;
         const sessionDataRaw = await this.redis.get(sessionKey);
         if (!sessionDataRaw) {
-            throw new common_1.UnauthorizedException('Session not found in cache.');
+            throw new common_1.UnauthorizedException("Session not found in cache.");
         }
         const sessionData = JSON.parse(sessionDataRaw);
         const accessToken = sessionData.access_token;
         const fingerprintHash = currentUser.fingerprint_hash;
         if (!accessToken) {
-            throw new common_1.UnauthorizedException('Access token not found in user session.');
+            throw new common_1.UnauthorizedException("Access token not found in user session.");
         }
         if (!fingerprintHash) {
-            throw new common_1.UnauthorizedException('Fingerprint hash not found in user session.');
+            throw new common_1.UnauthorizedException("Fingerprint hash not found in user session.");
         }
         const result = await this.decodeApiClient.getFollowing(accessToken, fingerprintHash, page, limit);
         if (!result || !result.success) {
-            throw new common_1.NotFoundException('Could not retrieve following list from Decode service');
+            throw new common_1.NotFoundException("Could not retrieve following list from Decode service");
         }
         const items = result.data?.users || [];
         const metadata = result.data?.meta;
         return {
             success: true,
             statusCode: 200,
-            message: 'OK',
+            message: "OK",
             data: {
                 items,
                 metadata: metadata || {
                     page,
                     limit,
                     total: items.length,
-                    is_last_page: true
-                }
-            }
+                    is_last_page: true,
+                },
+            },
         };
+    }
+    async cacheUserProfile(userDehiveId, profile) {
+        try {
+            const cacheKey = `user_profile:${userDehiveId}`;
+            const cacheData = {
+                _id: userDehiveId,
+                username: profile.username || `User_${userDehiveId}`,
+                display_name: profile.display_name || `User_${userDehiveId}`,
+                avatar_ipfs_hash: profile.avatar_ipfs_hash || undefined,
+                bio: profile.bio || null,
+                is_verified: profile.is_verified || false,
+            };
+            await this.redis.setex(cacheKey, 3600, JSON.stringify(cacheData));
+            this.logger.log(`Cached user profile for ${userDehiveId}`);
+        }
+        catch (error) {
+            this.logger.error(`Error caching user profile for ${userDehiveId}:`, error);
+        }
+    }
+    async getUserProfile(userDehiveId) {
+        try {
+            const cacheKey = `user_profile:${userDehiveId}`;
+            const cachedData = await this.redis.get(cacheKey);
+            if (cachedData) {
+                const profile = JSON.parse(cachedData);
+                this.logger.log(`Retrieved cached profile for ${userDehiveId} in WebSocket`);
+                return profile;
+            }
+            this.logger.log(`No cached profile found for ${userDehiveId}, using fallback in WebSocket`);
+            return {
+                _id: userDehiveId,
+                username: `User_${userDehiveId}`,
+                display_name: `User_${userDehiveId}`,
+                avatar_ipfs_hash: undefined,
+            };
+        }
+        catch (error) {
+            this.logger.error(`Error getting user profile for ${userDehiveId}:`, error);
+            return {
+                _id: userDehiveId,
+                username: `User_${userDehiveId}`,
+                display_name: `User_${userDehiveId}`,
+                avatar_ipfs_hash: undefined,
+            };
+        }
+    }
+    async getUserProfileFromDecode(userDehiveId, sessionId, fingerprintHash) {
+        try {
+            this.logger.log(`Fetching profile for ${userDehiveId} from decode API using session ${sessionId}`);
+            const profile = await this.decodeApiClient.getUserProfile(sessionId, fingerprintHash, userDehiveId);
+            if (profile) {
+                await this.cacheUserProfile(userDehiveId, profile);
+                this.logger.log(`Successfully fetched and cached profile for ${userDehiveId}:`, profile);
+                return profile;
+            }
+            this.logger.warn(`Failed to get profile from decode API for ${userDehiveId}`);
+            return null;
+        }
+        catch (error) {
+            this.logger.error(`Error getting user profile from decode API for ${userDehiveId}:`, error);
+            return null;
+        }
     }
 };
 exports.DirectMessagingService = DirectMessagingService;
@@ -2313,7 +2480,7 @@ __decorate([
     (0, mongoose_1.Prop)({
         type: String,
         enum: enum_1.enumUserRole,
-        default: 'USER',
+        default: "USER",
     }),
     __metadata("design:type", String)
 ], UserDehive.prototype, "dehive_role", void 0);
@@ -2324,8 +2491,8 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: String,
-        enum: ['ACTIVE', 'INACTIVE', 'BANNED'],
-        default: 'ACTIVE',
+        enum: ["ACTIVE", "INACTIVE", "BANNED"],
+        default: "ACTIVE",
     }),
     __metadata("design:type", String)
 ], UserDehive.prototype, "status", void 0);
@@ -2338,7 +2505,7 @@ __decorate([
     __metadata("design:type", Date)
 ], UserDehive.prototype, "last_login", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: String, default: '' }),
+    (0, mongoose_1.Prop)({ type: String, default: "" }),
     __metadata("design:type", String)
 ], UserDehive.prototype, "bio", void 0);
 __decorate([
@@ -2355,7 +2522,7 @@ __decorate([
 ], UserDehive.prototype, "banned_by_servers", void 0);
 exports.UserDehive = UserDehive = __decorate([
     (0, mongoose_1.Schema)({
-        collection: 'user_dehive',
+        collection: "user_dehive",
         timestamps: true,
     })
 ], UserDehive);
@@ -2652,22 +2819,22 @@ const method_not_allowed_filter_1 = __webpack_require__(/*! ../common/filters/me
 async function bootstrap() {
     const app = await core_1.NestFactory.create(direct_messaging_module_1.DirectMessagingModule);
     const configService = app.get(config_1.ConfigService);
-    app.enableCors({ origin: '*' });
-    app.setGlobalPrefix('api');
+    app.enableCors({ origin: "*" });
+    app.setGlobalPrefix("api");
     app.useGlobalPipes(new common_1.ValidationPipe({ whitelist: true, transform: true }));
     app.useGlobalFilters(new method_not_allowed_filter_1.MethodNotAllowedFilter());
-    app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+    app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
     app.useWebSocketAdapter(new platform_socket_io_1.IoAdapter(app));
     const config = new swagger_1.DocumentBuilder()
-        .setTitle('Dehive - Direct Messaging Service')
-        .setDescription('REST for 1:1 direct chat.')
-        .setVersion('1.0')
-        .addTag('Direct Messages')
+        .setTitle("Dehive - Direct Messaging Service")
+        .setDescription("REST for 1:1 direct chat.")
+        .setVersion("1.0")
+        .addTag("Direct Messages")
         .build();
     const document = swagger_1.SwaggerModule.createDocument(app, config);
-    swagger_1.SwaggerModule.setup('api-dm-docs', app, document);
-    const port = configService.get('DIRECT_MESSAGING_PORT') || 4004;
-    const host = configService.get('CLOUD_HOST') || 'localhost';
+    swagger_1.SwaggerModule.setup("api-dm-docs", app, document);
+    const port = configService.get("DIRECT_MESSAGING_PORT") || 4004;
+    const host = configService.get("CLOUD_HOST") || "localhost";
     await app.listen(port, host);
     console.log(`[Dehive] Direct-Messaging service running at http://localhost:${port}`);
     console.log(`[Dehive] Swagger UI at http://localhost:${port}/api-dm-docs`);
