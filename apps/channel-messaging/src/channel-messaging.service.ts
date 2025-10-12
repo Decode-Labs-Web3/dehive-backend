@@ -134,7 +134,7 @@ export class MessagingService {
       throw new BadRequestException("Invalid or missing user_dehive_id");
     }
     const isMember = await this.userDehiveServerModel.exists({
-      user_dehive_id: new Types.ObjectId(userId),
+      user_dehive_id: userId, // Remove ObjectId conversion - it's stored as string
       server_id: new Types.ObjectId(body.serverId),
     });
     if (!isMember) {
@@ -415,32 +415,45 @@ export class MessagingService {
   async getMessagesByConversationId(
     conversationId: string,
     getMessagesDto: GetMessagesDto,
-  ): Promise<unknown[]> {
-    const { page = 1, limit = 50 } = getMessagesDto;
-    const skip = (page - 1) * limit;
+  ): Promise<{ items: unknown[]; metadata: any }> {
+    const { page = 0, limit = 10 } = getMessagesDto;
+    const skip = page * limit;
 
     if (!Types.ObjectId.isValid(conversationId)) {
       throw new BadRequestException("Invalid conversationId");
     }
 
     // 1. Get messages with UserDehive populated and replyTo populated
-    const messages = await this.channelMessageModel
-      .find({ conversationId: new Types.ObjectId(conversationId) })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate<{
-        senderId: { _id: Types.ObjectId };
-      }>({
-        path: "senderId",
-        model: "UserDehive",
-        select: "_id",
-      })
-      .populate("replyTo", "content senderId createdAt")
-      .lean();
+    const [messages, total] = await Promise.all([
+      this.channelMessageModel
+        .find({ conversationId: new Types.ObjectId(conversationId) })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate<{
+          senderId: { _id: Types.ObjectId };
+        }>({
+          path: "senderId",
+          model: "UserDehive",
+          select: "_id",
+        })
+        .populate("replyTo", "content senderId createdAt")
+        .lean(),
+      this.channelMessageModel.countDocuments({
+        conversationId: new Types.ObjectId(conversationId),
+      }),
+    ]);
 
     if (!messages || messages.length === 0) {
-      return [];
+      return {
+        items: [],
+        metadata: {
+          page,
+          limit,
+          total: 0,
+          is_last_page: true,
+        },
+      };
     }
 
     // 2. Extract user IDs from senderId (which is UserDehive _id)
@@ -457,7 +470,7 @@ export class MessagingService {
     const profiles = await this.authClient.batchGetProfiles(userIds);
 
     // 4. Map messages with user profiles
-    return messages.map((msg) => {
+    const items = messages.map((msg) => {
       const sender = msg.senderId as {
         _id: Types.ObjectId;
       };
@@ -486,11 +499,24 @@ export class MessagingService {
         editedAt: msg.editedAt,
         replyTo: msg.replyTo || null,
 
-        createdAt: (msg as { createdAt: unknown }).createdAt,
+        createdAt: (msg as any).createdAt,
 
-        updatedAt: (msg as { updatedAt: unknown }).updatedAt,
+        updatedAt: (msg as any).updatedAt,
       };
     });
+
+    const totalPages = Math.ceil(total / limit);
+    const isLastPage = page >= totalPages - 1;
+
+    return {
+      items,
+      metadata: {
+        page,
+        limit,
+        total: items.length,
+        is_last_page: isLastPage,
+      },
+    };
   }
 
   async editMessage(
@@ -579,9 +605,10 @@ export class MessagingService {
     }
 
     const membership = await this.userDehiveServerModel.exists({
-      user_dehive_id: new Types.ObjectId(userId),
+      user_dehive_id: userId, // Remove ObjectId conversion - it's stored as string
       server_id: new Types.ObjectId(serverId),
     });
+
     if (!membership) {
       throw new BadRequestException("User is not a member of this server");
     }
@@ -603,7 +630,7 @@ export class MessagingService {
       query.type = type;
     }
 
-    const skip = (page - 1) * limit;
+    const skip = page * limit;
     const [items, total] = await Promise.all([
       this.uploadModel
         .find(query)
@@ -614,10 +641,10 @@ export class MessagingService {
       this.uploadModel.countDocuments(query),
     ]);
 
+    const totalPages = Math.ceil(total / limit);
+    const isLastPage = page >= totalPages - 1;
+
     return {
-      page,
-      limit,
-      total,
       items: items.map((u) => ({
         _id: u._id,
         type: u.type,
@@ -631,6 +658,12 @@ export class MessagingService {
         thumbnailUrl: u.thumbnailUrl,
         createdAt: (u as unknown as { createdAt?: Date })?.createdAt,
       })),
+      metadata: {
+        page,
+        limit,
+        total: items.length,
+        is_last_page: isLastPage,
+      },
     };
   }
 }

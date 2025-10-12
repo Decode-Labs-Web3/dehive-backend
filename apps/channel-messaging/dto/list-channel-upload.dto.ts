@@ -27,19 +27,19 @@ export class ListUploadsDto {
   type?: AttachmentType;
 
   @ApiPropertyOptional({
-    description: "Page number (starting at 1)",
-    default: 1,
+    description: "Page number (starting at 0)",
+    default: 0,
     type: Number,
   })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @Min(1)
-  page = 1;
+  @Min(0)
+  page = 0;
 
   @ApiPropertyOptional({
     description: "Items per page (max 100)",
-    default: 30,
+    default: 10,
     type: Number,
   })
   @IsOptional()
@@ -47,5 +47,5 @@ export class ListUploadsDto {
   @IsNumber()
   @Min(1)
   @Max(100)
-  limit = 30;
+  limit = 10;
 }

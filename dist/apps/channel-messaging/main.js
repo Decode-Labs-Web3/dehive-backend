@@ -13,14 +13,14 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CurrentUser = void 0;
 const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
 exports.CurrentUser = (0, common_1.createParamDecorator)((data, ctx) => {
-    console.log('🎯 [CHANNEL-MESSAGING CURRENT USER] Decorator called with data:', data);
+    console.log("🎯 [CHANNEL-MESSAGING CURRENT USER] Decorator called with data:", data);
     try {
         const request = ctx
             .switchToHttp()
             .getRequest();
-        console.log('🎯 [CHANNEL-MESSAGING CURRENT USER] Request user:', request.user);
-        console.log('🎯 [CHANNEL-MESSAGING CURRENT USER] Request sessionId:', request.sessionId);
-        if (data === 'sessionId') {
+        console.log("🎯 [CHANNEL-MESSAGING CURRENT USER] Request user:", request.user);
+        console.log("🎯 [CHANNEL-MESSAGING CURRENT USER] Request sessionId:", request.sessionId);
+        if (data === "sessionId") {
             return request.sessionId;
         }
         const user = request.user;
@@ -28,11 +28,11 @@ exports.CurrentUser = (0, common_1.createParamDecorator)((data, ctx) => {
             console.log(`🎯 [CHANNEL-MESSAGING CURRENT USER] Returning user.${data}:`, user[data]);
             return user[data];
         }
-        console.log('🎯 [CHANNEL-MESSAGING CURRENT USER] Returning full user:', user);
+        console.log("🎯 [CHANNEL-MESSAGING CURRENT USER] Returning full user:", user);
         return user;
     }
     catch (error) {
-        console.error('❌ [CHANNEL-MESSAGING CURRENT USER] Error:', error);
+        console.error("❌ [CHANNEL-MESSAGING CURRENT USER] Error:", error);
         return undefined;
     }
 });
@@ -64,59 +64,59 @@ const core_1 = __webpack_require__(/*! @nestjs/core */ "@nestjs/core");
 const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
 const axios_2 = __webpack_require__(/*! axios */ "axios");
 const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
-exports.PUBLIC_KEY = 'public';
+exports.PUBLIC_KEY = "public";
 const Public = () => (0, common_1.SetMetadata)(exports.PUBLIC_KEY, true);
 exports.Public = Public;
 let AuthGuard = AuthGuard_1 = class AuthGuard {
     httpService;
     logger = new common_1.Logger(AuthGuard_1.name);
-    authServiceUrl = 'http://localhost:4006';
+    authServiceUrl = "http://localhost:4006";
     constructor(httpService) {
         this.httpService = httpService;
-        console.log('🔥 [CHANNEL-MESSAGING AUTH GUARD] Constructor called - This is the channel-messaging AuthGuard!');
+        console.log("🔥 [CHANNEL-MESSAGING AUTH GUARD] Constructor called - This is the channel-messaging AuthGuard!");
     }
     async canActivate(context) {
-        console.log('🚨 [CHANNEL-MESSAGING AUTH GUARD] canActivate called - This is the channel-messaging AuthGuard!');
+        console.log("🚨 [CHANNEL-MESSAGING AUTH GUARD] canActivate called - This is the channel-messaging AuthGuard!");
         const request = context.switchToHttp().getRequest();
         const isPublic = new core_1.Reflector().get(exports.PUBLIC_KEY, context.getHandler());
-        console.log('🚨 [CHANNEL-MESSAGING AUTH GUARD] isPublic:', isPublic);
+        console.log("🚨 [CHANNEL-MESSAGING AUTH GUARD] isPublic:", isPublic);
         if (isPublic) {
-            console.log('🚨 [CHANNEL-MESSAGING AUTH GUARD] Route is public, skipping auth');
+            console.log("🚨 [CHANNEL-MESSAGING AUTH GUARD] Route is public, skipping auth");
             return true;
         }
         const sessionId = this.extractSessionIdFromHeader(request);
-        console.log('🚨 [CHANNEL-MESSAGING AUTH GUARD] sessionId:', sessionId);
+        console.log("🚨 [CHANNEL-MESSAGING AUTH GUARD] sessionId:", sessionId);
         if (!sessionId) {
-            console.log('❌ [CHANNEL-MESSAGING AUTH GUARD] No session ID found!');
+            console.log("❌ [CHANNEL-MESSAGING AUTH GUARD] No session ID found!");
             throw new common_1.UnauthorizedException({
-                message: 'Session ID is required',
-                error: 'MISSING_SESSION_ID',
+                message: "Session ID is required",
+                error: "MISSING_SESSION_ID",
             });
         }
         try {
             const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.authServiceUrl}/auth/session/check`, {
                 headers: {
-                    'x-session-id': sessionId,
-                    'Content-Type': 'application/json',
+                    "x-session-id": sessionId,
+                    "Content-Type": "application/json",
                 },
                 timeout: 5000,
             }));
             if (!response.data.success || !response.data.data) {
                 throw new common_1.UnauthorizedException({
-                    message: response.data.message || 'Invalid session',
-                    error: 'INVALID_SESSION',
+                    message: response.data.message || "Invalid session",
+                    error: "INVALID_SESSION",
                 });
             }
             const session_check_response = response.data;
             if (session_check_response.success && session_check_response.data) {
-                request['user'] = {
+                request["user"] = {
                     userId: session_check_response.data.user._id,
-                    email: session_check_response.data.user.email || '',
-                    username: session_check_response.data.user.username || '',
-                    role: 'user',
+                    email: session_check_response.data.user.email || "",
+                    username: session_check_response.data.user.username || "",
+                    role: "user",
                 };
-                request['sessionId'] = sessionId;
-                console.log('✅ [CHANNEL-MESSAGING AUTH GUARD] User attached to request:', request['user']);
+                request["sessionId"] = sessionId;
+                console.log("✅ [CHANNEL-MESSAGING AUTH GUARD] User attached to request:", request["user"]);
             }
             return true;
         }
@@ -124,14 +124,14 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
             if (error instanceof axios_2.AxiosError) {
                 if (error.response?.status === 401) {
                     throw new common_1.UnauthorizedException({
-                        message: 'Invalid or expired session',
-                        error: 'SESSION_EXPIRED',
+                        message: "Invalid or expired session",
+                        error: "SESSION_EXPIRED",
                     });
                 }
-                this.logger.error('Auth service is unavailable');
+                this.logger.error("Auth service is unavailable");
                 throw new common_1.UnauthorizedException({
-                    message: 'Authentication service unavailable',
-                    error: 'SERVICE_UNAVAILABLE',
+                    message: "Authentication service unavailable",
+                    error: "SERVICE_UNAVAILABLE",
                 });
             }
             if (error instanceof common_1.UnauthorizedException) {
@@ -139,13 +139,13 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
             }
             this.logger.error(`Authentication failed: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
             throw new common_1.UnauthorizedException({
-                message: 'Authentication failed',
-                error: 'AUTHENTICATION_ERROR',
+                message: "Authentication failed",
+                error: "AUTHENTICATION_ERROR",
             });
         }
     }
     extractSessionIdFromHeader(request) {
-        return request.headers['x-session-id'];
+        return request.headers["x-session-id"];
     }
 };
 exports.AuthGuard = AuthGuard;
@@ -200,37 +200,37 @@ __decorate([
     __metadata("design:type", String)
 ], AttachmentDto.prototype, "type", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'Public URL to access the file' }),
+    (0, swagger_1.ApiProperty)({ description: "Public URL to access the file" }),
     (0, class_validator_1.IsUrl)(),
     __metadata("design:type", String)
 ], AttachmentDto.prototype, "url", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'Original file name' }),
+    (0, swagger_1.ApiProperty)({ description: "Original file name" }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], AttachmentDto.prototype, "name", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'File size in bytes', example: 123456 }),
+    (0, swagger_1.ApiProperty)({ description: "File size in bytes", example: 123456 }),
     (0, class_validator_1.IsInt)(),
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], AttachmentDto.prototype, "size", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'MIME type of the file', example: 'image/jpeg' }),
+    (0, swagger_1.ApiProperty)({ description: "MIME type of the file", example: "image/jpeg" }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.IsNotEmpty)(),
     __metadata("design:type", String)
 ], AttachmentDto.prototype, "mimeType", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ description: 'Width in pixels (image/video)' }),
+    (0, swagger_1.ApiPropertyOptional)({ description: "Width in pixels (image/video)" }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsInt)(),
     (0, class_validator_1.Min)(1),
     __metadata("design:type", Number)
 ], AttachmentDto.prototype, "width", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ description: 'Height in pixels (image/video)' }),
+    (0, swagger_1.ApiPropertyOptional)({ description: "Height in pixels (image/video)" }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsInt)(),
     (0, class_validator_1.Min)(1),
@@ -238,7 +238,7 @@ __decorate([
 ], AttachmentDto.prototype, "height", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'Duration in milliseconds (audio/video)',
+        description: "Duration in milliseconds (audio/video)",
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsInt)(),
@@ -246,7 +246,7 @@ __decorate([
     __metadata("design:type", Number)
 ], AttachmentDto.prototype, "durationMs", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ description: 'Thumbnail/preview URL (image/video)' }),
+    (0, swagger_1.ApiPropertyOptional)({ description: "Thumbnail/preview URL (image/video)" }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
@@ -286,14 +286,14 @@ class UploadInitDto {
 }
 exports.UploadInitDto = UploadInitDto;
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ description: 'Server ID for permission check' }),
+    (0, swagger_1.ApiPropertyOptional)({ description: "Server ID for permission check" }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
 ], UploadInitDto.prototype, "serverId", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'Channel ConversationId ID for permission check',
+        description: "Channel ConversationId ID for permission check",
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsMongoId)(),
@@ -317,7 +317,7 @@ class UploadResponseDto {
 }
 exports.UploadResponseDto = UploadResponseDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'Upload ID (MongoId) to reference in chat' }),
+    (0, swagger_1.ApiProperty)({ description: "Upload ID (MongoId) to reference in chat" }),
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
 ], UploadResponseDto.prototype, "uploadId", void 0);
@@ -335,17 +335,17 @@ __decorate([
     __metadata("design:type", String)
 ], UploadResponseDto.prototype, "name", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ description: 'File size in bytes' }),
+    (0, swagger_1.ApiProperty)({ description: "File size in bytes" }),
     (0, class_validator_1.IsInt)(),
     (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], UploadResponseDto.prototype, "size", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ example: 'image/jpeg' }),
+    (0, swagger_1.ApiProperty)({ example: "image/jpeg" }),
     __metadata("design:type", String)
 ], UploadResponseDto.prototype, "mimeType", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ description: 'Error message if upload failed' }),
+    (0, swagger_1.ApiPropertyOptional)({ description: "Error message if upload failed" }),
     __metadata("design:type", String)
 ], UploadResponseDto.prototype, "errorMessage", void 0);
 __decorate([
@@ -403,19 +403,19 @@ class CreateMessageDto {
 exports.CreateMessageDto = CreateMessageDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The ID of the channel conversation to send the message to.',
-        example: '68c5adb6ec465897d540c58',
+        description: "The ID of the channel conversation to send the message to.",
+        example: "68c5adb6ec465897d540c58",
     }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'conversationId is required' }),
-    (0, class_validator_1.IsMongoId)({ message: 'conversationId must be a valid MongoId' }),
+    (0, class_validator_1.IsNotEmpty)({ message: "conversationId is required" }),
+    (0, class_validator_1.IsMongoId)({ message: "conversationId must be a valid MongoId" }),
     __metadata("design:type", String)
 ], CreateMessageDto.prototype, "conversationId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The text content of the message (empty string if only sending files)',
-        example: 'Hello everyone! How is the project going?',
+        description: "The text content of the message (empty string if only sending files)",
+        example: "Hello everyone! How is the project going?",
         maxLength: 2000,
-        default: '',
+        default: "",
     }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.Length)(0, 2000),
@@ -424,30 +424,30 @@ __decorate([
 __decorate([
     (0, swagger_1.ApiProperty)({
         type: [String],
-        description: 'List of upload IDs to attach (empty array if no files)',
-        example: ['68db1234abcd5678efgh9013'],
+        description: "List of upload IDs to attach (empty array if no files)",
+        example: ["68db1234abcd5678efgh9013"],
         default: [],
     }),
     (0, class_validator_1.IsArray)(),
-    (0, class_validator_1.IsMongoId)({ each: true, message: 'Each uploadId must be a valid MongoId' }),
+    (0, class_validator_1.IsMongoId)({ each: true, message: "Each uploadId must be a valid MongoId" }),
     __metadata("design:type", Array)
 ], CreateMessageDto.prototype, "uploadIds", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
         type: [attachment_dto_1.AttachmentDto],
-        description: 'Optional explicit attachments; server may ignore if uploadIds provided',
+        description: "Optional explicit attachments; server may ignore if uploadIds provided",
     }),
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Array)
 ], CreateMessageDto.prototype, "attachments", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'ID of the message being replied to (optional)',
-        example: '68dc1234abcd5678efgh9014',
+        description: "ID of the message being replied to (optional)",
+        example: "68dc1234abcd5678efgh9014",
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.ValidateIf)((o) => o.replyTo !== null && o.replyTo !== undefined),
-    (0, class_validator_1.IsMongoId)({ message: 'replyTo must be a valid MongoId' }),
+    (0, class_validator_1.IsMongoId)({ message: "replyTo must be a valid MongoId" }),
     __metadata("design:type", Object)
 ], CreateMessageDto.prototype, "replyTo", void 0);
 
@@ -483,30 +483,30 @@ class GetMessagesParamsDto {
 }
 exports.GetMessagesParamsDto = GetMessagesParamsDto;
 class GetMessagesDto {
-    page = 1;
-    limit = 50;
+    page = 0;
+    limit = 10;
     static _OPENAPI_METADATA_FACTORY() {
-        return { page: { required: false, type: () => Number, default: 1, minimum: 1 }, limit: { required: false, type: () => Number, default: 50, minimum: 1, maximum: 100 } };
+        return { page: { required: false, type: () => Number, default: 0, minimum: 0 }, limit: { required: false, type: () => Number, default: 10, minimum: 1, maximum: 100 } };
     }
 }
 exports.GetMessagesDto = GetMessagesDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The page number to retrieve, starting from 1.',
-        default: 1,
+        description: "The page number to retrieve, starting from 0.",
+        default: 0,
         required: false,
         type: Number,
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
-    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Min)(0),
     __metadata("design:type", Number)
 ], GetMessagesDto.prototype, "page", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The number of messages to retrieve per page (max 100).',
-        default: 50,
+        description: "The number of messages to retrieve per page (max 100).",
+        default: 10,
         required: false,
         type: Number,
     }),
@@ -547,24 +547,24 @@ const enum_1 = __webpack_require__(/*! ../enum/enum */ "./apps/channel-messaging
 class ListUploadsDto {
     serverId;
     type;
-    page = 1;
-    limit = 30;
+    page = 0;
+    limit = 10;
     static _OPENAPI_METADATA_FACTORY() {
-        return { serverId: { required: true, type: () => String }, type: { required: false, enum: (__webpack_require__(/*! ../enum/enum */ "./apps/channel-messaging/enum/enum.ts").AttachmentType) }, page: { required: true, type: () => Object, default: 1, minimum: 1 }, limit: { required: true, type: () => Object, default: 30, minimum: 1, maximum: 100 } };
+        return { serverId: { required: true, type: () => String }, type: { required: false, enum: (__webpack_require__(/*! ../enum/enum */ "./apps/channel-messaging/enum/enum.ts").AttachmentType) }, page: { required: true, type: () => Object, default: 0, minimum: 0 }, limit: { required: true, type: () => Object, default: 10, minimum: 1, maximum: 100 } };
     }
 }
 exports.ListUploadsDto = ListUploadsDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'Server ID for scoping and permission',
-        example: '68db1234abcd5678efgh9013',
+        description: "Server ID for scoping and permission",
+        example: "68db1234abcd5678efgh9013",
     }),
     (0, class_validator_1.IsMongoId)(),
     __metadata("design:type", String)
 ], ListUploadsDto.prototype, "serverId", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'Filter by attachment type',
+        description: "Filter by attachment type",
         enum: enum_1.AttachmentType,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -573,20 +573,20 @@ __decorate([
 ], ListUploadsDto.prototype, "type", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'Page number (starting at 1)',
-        default: 1,
+        description: "Page number (starting at 0)",
+        default: 0,
         type: Number,
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_transformer_1.Type)(() => Number),
     (0, class_validator_1.IsNumber)(),
-    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Min)(0),
     __metadata("design:type", Object)
 ], ListUploadsDto.prototype, "page", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)({
-        description: 'Items per page (max 100)',
-        default: 30,
+        description: "Items per page (max 100)",
+        default: 10,
         type: Number,
     }),
     (0, class_validator_1.IsOptional)(),
@@ -675,18 +675,18 @@ let ChatGateway = class ChatGateway {
         client.emit(event, data);
     }
     handleConnection(client) {
-        console.log('[WebSocket] Client connected. Awaiting identity.');
+        console.log("[WebSocket] Client connected. Awaiting identity.");
         this.meta.set(client, {
             currentRooms: new Set(),
-            isAuthenticated: false
+            isAuthenticated: false,
         });
     }
     handleDisconnect(client) {
-        console.log('[WebSocket] Client disconnected.');
+        console.log("[WebSocket] Client disconnected.");
         const meta = this.meta.get(client);
         if (meta) {
             if (meta.currentRooms) {
-                meta.currentRooms.forEach(roomId => {
+                meta.currentRooms.forEach((roomId) => {
                     client.leave(roomId);
                 });
             }
@@ -694,20 +694,20 @@ let ChatGateway = class ChatGateway {
         }
     }
     async handleIdentity(userDehiveId, client) {
-        if (!userDehiveId || typeof userDehiveId !== 'string') {
-            return this.send(client, 'error', {
-                message: 'Invalid identity payload. Please send a string userDehiveId.',
+        if (!userDehiveId || typeof userDehiveId !== "string") {
+            return this.send(client, "error", {
+                message: "Invalid identity payload. Please send a string userDehiveId.",
             });
         }
         const meta = this.meta.get(client);
         if (!meta) {
-            return this.send(client, 'error', {
-                message: 'Internal server error: No client metadata found.',
+            return this.send(client, "error", {
+                message: "Internal server error: No client metadata found.",
             });
         }
         if (!mongoose_2.Types.ObjectId.isValid(userDehiveId)) {
-            return this.send(client, 'error', {
-                message: 'Invalid userDehiveId format.',
+            return this.send(client, "error", {
+                message: "Invalid userDehiveId format.",
             });
         }
         try {
@@ -716,23 +716,23 @@ let ChatGateway = class ChatGateway {
             });
             if (!exists) {
                 console.log(`[WebSocket] UserDehive not found: ${userDehiveId}`);
-                return this.send(client, 'error', {
-                    message: 'UserDehive not found.',
+                return this.send(client, "error", {
+                    message: "UserDehive not found.",
                 });
             }
         }
-        catch (error) {
-            return this.send(client, 'error', {
-                message: 'Database error while checking user existence.',
+        catch {
+            return this.send(client, "error", {
+                message: "Database error while checking user existence.",
             });
         }
         console.log(`[WebSocket] Client is identifying as UserDehive ID: ${userDehiveId}`);
         meta.userDehiveId = userDehiveId;
         meta.isAuthenticated = true;
         try {
-            this.send(client, 'identityConfirmed', {
+            this.send(client, "identityConfirmed", {
                 message: `You are now identified as ${userDehiveId}`,
-                userDehiveId: userDehiveId
+                userDehiveId: userDehiveId,
             });
             console.log(`[WebSocket] identityConfirmed sent successfully`);
         }
@@ -743,13 +743,13 @@ let ChatGateway = class ChatGateway {
     async handleJoinChannel(data, client) {
         const meta = this.meta.get(client);
         if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-            return this.send(client, 'error', {
+            return this.send(client, "error", {
                 message: 'Please identify yourself first by sending an "identity" event.',
             });
         }
         let parsedData;
         try {
-            if (typeof data === 'string') {
+            if (typeof data === "string") {
                 parsedData = JSON.parse(data);
             }
             else {
@@ -757,41 +757,54 @@ let ChatGateway = class ChatGateway {
             }
         }
         catch (error) {
-            return this.send(client, 'error', {
-                message: 'Invalid JSON payload.',
-                details: { received: data, error: error instanceof Error ? error.message : String(error) }
+            return this.send(client, "error", {
+                message: "Invalid JSON payload.",
+                details: {
+                    received: data,
+                    error: error instanceof Error ? error.message : String(error),
+                },
             });
         }
         const { serverId, categoryId, channelId } = parsedData;
-        console.log('[WebSocket] joinChannel raw data:', data);
-        console.log('[WebSocket] joinChannel parsed data:', JSON.stringify(parsedData, null, 2));
-        console.log('[WebSocket] Extracted values:', { serverId, categoryId, channelId });
+        console.log("[WebSocket] joinChannel raw data:", data);
+        console.log("[WebSocket] joinChannel parsed data:", JSON.stringify(parsedData, null, 2));
+        console.log("[WebSocket] Extracted values:", {
+            serverId,
+            categoryId,
+            channelId,
+        });
         if (!serverId ||
             !categoryId ||
             !channelId ||
             !mongoose_2.Types.ObjectId.isValid(serverId) ||
             !mongoose_2.Types.ObjectId.isValid(categoryId) ||
             !mongoose_2.Types.ObjectId.isValid(channelId)) {
-            console.log('[WebSocket] Validation failed:', {
+            console.log("[WebSocket] Validation failed:", {
                 serverId: { value: serverId, valid: mongoose_2.Types.ObjectId.isValid(serverId) },
-                categoryId: { value: categoryId, valid: mongoose_2.Types.ObjectId.isValid(categoryId) },
-                channelId: { value: channelId, valid: mongoose_2.Types.ObjectId.isValid(channelId) }
+                categoryId: {
+                    value: categoryId,
+                    valid: mongoose_2.Types.ObjectId.isValid(categoryId),
+                },
+                channelId: {
+                    value: channelId,
+                    valid: mongoose_2.Types.ObjectId.isValid(channelId),
+                },
             });
-            return this.send(client, 'error', {
-                message: 'Invalid payload. serverId, categoryId, and channelId are required and must be valid ObjectIds.',
+            return this.send(client, "error", {
+                message: "Invalid payload. serverId, categoryId, and channelId are required and must be valid ObjectIds.",
                 details: {
                     received: data,
-                    extracted: { serverId, categoryId, channelId }
-                }
+                    extracted: { serverId, categoryId, channelId },
+                },
             });
         }
         try {
-            console.log('[WebSocket] Checking user membership...');
-            console.log('[WebSocket] Query params:', {
+            console.log("[WebSocket] Checking user membership...");
+            console.log("[WebSocket] Query params:", {
                 userDehiveId: meta.userDehiveId,
                 serverId: serverId,
                 userDehiveIdObjectId: new mongoose_2.Types.ObjectId(meta.userDehiveId),
-                serverIdObjectId: new mongoose_2.Types.ObjectId(serverId)
+                serverIdObjectId: new mongoose_2.Types.ObjectId(serverId),
             });
             const query1 = {
                 user_dehive_id: new mongoose_2.Types.ObjectId(meta.userDehiveId),
@@ -805,89 +818,89 @@ let ChatGateway = class ChatGateway {
                 user_dehive_id: meta.userDehiveId,
                 server_id: new mongoose_2.Types.ObjectId(serverId),
             };
-            console.log('[WebSocket] Trying query 1 (both ObjectId):', query1);
+            console.log("[WebSocket] Trying query 1 (both ObjectId):", query1);
             let isMember = await this.userDehiveServerModel.findOne(query1);
             if (!isMember) {
-                console.log('[WebSocket] Query 1 failed, trying query 2 (both string):', query2);
+                console.log("[WebSocket] Query 1 failed, trying query 2 (both string):", query2);
                 isMember = await this.userDehiveServerModel.findOne(query2);
             }
             if (!isMember) {
-                console.log('[WebSocket] Query 2 failed, trying query 3 (string + ObjectId):', query3);
+                console.log("[WebSocket] Query 2 failed, trying query 3 (string + ObjectId):", query3);
                 isMember = await this.userDehiveServerModel.findOne(query3);
             }
             const allUserMemberships = await this.userDehiveServerModel.find({
-                user_dehive_id: meta.userDehiveId
+                user_dehive_id: meta.userDehiveId,
             });
-            console.log('[WebSocket] All memberships for user:', allUserMemberships);
+            console.log("[WebSocket] All memberships for user:", allUserMemberships);
             const allServerMembers = await this.userDehiveServerModel.find({
-                server_id: new mongoose_2.Types.ObjectId(serverId)
+                server_id: new mongoose_2.Types.ObjectId(serverId),
             });
-            console.log('[WebSocket] All members of server:', allServerMembers);
+            console.log("[WebSocket] All members of server:", allServerMembers);
             if (!isMember) {
-                console.log('[WebSocket] User is not a member of server:', serverId);
-                return this.send(client, 'error', {
-                    message: 'Access denied. You are not a member of this server.',
+                console.log("[WebSocket] User is not a member of server:", serverId);
+                return this.send(client, "error", {
+                    message: "Access denied. You are not a member of this server.",
                     details: {
                         serverId,
                         userDehiveId: meta.userDehiveId,
                         allUserMemberships,
-                        allServerMembers
-                    }
+                        allServerMembers,
+                    },
                 });
             }
-            console.log('[WebSocket] User membership confirmed:', isMember);
-            console.log('[WebSocket] Checking channel...');
+            console.log("[WebSocket] User membership confirmed:", isMember);
+            console.log("[WebSocket] Checking channel...");
             const channel = await this.channelModel.findById(channelId);
             if (!channel) {
-                console.log('[WebSocket] Channel not found:', channelId);
-                return this.send(client, 'error', {
-                    message: 'Channel not found.',
-                    details: { channelId }
+                console.log("[WebSocket] Channel not found:", channelId);
+                return this.send(client, "error", {
+                    message: "Channel not found.",
+                    details: { channelId },
                 });
             }
             if (channel.category_id.toString() !== categoryId) {
-                console.log('[WebSocket] Channel does not belong to category:', {
+                console.log("[WebSocket] Channel does not belong to category:", {
                     channelCategoryId: channel.category_id.toString(),
-                    expectedCategoryId: categoryId
+                    expectedCategoryId: categoryId,
                 });
-                return this.send(client, 'error', {
-                    message: 'Channel does not belong to the specified category.',
+                return this.send(client, "error", {
+                    message: "Channel does not belong to the specified category.",
                     details: {
                         channelId,
                         channelCategoryId: channel.category_id.toString(),
-                        expectedCategoryId: categoryId
-                    }
+                        expectedCategoryId: categoryId,
+                    },
                 });
             }
-            console.log('[WebSocket] Channel validation passed');
-            console.log('[WebSocket] Checking category...');
+            console.log("[WebSocket] Channel validation passed");
+            console.log("[WebSocket] Checking category...");
             const category = await this.categoryModel.findById(categoryId);
             if (!category) {
-                console.log('[WebSocket] Category not found:', categoryId);
-                return this.send(client, 'error', {
-                    message: 'Category not found.',
-                    details: { categoryId }
+                console.log("[WebSocket] Category not found:", categoryId);
+                return this.send(client, "error", {
+                    message: "Category not found.",
+                    details: { categoryId },
                 });
             }
             if (category.server_id.toString() !== serverId) {
-                console.log('[WebSocket] Category does not belong to server:', {
+                console.log("[WebSocket] Category does not belong to server:", {
                     categoryServerId: category.server_id.toString(),
-                    expectedServerId: serverId
+                    expectedServerId: serverId,
                 });
-                return this.send(client, 'error', {
-                    message: 'Category does not belong to the specified server.',
+                return this.send(client, "error", {
+                    message: "Category does not belong to the specified server.",
                     details: {
                         categoryId,
                         categoryServerId: category.server_id.toString(),
-                        expectedServerId: serverId
-                    }
+                        expectedServerId: serverId,
+                    },
                 });
             }
-            console.log('[WebSocket] Category validation passed');
+            console.log("[WebSocket] Category validation passed");
             const conversation = await this.channelConversationModel.findOneAndUpdate({ channelId: new mongoose_2.Types.ObjectId(channelId) }, { $setOnInsert: { channel_id: new mongoose_2.Types.ObjectId(channelId) } }, { upsert: true, new: true, runValidators: true });
             const conversationId = String(conversation._id);
             if (meta.currentRooms) {
-                meta.currentRooms.forEach(roomId => {
+                meta.currentRooms.forEach((roomId) => {
                     client.leave(roomId);
                 });
                 meta.currentRooms.clear();
@@ -897,15 +910,15 @@ let ChatGateway = class ChatGateway {
             console.log(`[WebSocket] ✅ SUCCESS: User ${meta.userDehiveId} joined channel ${channelId}`);
             console.log(`[WebSocket] ✅ CONVERSATION ID: ${conversationId}`);
             console.log(`[WebSocket] ✅ ROOM JOINED: ${conversationId}`);
-            this.send(client, 'joinedChannel', {
+            this.send(client, "joinedChannel", {
                 conversationId,
-                message: 'Joined channel room successfully',
+                message: "Joined channel room successfully",
             });
         }
         catch (error) {
-            console.error('[WebSocket] Error handling joinChannel:', error);
-            this.send(client, 'error', {
-                message: 'Failed to join channel.',
+            console.error("[WebSocket] Error handling joinChannel:", error);
+            this.send(client, "error", {
+                message: "Failed to join channel.",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -913,39 +926,39 @@ let ChatGateway = class ChatGateway {
     async handleJoinConversation(payload, client) {
         const meta = this.meta.get(client);
         if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-            return this.send(client, 'error', {
+            return this.send(client, "error", {
                 message: 'Please identify yourself first by sending an "identity" event.',
             });
         }
-        let conversationId = '';
-        if (typeof payload === 'string') {
+        let conversationId = "";
+        if (typeof payload === "string") {
             conversationId = payload;
         }
-        else if (payload && typeof payload === 'object') {
+        else if (payload && typeof payload === "object") {
             conversationId = payload.conversationId;
         }
         if (!mongoose_2.Types.ObjectId.isValid(conversationId)) {
-            return this.send(client, 'error', {
-                message: 'Invalid conversationId.',
+            return this.send(client, "error", {
+                message: "Invalid conversationId.",
             });
         }
         try {
             const conversation = await this.channelConversationModel.findById(conversationId);
             if (!conversation) {
-                return this.send(client, 'error', {
-                    message: 'Conversation not found.',
+                return this.send(client, "error", {
+                    message: "Conversation not found.",
                 });
             }
             const channel = await this.channelModel.findById(conversation.channelId);
             if (!channel) {
-                return this.send(client, 'error', {
-                    message: 'Channel not found.',
+                return this.send(client, "error", {
+                    message: "Channel not found.",
                 });
             }
             const category = await this.categoryModel.findById(channel.category_id);
             if (!category) {
-                return this.send(client, 'error', {
-                    message: 'Category not found.',
+                return this.send(client, "error", {
+                    message: "Category not found.",
                 });
             }
             const isMember = await this.userDehiveServerModel.findOne({
@@ -953,12 +966,12 @@ let ChatGateway = class ChatGateway {
                 server_id: category.server_id,
             });
             if (!isMember) {
-                return this.send(client, 'error', {
-                    message: 'Access denied. You are not a member of this server.',
+                return this.send(client, "error", {
+                    message: "Access denied. You are not a member of this server.",
                 });
             }
             if (meta.currentRooms) {
-                meta.currentRooms.forEach(roomId => {
+                meta.currentRooms.forEach((roomId) => {
                     client.leave(roomId);
                 });
                 meta.currentRooms.clear();
@@ -966,15 +979,15 @@ let ChatGateway = class ChatGateway {
             await client.join(conversationId);
             meta.currentRooms?.add(conversationId);
             console.log(`[WebSocket] User ${meta.userDehiveId} joined conversation room: ${conversationId}`);
-            this.send(client, 'joinedConversation', {
+            this.send(client, "joinedConversation", {
                 conversationId,
                 message: `You have successfully joined conversation ${conversationId}`,
             });
         }
         catch (error) {
-            console.error('[WebSocket] Error handling joinConversation:', error);
-            this.send(client, 'error', {
-                message: 'Failed to join conversation.',
+            console.error("[WebSocket] Error handling joinConversation:", error);
+            this.send(client, "error", {
+                message: "Failed to join conversation.",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -982,67 +995,68 @@ let ChatGateway = class ChatGateway {
     async handleMessage(data, client) {
         const meta = this.meta.get(client);
         if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-            return this.send(client, 'error', {
-                message: 'Please identify yourself before sending a message.',
+            return this.send(client, "error", {
+                message: "Please identify yourself before sending a message.",
             });
         }
         try {
             let parsedData;
-            if (typeof data === 'string') {
+            if (typeof data === "string") {
                 parsedData = JSON.parse(data);
             }
             else {
                 parsedData = data;
             }
-            if (!parsedData || typeof parsedData !== 'object') {
-                return this.send(client, 'error', {
-                    message: 'Invalid payload.',
+            if (!parsedData || typeof parsedData !== "object") {
+                return this.send(client, "error", {
+                    message: "Invalid payload.",
                 });
             }
             const convId = parsedData.conversationId;
             if (!convId || !mongoose_2.Types.ObjectId.isValid(convId)) {
-                return this.send(client, 'error', {
-                    message: 'Invalid conversationId.',
+                return this.send(client, "error", {
+                    message: "Invalid conversationId.",
                 });
             }
-            if (typeof parsedData.content !== 'string') {
-                return this.send(client, 'error', {
-                    message: 'Content must be a string (0-2000 chars).',
+            if (typeof parsedData.content !== "string") {
+                return this.send(client, "error", {
+                    message: "Content must be a string (0-2000 chars).",
                 });
             }
-            if (String(parsedData.content ?? '').length > 2000) {
-                return this.send(client, 'error', {
-                    message: 'Content must not exceed 2000 characters.',
+            if (String(parsedData.content ?? "").length > 2000) {
+                return this.send(client, "error", {
+                    message: "Content must not exceed 2000 characters.",
                 });
             }
             if (!Array.isArray(parsedData.uploadIds)) {
-                return this.send(client, 'error', {
-                    message: 'uploadIds is required and must be an array',
+                return this.send(client, "error", {
+                    message: "uploadIds is required and must be an array",
                 });
             }
             if (parsedData.uploadIds.length > 0) {
                 const allValid = parsedData.uploadIds.every((id) => {
-                    return typeof id === 'string' && mongoose_2.Types.ObjectId.isValid(id);
+                    return typeof id === "string" && mongoose_2.Types.ObjectId.isValid(id);
                 });
                 if (!allValid) {
-                    return this.send(client, 'error', {
-                        message: 'One or more uploadIds are invalid',
+                    return this.send(client, "error", {
+                        message: "One or more uploadIds are invalid",
                     });
                 }
             }
             if (parsedData.replyTo !== undefined && parsedData.replyTo !== null) {
-                if (typeof parsedData.replyTo !== 'string' || !mongoose_2.Types.ObjectId.isValid(parsedData.replyTo)) {
-                    return this.send(client, 'error', {
-                        message: 'replyTo must be a valid message ID',
+                if (typeof parsedData.replyTo !== "string" ||
+                    !mongoose_2.Types.ObjectId.isValid(parsedData.replyTo)) {
+                    return this.send(client, "error", {
+                        message: "replyTo must be a valid message ID",
                     });
                 }
             }
             console.log(`[WebSocket] 📨 SEND MESSAGE: User ${meta.userDehiveId} sending to conversation ${convId}`);
             console.log(`[WebSocket] 📨 MESSAGE CONTENT: "${parsedData.content}"`);
             console.log(`[WebSocket] 📨 UPLOAD IDS: ${JSON.stringify(parsedData.uploadIds)}`);
-            const savedMessage = await this.messagingService.createMessage(parsedData, meta.userDehiveId);
+            const savedMessage = (await this.messagingService.createMessage(parsedData, meta.userDehiveId));
             console.log(`[WebSocket] ✅ MESSAGE SAVED: ${savedMessage._id}`);
-            const senderProfile = await this.userDehiveModel.findById(savedMessage.senderId).lean();
+            await this.userDehiveModel.findById(savedMessage.senderId).lean();
             const messageToBroadcast = {
                 _id: savedMessage._id,
                 sender: {
@@ -1058,14 +1072,14 @@ let ChatGateway = class ChatGateway {
             };
             this.server
                 .to(String(parsedData.conversationId))
-                .emit('newMessage', messageToBroadcast);
+                .emit("newMessage", messageToBroadcast);
             console.log(`[WebSocket] 📢 MESSAGE BROADCASTED to room: ${parsedData.conversationId}`);
             console.log(`[WebSocket] 📢 BROADCAST DATA:`, JSON.stringify(messageToBroadcast, null, 2));
         }
         catch (error) {
-            console.error('[WebSocket] Error handling message:', error);
-            this.send(client, 'error', {
-                message: 'Failed to send message.',
+            console.error("[WebSocket] Error handling message:", error);
+            this.send(client, "error", {
+                message: "Failed to send message.",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -1073,13 +1087,13 @@ let ChatGateway = class ChatGateway {
     async handleEditMessage(data, client) {
         const meta = this.meta.get(client);
         if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-            return this.send(client, 'error', {
-                message: 'Please identify yourself before editing.',
+            return this.send(client, "error", {
+                message: "Please identify yourself before editing.",
             });
         }
         try {
             let parsedData;
-            if (typeof data === 'string') {
+            if (typeof data === "string") {
                 parsedData = JSON.parse(data);
             }
             else {
@@ -1095,11 +1109,11 @@ let ChatGateway = class ChatGateway {
             };
             this.server
                 .to(String(payload.conversationId))
-                .emit('messageEdited', payload);
+                .emit("messageEdited", payload);
         }
         catch (error) {
-            this.send(client, 'error', {
-                message: 'Failed to edit message.',
+            this.send(client, "error", {
+                message: "Failed to edit message.",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -1107,13 +1121,13 @@ let ChatGateway = class ChatGateway {
     async handleDeleteMessage(data, client) {
         const meta = this.meta.get(client);
         if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-            return this.send(client, 'error', {
-                message: 'Please identify yourself before deleting.',
+            return this.send(client, "error", {
+                message: "Please identify yourself before deleting.",
             });
         }
         try {
             let parsedData;
-            if (typeof data === 'string') {
+            if (typeof data === "string") {
                 parsedData = JSON.parse(data);
             }
             else {
@@ -1127,11 +1141,11 @@ let ChatGateway = class ChatGateway {
             };
             this.server
                 .to(String(payload.conversationId))
-                .emit('messageDeleted', payload);
+                .emit("messageDeleted", payload);
         }
         catch (error) {
-            this.send(client, 'error', {
-                message: 'Failed to delete message.',
+            this.send(client, "error", {
+                message: "Failed to delete message.",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -1139,13 +1153,13 @@ let ChatGateway = class ChatGateway {
     async handleLeaveRoom(data, client) {
         const meta = this.meta.get(client);
         if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-            return this.send(client, 'error', {
-                message: 'Please identify yourself first.',
+            return this.send(client, "error", {
+                message: "Please identify yourself first.",
             });
         }
         try {
             let parsedData;
-            if (typeof data === 'string') {
+            if (typeof data === "string") {
                 parsedData = JSON.parse(data);
             }
             else {
@@ -1155,33 +1169,33 @@ let ChatGateway = class ChatGateway {
                 if (meta.currentRooms?.has(parsedData.conversationId)) {
                     await client.leave(parsedData.conversationId);
                     meta.currentRooms.delete(parsedData.conversationId);
-                    this.send(client, 'leftRoom', {
+                    this.send(client, "leftRoom", {
                         conversationId: parsedData.conversationId,
-                        message: 'Left room successfully',
+                        message: "Left room successfully",
                     });
                 }
                 else {
-                    this.send(client, 'error', {
-                        message: 'You are not in this room.',
+                    this.send(client, "error", {
+                        message: "You are not in this room.",
                     });
                 }
             }
             else {
                 if (meta.currentRooms) {
-                    meta.currentRooms.forEach(roomId => {
+                    meta.currentRooms.forEach((roomId) => {
                         client.leave(roomId);
                     });
                     meta.currentRooms.clear();
                 }
-                this.send(client, 'leftAllRooms', {
-                    message: 'Left all rooms successfully',
+                this.send(client, "leftAllRooms", {
+                    message: "Left all rooms successfully",
                 });
             }
         }
         catch (error) {
-            console.error('[WebSocket] Error handling leaveRoom:', error);
-            this.send(client, 'error', {
-                message: 'Failed to leave room.',
+            console.error("[WebSocket] Error handling leaveRoom:", error);
+            this.send(client, "error", {
+                message: "Failed to leave room.",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -1189,19 +1203,19 @@ let ChatGateway = class ChatGateway {
     handleGetCurrentRooms(client) {
         const meta = this.meta.get(client);
         if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-            return this.send(client, 'error', {
-                message: 'Please identify yourself first.',
+            return this.send(client, "error", {
+                message: "Please identify yourself first.",
             });
         }
-        this.send(client, 'currentRooms', {
+        this.send(client, "currentRooms", {
             rooms: Array.from(meta.currentRooms || []),
-            message: 'Current rooms retrieved successfully',
+            message: "Current rooms retrieved successfully",
         });
     }
     handlePing(client) {
-        this.send(client, 'pong', {
+        this.send(client, "pong", {
             timestamp: new Date().toISOString(),
-            message: 'Pong!',
+            message: "Pong!",
         });
     }
 };
@@ -1211,7 +1225,7 @@ __decorate([
     __metadata("design:type", socket_io_1.Server)
 ], ChatGateway.prototype, "server", void 0);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('identity'),
+    (0, websockets_1.SubscribeMessage)("identity"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1219,7 +1233,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleIdentity", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('joinChannel'),
+    (0, websockets_1.SubscribeMessage)("joinChannel"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1227,7 +1241,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleJoinChannel", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('joinConversation'),
+    (0, websockets_1.SubscribeMessage)("joinConversation"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1235,7 +1249,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleJoinConversation", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('sendMessage'),
+    (0, websockets_1.SubscribeMessage)("sendMessage"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1243,7 +1257,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleMessage", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('editMessage'),
+    (0, websockets_1.SubscribeMessage)("editMessage"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1251,7 +1265,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleEditMessage", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('deleteMessage'),
+    (0, websockets_1.SubscribeMessage)("deleteMessage"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1259,7 +1273,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleDeleteMessage", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('leaveRoom'),
+    (0, websockets_1.SubscribeMessage)("leaveRoom"),
     __param(0, (0, websockets_1.MessageBody)()),
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
@@ -1267,14 +1281,14 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleLeaveRoom", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('getCurrentRooms'),
+    (0, websockets_1.SubscribeMessage)("getCurrentRooms"),
     __param(0, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [socket_io_1.Socket]),
     __metadata("design:returntype", void 0)
 ], ChatGateway.prototype, "handleGetCurrentRooms", null);
 __decorate([
-    (0, websockets_1.SubscribeMessage)('ping'),
+    (0, websockets_1.SubscribeMessage)("ping"),
     __param(0, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [socket_io_1.Socket]),
@@ -1283,7 +1297,7 @@ __decorate([
 exports.ChatGateway = ChatGateway = __decorate([
     (0, websockets_1.WebSocketGateway)({
         cors: {
-            origin: '*',
+            origin: "*",
         },
     }),
     __param(1, (0, mongoose_1.InjectModel)(user_dehive_schema_1.UserDehive.name)),
@@ -1332,7 +1346,7 @@ exports.ChannelConversation = ChannelConversation;
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'Channel',
+        ref: "Channel",
         required: true,
         unique: true,
         index: true,
@@ -1344,7 +1358,7 @@ __decorate([
     __metadata("design:type", String)
 ], ChannelConversation.prototype, "key_contract", void 0);
 exports.ChannelConversation = ChannelConversation = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'channel_conversation', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "channel_conversation", timestamps: true })
 ], ChannelConversation);
 exports.ChannelConversationSchema = mongoose_1.SchemaFactory.createForClass(ChannelConversation);
 
@@ -1390,7 +1404,7 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'ChannelConversation',
+        ref: "ChannelConversation",
         required: true,
         index: true,
     }),
@@ -1399,14 +1413,14 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'UserDehive',
+        ref: "UserDehive",
         required: true,
         index: true,
     }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], ChannelMessage.prototype, "senderId", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Channel', required: true, index: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Channel", required: true, index: true }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], ChannelMessage.prototype, "channelId", void 0);
 __decorate([
@@ -1428,14 +1442,14 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'ChannelMessage',
+        ref: "ChannelMessage",
         required: false,
         default: null,
     }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], ChannelMessage.prototype, "replyTo", void 0);
 exports.ChannelMessage = ChannelMessage = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'channel_message', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "channel_message", timestamps: true })
 ], ChannelMessage);
 exports.ChannelMessageSchema = mongoose_1.SchemaFactory.createForClass(ChannelMessage);
 
@@ -1480,18 +1494,18 @@ exports.Upload = Upload;
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'UserDehive',
+        ref: "UserDehive",
         required: true,
         index: true,
     }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Upload.prototype, "ownerId", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Server', required: false, index: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Server", required: false, index: true }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Upload.prototype, "serverId", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Channel', required: false, index: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Channel", required: false, index: true }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Upload.prototype, "channelId", void 0);
 __decorate([
@@ -1531,7 +1545,7 @@ __decorate([
     __metadata("design:type", String)
 ], Upload.prototype, "thumbnailUrl", void 0);
 exports.Upload = Upload = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'channel_upload', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "channel_upload", timestamps: true })
 ], Upload);
 exports.UploadSchema = mongoose_1.SchemaFactory.createForClass(Upload);
 
@@ -1573,14 +1587,14 @@ let AuthServiceClient = AuthServiceClient_1 = class AuthServiceClient {
     logger = new common_1.Logger(AuthServiceClient_1.name);
     authServiceUrl;
     PROFILE_CACHE_TTL = 900;
-    PROFILE_CACHE_PREFIX = 'user_profile:';
+    PROFILE_CACHE_PREFIX = "user_profile:";
     constructor(httpService, redis, configService) {
         this.httpService = httpService;
         this.redis = redis;
         this.configService = configService;
         this.authServiceUrl =
-            this.configService.get('AUTH_SERVICE_URL') ||
-                'http://localhost:4006';
+            this.configService.get("AUTH_SERVICE_URL") ||
+                "http://localhost:4006";
     }
     async getUserProfile(userId) {
         const cacheKey = `${this.PROFILE_CACHE_PREFIX}${userId}`;
@@ -1599,7 +1613,7 @@ let AuthServiceClient = AuthServiceClient_1 = class AuthServiceClient {
             await this.redis.setex(cacheKey, this.PROFILE_CACHE_TTL, JSON.stringify(profile));
             return profile;
         }
-        catch (error) {
+        catch {
             this.logger.error(`Failed to fetch user profile: ${userId}`);
             return null;
         }
@@ -1623,7 +1637,7 @@ let AuthServiceClient = AuthServiceClient_1 = class AuthServiceClient {
                     try {
                         profiles[id] = JSON.parse(data);
                     }
-                    catch (parseError) {
+                    catch {
                         missingIds.push(id);
                     }
                 }
@@ -1702,7 +1716,7 @@ let MessagingController = class MessagingController {
         return {
             success: true,
             statusCode: 201,
-            message: 'Message sent successfully',
+            message: "Message sent successfully",
             data: savedMessage,
         };
     }
@@ -1712,7 +1726,7 @@ let MessagingController = class MessagingController {
             .then((messages) => ({
             success: true,
             statusCode: 200,
-            message: 'Fetched conversation messages successfully',
+            message: "Fetched conversation messages successfully",
             data: messages,
         }));
     }
@@ -1721,7 +1735,7 @@ let MessagingController = class MessagingController {
         return {
             success: true,
             statusCode: 201,
-            message: 'File uploaded successfully',
+            message: "File uploaded successfully",
             data: result,
         };
     }
@@ -1736,7 +1750,7 @@ let MessagingController = class MessagingController {
         return {
             success: true,
             statusCode: 200,
-            message: 'Fetched uploads successfully',
+            message: "Fetched uploads successfully",
             data: result,
         };
     }
@@ -1745,7 +1759,7 @@ let MessagingController = class MessagingController {
         return {
             success: true,
             statusCode: 200,
-            message: 'Conversation ID retrieved successfully',
+            message: "Conversation ID retrieved successfully",
             data: {
                 conversationId: String(conversation._id),
                 channelId: String(conversation.channelId),
@@ -1756,156 +1770,156 @@ let MessagingController = class MessagingController {
 };
 exports.MessagingController = MessagingController;
 __decorate([
-    (0, common_1.Post)('send'),
-    (0, swagger_1.ApiOperation)({ summary: 'Send a message to a channel conversation' }),
+    (0, common_1.Post)("send"),
+    (0, swagger_1.ApiOperation)({ summary: "Send a message to a channel conversation" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiBody)({ type: create_message_dto_1.CreateMessageDto }),
-    (0, swagger_1.ApiResponse)({ status: 201, description: 'Message sent successfully.' }),
-    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid input or missing fields.' }),
+    (0, swagger_1.ApiResponse)({ status: 201, description: "Message sent successfully." }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Invalid input or missing fields." }),
     (0, swagger_1.ApiResponse)({
         status: 403,
-        description: 'User is not allowed to post in this channel (future implementation).',
+        description: "User is not allowed to post in this channel (future implementation).",
     }),
-    (0, swagger_1.ApiResponse)({ status: 404, description: 'Conversation not found.' }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Conversation not found." }),
     openapi.ApiResponse({ status: 201 }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(0, (0, current_user_decorator_1.CurrentUser)("userId")),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, create_message_dto_1.CreateMessageDto]),
     __metadata("design:returntype", Promise)
 ], MessagingController.prototype, "sendMessage", null);
 __decorate([
-    (0, common_1.Get)('conversation/:conversationId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get paginated messages for a conversation' }),
+    (0, common_1.Get)("conversation/:conversationId"),
+    (0, swagger_1.ApiOperation)({ summary: "Get paginated messages for a conversation" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiParam)({
-        name: 'conversationId',
-        description: 'The ID of the channel conversation to retrieve messages from',
+        name: "conversationId",
+        description: "The ID of the channel conversation to retrieve messages from",
     }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns a list of messages.' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Returns a list of messages." }),
     (0, swagger_1.ApiResponse)({
         status: 404,
-        description: 'No messages found for the channel.',
+        description: "No messages found for the channel.",
     }),
     (0, common_1.UsePipes)(new common_1.ValidationPipe({ transform: true })),
     openapi.ApiResponse({ status: 200 }),
-    __param(0, (0, common_1.Param)('conversationId')),
+    __param(0, (0, common_1.Param)("conversationId")),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, get_messages_dto_1.GetMessagesDto]),
     __metadata("design:returntype", void 0)
 ], MessagingController.prototype, "getMessages", null);
 __decorate([
-    (0, common_1.Post)('files/upload'),
-    (0, swagger_1.ApiOperation)({ summary: 'Upload a file and return metadata' }),
+    (0, common_1.Post)("files/upload"),
+    (0, swagger_1.ApiOperation)({ summary: "Upload a file and return metadata" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiConsumes)('multipart/form-data'),
+    (0, swagger_1.ApiConsumes)("multipart/form-data"),
     (0, swagger_1.ApiBody)({
         schema: {
-            type: 'object',
+            type: "object",
             properties: {
-                file: { type: 'string', format: 'binary' },
-                serverId: { type: 'string', description: 'Server ID (MongoId)' },
+                file: { type: "string", format: "binary" },
+                serverId: { type: "string", description: "Server ID (MongoId)" },
                 conversationId: {
-                    type: 'string',
-                    description: ' Channel Conversation ID (MongoId)',
+                    type: "string",
+                    description: " Channel Conversation ID (MongoId)",
                 },
             },
-            required: ['file', 'serverId', 'conversationId'],
+            required: ["file", "serverId", "conversationId"],
         },
     }),
     (0, swagger_1.ApiResponse)({
         status: 201,
-        description: 'File uploaded successfully.',
+        description: "File uploaded successfully.",
         type: channel_upload_dto_1.UploadResponseDto,
     }),
     (0, swagger_1.ApiResponse)({
         status: 400,
-        description: 'Missing header, invalid/missing serverId, not a member, or size/type exceeds limits.',
+        description: "Missing header, invalid/missing serverId, not a member, or size/type exceeds limits.",
     }),
-    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file')),
+    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)("file")),
     openapi.ApiResponse({ status: 201, type: Object }),
     __param(0, (0, common_1.UploadedFile)()),
     __param(1, (0, common_1.Body)()),
-    __param(2, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)("userId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, channel_upload_dto_1.UploadInitDto, String]),
     __metadata("design:returntype", Promise)
 ], MessagingController.prototype, "upload", null);
 __decorate([
-    (0, common_1.Get)('files/list'),
-    (0, swagger_1.ApiOperation)({ summary: 'List previously uploaded files (gallery)' }),
+    (0, common_1.Get)("files/list"),
+    (0, swagger_1.ApiOperation)({ summary: "List previously uploaded files (gallery)" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
-    (0, swagger_1.ApiResponse)({ status: 200, description: 'Returns paginated uploads.' }),
-    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid query or header.' }),
-    (0, swagger_1.ApiResponse)({ status: 403, description: 'Not allowed.' }),
+    (0, swagger_1.ApiResponse)({ status: 200, description: "Returns paginated uploads." }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Invalid query or header." }),
+    (0, swagger_1.ApiResponse)({ status: 403, description: "Not allowed." }),
     openapi.ApiResponse({ status: 200 }),
-    __param(0, (0, current_user_decorator_1.CurrentUser)('userId')),
+    __param(0, (0, current_user_decorator_1.CurrentUser)("userId")),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String, list_channel_upload_dto_1.ListUploadsDto]),
     __metadata("design:returntype", Promise)
 ], MessagingController.prototype, "listUploads", null);
 __decorate([
-    (0, common_1.Get)('conversation/by-channel/:channelId'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get or create conversation ID for a channel' }),
+    (0, common_1.Get)("conversation/by-channel/:channelId"),
+    (0, swagger_1.ApiOperation)({ summary: "Get or create conversation ID for a channel" }),
     (0, swagger_1.ApiHeader)({
-        name: 'x-session-id',
-        description: 'Session ID of authenticated user',
+        name: "x-session-id",
+        description: "Session ID of authenticated user",
         required: true,
     }),
     (0, swagger_1.ApiParam)({
-        name: 'channelId',
-        description: 'The ID of the channel to get conversation for',
-        example: '68c5adb6ec465897d540c58',
+        name: "channelId",
+        description: "The ID of the channel to get conversation for",
+        example: "68c5adb6ec465897d540c58",
     }),
     (0, swagger_1.ApiResponse)({
         status: 200,
-        description: 'Returns conversation ID for the channel',
+        description: "Returns conversation ID for the channel",
         schema: {
-            type: 'object',
+            type: "object",
             properties: {
-                success: { type: 'boolean' },
-                statusCode: { type: 'number' },
-                message: { type: 'string' },
+                success: { type: "boolean" },
+                statusCode: { type: "number" },
+                message: { type: "string" },
                 data: {
-                    type: 'object',
+                    type: "object",
                     properties: {
-                        conversationId: { type: 'string' },
-                        channelId: { type: 'string' },
-                        createdAt: { type: 'string', format: 'date-time' }
-                    }
-                }
-            }
-        }
+                        conversationId: { type: "string" },
+                        channelId: { type: "string" },
+                        createdAt: { type: "string", format: "date-time" },
+                    },
+                },
+            },
+        },
     }),
-    (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid channelId.' }),
-    (0, swagger_1.ApiResponse)({ status: 404, description: 'Channel not found.' }),
+    (0, swagger_1.ApiResponse)({ status: 400, description: "Invalid channelId." }),
+    (0, swagger_1.ApiResponse)({ status: 404, description: "Channel not found." }),
     openapi.ApiResponse({ status: 200 }),
-    __param(0, (0, common_1.Param)('channelId')),
+    __param(0, (0, common_1.Param)("channelId")),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], MessagingController.prototype, "getConversationByChannelId", null);
 exports.MessagingController = MessagingController = __decorate([
-    (0, swagger_1.ApiTags)('Channel Messages'),
-    (0, common_1.Controller)('messages'),
+    (0, swagger_1.ApiTags)("Channel Messages"),
+    (0, common_1.Controller)("messages"),
     (0, common_2.UseGuards)(auth_guard_1.AuthGuard),
     __metadata("design:paramtypes", [channel_messaging_service_1.MessagingService])
 ], MessagingController);
@@ -1954,7 +1968,7 @@ exports.MessagingModule = MessagingModule = __decorate([
         imports: [
             config_1.ConfigModule.forRoot({
                 isGlobal: true,
-                envFilePath: '.env',
+                envFilePath: ".env",
             }),
             axios_1.HttpModule.register({
                 timeout: 5000,
@@ -1963,8 +1977,8 @@ exports.MessagingModule = MessagingModule = __decorate([
             ioredis_1.RedisModule.forRootAsync({
                 imports: [config_1.ConfigModule],
                 useFactory: (config) => ({
-                    type: 'single',
-                    url: config.get('REDIS_URI'),
+                    type: "single",
+                    url: config.get("REDIS_URI"),
                 }),
                 inject: [config_1.ConfigService],
             }),
@@ -1972,8 +1986,8 @@ exports.MessagingModule = MessagingModule = __decorate([
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],
                 useFactory: (configService) => ({
-                    uri: configService.get('MONGODB_URI'),
-                    dbName: 'dehive_db',
+                    uri: configService.get("MONGODB_URI"),
+                    dbName: "dehive_db",
                 }),
             }),
             mongoose_1.MongooseModule.forFeature([
@@ -2052,20 +2066,20 @@ let MessagingService = class MessagingService {
         this.authClient = authClient;
     }
     detectAttachmentType(mime) {
-        if (mime.startsWith('image/'))
+        if (mime.startsWith("image/"))
             return enum_1.AttachmentType.IMAGE;
-        if (mime.startsWith('video/'))
+        if (mime.startsWith("video/"))
             return enum_1.AttachmentType.VIDEO;
-        if (mime.startsWith('audio/'))
+        if (mime.startsWith("audio/"))
             return enum_1.AttachmentType.AUDIO;
         return enum_1.AttachmentType.FILE;
     }
     getLimits() {
-        const toBytes = (mb, def) => (parseInt(mb || '', 10) || def) * 1024 * 1024;
+        const toBytes = (mb, def) => (parseInt(mb || "", 10) || def) * 1024 * 1024;
         return {
-            image: toBytes(this.configService.get('MAX_IMAGE_MB') ?? '10', 10),
-            video: toBytes(this.configService.get('MAX_VIDEO_MB') ?? '100', 100),
-            file: toBytes(this.configService.get('MAX_FILE_MB') ?? '25', 25),
+            image: toBytes(this.configService.get("MAX_IMAGE_MB") ?? "10", 10),
+            video: toBytes(this.configService.get("MAX_VIDEO_MB") ?? "100", 100),
+            file: toBytes(this.configService.get("MAX_FILE_MB") ?? "25", 25),
         };
     }
     validateUploadSize(mime, size) {
@@ -2081,58 +2095,58 @@ let MessagingService = class MessagingService {
             throw new common_1.BadRequestException(`File exceeds size limit (${limits.file} bytes)`);
     }
     async handleUpload(file, body, userId) {
-        if (!file || typeof file !== 'object')
-            throw new common_1.BadRequestException('File is required');
+        if (!file || typeof file !== "object")
+            throw new common_1.BadRequestException("File is required");
         const uploaded = file;
-        const mime = uploaded.mimetype || 'application/octet-stream';
+        const mime = uploaded.mimetype || "application/octet-stream";
         const size = uploaded.size ?? 0;
         this.validateUploadSize(mime, size);
         if (!body.serverId) {
-            throw new common_1.BadRequestException('serverId is required');
+            throw new common_1.BadRequestException("serverId is required");
         }
         if (!mongoose_2.Types.ObjectId.isValid(body.serverId)) {
-            throw new common_1.BadRequestException('Invalid serverId');
+            throw new common_1.BadRequestException("Invalid serverId");
         }
         if (!body.conversationId) {
-            throw new common_1.BadRequestException('conversationId is required');
+            throw new common_1.BadRequestException("conversationId is required");
         }
         if (!mongoose_2.Types.ObjectId.isValid(body.conversationId)) {
-            throw new common_1.BadRequestException('Invalid conversationId');
+            throw new common_1.BadRequestException("Invalid conversationId");
         }
         if (!userId || !mongoose_2.Types.ObjectId.isValid(userId)) {
-            throw new common_1.BadRequestException('Invalid or missing user_dehive_id');
+            throw new common_1.BadRequestException("Invalid or missing user_dehive_id");
         }
         const isMember = await this.userDehiveServerModel.exists({
-            user_dehive_id: new mongoose_2.Types.ObjectId(userId),
+            user_dehive_id: userId,
             server_id: new mongoose_2.Types.ObjectId(body.serverId),
         });
         if (!isMember) {
-            throw new common_1.BadRequestException('User is not a member of this server');
+            throw new common_1.BadRequestException("User is not a member of this server");
         }
         const conversation = await this.channelConversationModel.findById(body.conversationId);
         if (!conversation) {
-            throw new common_1.NotFoundException('Conversation not found');
+            throw new common_1.NotFoundException("Conversation not found");
         }
-        const storage = (this.configService.get('STORAGE') || 'local').toLowerCase();
-        const cdnBase = this.configService.get('CDN_BASE_URL') ||
-            'http://localhost:4003/uploads';
-        let fileUrl = '';
-        const originalName = uploaded.originalname || 'upload.bin';
-        const ext = path.extname(originalName) || '';
+        const storage = (this.configService.get("STORAGE") || "local").toLowerCase();
+        const cdnBase = this.configService.get("CDN_BASE_URL") ||
+            "http://localhost:4003/uploads";
+        let fileUrl = "";
+        const originalName = uploaded.originalname || "upload.bin";
+        const ext = path.extname(originalName) || "";
         const safeName = `${(0, crypto_1.randomUUID)()}${ext}`;
-        if (storage === 'local') {
-            const uploadDir = path.resolve(process.cwd(), 'uploads');
+        if (storage === "local") {
+            const uploadDir = path.resolve(process.cwd(), "uploads");
             if (!fs.existsSync(uploadDir))
                 fs.mkdirSync(uploadDir, { recursive: true });
             const dest = path.join(uploadDir, safeName);
             const buffer = Buffer.isBuffer(uploaded.buffer)
                 ? uploaded.buffer
-                : Buffer.from('');
+                : Buffer.from("");
             fs.writeFileSync(dest, buffer);
-            fileUrl = `${cdnBase.replace(/\/$/, '')}/${safeName}`;
+            fileUrl = `${cdnBase.replace(/\/$/, "")}/${safeName}`;
         }
         else {
-            throw new common_1.BadRequestException('S3/MinIO not implemented yet');
+            throw new common_1.BadRequestException("S3/MinIO not implemented yet");
         }
         const type = this.detectAttachmentType(mime);
         let width;
@@ -2149,21 +2163,21 @@ let MessagingService = class MessagingService {
             else if (type === enum_1.AttachmentType.VIDEO ||
                 type === enum_1.AttachmentType.AUDIO) {
                 const probeMeta = ffprobe_static_1.default;
-                const probeBin = (typeof probeMeta === 'object' && probeMeta?.path) ||
-                    (typeof probeMeta === 'string' ? probeMeta : 'ffprobe');
-                const tmpFilePath = path.resolve(process.cwd(), 'uploads', safeName);
+                const probeBin = (typeof probeMeta === "object" && probeMeta?.path) ||
+                    (typeof probeMeta === "string" ? probeMeta : "ffprobe");
+                const tmpFilePath = path.resolve(process.cwd(), "uploads", safeName);
                 const probe = childProcess.spawnSync(probeBin, [
-                    '-v',
-                    'error',
-                    '-print_format',
-                    'json',
-                    '-show_format',
-                    '-show_streams',
+                    "-v",
+                    "error",
+                    "-print_format",
+                    "json",
+                    "-show_format",
+                    "-show_streams",
                     tmpFilePath,
-                ], { encoding: 'utf-8' });
+                ], { encoding: "utf-8" });
                 if (probe.status === 0 && probe.stdout) {
                     const info = JSON.parse(String(probe.stdout));
-                    const videoStream = info.streams?.find((s) => s.codec_type === 'video');
+                    const videoStream = info.streams?.find((s) => s.codec_type === "video");
                     if (videoStream) {
                         width = videoStream.width;
                         height = videoStream.height;
@@ -2174,23 +2188,23 @@ let MessagingService = class MessagingService {
                     if (dur && !Number.isNaN(dur))
                         durationMs = Math.round(dur * 1000);
                     if (type === enum_1.AttachmentType.VIDEO) {
-                        const thumbName = `${safeName.replace(ext, '')}_thumb.jpg`;
-                        const thumbPath = path.resolve(process.cwd(), 'uploads', thumbName);
-                        const ffmpegBin = ffmpeg_static_1.default || 'ffmpeg';
+                        const thumbName = `${safeName.replace(ext, "")}_thumb.jpg`;
+                        const thumbPath = path.resolve(process.cwd(), "uploads", thumbName);
+                        const ffmpegBin = ffmpeg_static_1.default || "ffmpeg";
                         const ffmpeg = childProcess.spawnSync(ffmpegBin, [
-                            '-i',
+                            "-i",
                             tmpFilePath,
-                            '-ss',
-                            '00:00:00.000',
-                            '-vframes',
-                            '1',
-                            '-vf',
-                            'scale=640:-1',
+                            "-ss",
+                            "00:00:00.000",
+                            "-vframes",
+                            "1",
+                            "-vf",
+                            "scale=640:-1",
                             thumbPath,
-                            '-y',
-                        ], { encoding: 'utf-8' });
+                            "-y",
+                        ], { encoding: "utf-8" });
                         if (ffmpeg.status === 0) {
-                            thumbnailUrl = `${cdnBase.replace(/\/$/, '')}/${thumbName}`;
+                            thumbnailUrl = `${cdnBase.replace(/\/$/, "")}/${thumbName}`;
                         }
                     }
                 }
@@ -2233,7 +2247,7 @@ let MessagingService = class MessagingService {
             createMessageDto.uploadIds.length > 0) {
             const validIds = createMessageDto.uploadIds.filter((id) => mongoose_2.Types.ObjectId.isValid(id));
             if (validIds.length !== createMessageDto.uploadIds.length) {
-                throw new common_1.BadRequestException('One or more uploadIds are invalid');
+                throw new common_1.BadRequestException("One or more uploadIds are invalid");
             }
             const uploadObjectIds = validIds.map((id) => new mongoose_2.Types.ObjectId(id));
             const uploads = await this.uploadModel
@@ -2243,7 +2257,7 @@ let MessagingService = class MessagingService {
             })
                 .lean();
             if (uploads.length !== uploadObjectIds.length) {
-                throw new common_1.BadRequestException('You can only attach files that you uploaded');
+                throw new common_1.BadRequestException("You can only attach files that you uploaded");
             }
             attachments = uploads.map((u) => ({
                 type: u.type,
@@ -2259,19 +2273,22 @@ let MessagingService = class MessagingService {
         }
         const conversation = await this.channelConversationModel.findById(createMessageDto.conversationId);
         if (!conversation) {
-            throw new common_1.BadRequestException('Invalid conversationId');
+            throw new common_1.BadRequestException("Invalid conversationId");
         }
         let replyToMessageId;
         if (createMessageDto.replyTo) {
             if (!mongoose_2.Types.ObjectId.isValid(createMessageDto.replyTo)) {
-                throw new common_1.BadRequestException('Invalid replyTo message id');
+                throw new common_1.BadRequestException("Invalid replyTo message id");
             }
-            const replyToMessage = await this.channelMessageModel.findById(createMessageDto.replyTo).lean();
+            const replyToMessage = await this.channelMessageModel
+                .findById(createMessageDto.replyTo)
+                .lean();
             if (!replyToMessage) {
-                throw new common_1.NotFoundException('Message being replied to not found');
+                throw new common_1.NotFoundException("Message being replied to not found");
             }
-            if (String(replyToMessage.conversationId) !== createMessageDto.conversationId) {
-                throw new common_1.BadRequestException('Cannot reply to a message from a different conversation');
+            if (String(replyToMessage.conversationId) !==
+                createMessageDto.conversationId) {
+                throw new common_1.BadRequestException("Cannot reply to a message from a different conversation");
             }
             replyToMessageId = new mongoose_2.Types.ObjectId(createMessageDto.replyTo);
         }
@@ -2286,17 +2303,17 @@ let MessagingService = class MessagingService {
         const savedMessage = await newMessage.save();
         const populatedMessage = await this.channelMessageModel
             .findById(savedMessage._id)
-            .populate('replyTo', 'content senderId createdAt')
+            .populate("replyTo", "content senderId createdAt")
             .lean();
         const formattedMessage = {
             ...populatedMessage,
-            replyTo: populatedMessage?.replyTo || null
+            replyTo: populatedMessage?.replyTo || null,
         };
         return formattedMessage;
     }
     async getOrCreateConversationByChannelId(channelId) {
         if (!mongoose_2.Types.ObjectId.isValid(channelId)) {
-            throw new common_1.BadRequestException('Invalid channelId');
+            throw new common_1.BadRequestException("Invalid channelId");
         }
         const conversation = await this.channelConversationModel.findOneAndUpdate({ channelId: new mongoose_2.Types.ObjectId(channelId) }, {
             $setOnInsert: {
@@ -2306,25 +2323,38 @@ let MessagingService = class MessagingService {
         return conversation;
     }
     async getMessagesByConversationId(conversationId, getMessagesDto) {
-        const { page = 1, limit = 50 } = getMessagesDto;
-        const skip = (page - 1) * limit;
+        const { page = 0, limit = 10 } = getMessagesDto;
+        const skip = page * limit;
         if (!mongoose_2.Types.ObjectId.isValid(conversationId)) {
-            throw new common_1.BadRequestException('Invalid conversationId');
+            throw new common_1.BadRequestException("Invalid conversationId");
         }
-        const messages = await this.channelMessageModel
-            .find({ conversationId: new mongoose_2.Types.ObjectId(conversationId) })
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit)
-            .populate({
-            path: 'senderId',
-            model: 'UserDehive',
-            select: '_id',
-        })
-            .populate('replyTo', 'content senderId createdAt')
-            .lean();
+        const [messages, total] = await Promise.all([
+            this.channelMessageModel
+                .find({ conversationId: new mongoose_2.Types.ObjectId(conversationId) })
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .populate({
+                path: "senderId",
+                model: "UserDehive",
+                select: "_id",
+            })
+                .populate("replyTo", "content senderId createdAt")
+                .lean(),
+            this.channelMessageModel.countDocuments({
+                conversationId: new mongoose_2.Types.ObjectId(conversationId),
+            }),
+        ]);
         if (!messages || messages.length === 0) {
-            return [];
+            return {
+                items: [],
+                metadata: {
+                    page,
+                    limit,
+                    total: 0,
+                    is_last_page: true,
+                },
+            };
         }
         const userIds = messages
             .map((m) => {
@@ -2333,12 +2363,12 @@ let MessagingService = class MessagingService {
         })
             .filter((id) => Boolean(id));
         const profiles = await this.authClient.batchGetProfiles(userIds);
-        return messages.map((msg) => {
+        const items = messages.map((msg) => {
             const sender = msg.senderId;
-            const userId = sender?._id?.toString() || '';
+            const userId = sender?._id?.toString() || "";
             const profile = profiles[userId] || {
-                username: 'Unknown User',
-                display_name: 'Unknown User',
+                username: "Unknown User",
+                display_name: "Unknown User",
                 avatar: null,
             };
             return {
@@ -2349,7 +2379,7 @@ let MessagingService = class MessagingService {
                 senderId: sender?._id,
                 sender: {
                     user_id: userId,
-                    user_dehive_id: sender?._id?.toString() || '',
+                    user_dehive_id: sender?._id?.toString() || "",
                     username: profile.username,
                     display_name: profile.display_name || profile.username,
                     avatar: profile.avatar,
@@ -2362,22 +2392,33 @@ let MessagingService = class MessagingService {
                 updatedAt: msg.updatedAt,
             };
         });
+        const totalPages = Math.ceil(total / limit);
+        const isLastPage = page >= totalPages - 1;
+        return {
+            items,
+            metadata: {
+                page,
+                limit,
+                total: items.length,
+                is_last_page: isLastPage,
+            },
+        };
     }
     async editMessage(messageId, editorUserDehiveId, newContent) {
         if (!mongoose_2.Types.ObjectId.isValid(messageId)) {
-            throw new common_1.BadRequestException('Invalid message id');
+            throw new common_1.BadRequestException("Invalid message id");
         }
         if (!mongoose_2.Types.ObjectId.isValid(editorUserDehiveId)) {
-            throw new common_1.BadRequestException('Invalid user id');
+            throw new common_1.BadRequestException("Invalid user id");
         }
-        if (typeof newContent !== 'string') {
-            throw new common_1.BadRequestException('Content must be a string');
+        if (typeof newContent !== "string") {
+            throw new common_1.BadRequestException("Content must be a string");
         }
         const msg = await this.channelMessageModel.findById(messageId);
         if (!msg)
-            throw new common_1.NotFoundException('Message not found');
+            throw new common_1.NotFoundException("Message not found");
         if (String(msg.senderId) !== editorUserDehiveId) {
-            throw new common_1.BadRequestException('You can only edit your own message');
+            throw new common_1.BadRequestException("You can only edit your own message");
         }
         msg.content = newContent;
         msg.isEdited = true;
@@ -2385,55 +2426,55 @@ let MessagingService = class MessagingService {
         await msg.save();
         const populatedMessage = await this.channelMessageModel
             .findById(msg._id)
-            .populate('replyTo', 'content senderId createdAt')
+            .populate("replyTo", "content senderId createdAt")
             .lean();
         const formattedMessage = {
             ...populatedMessage,
-            replyTo: populatedMessage?.replyTo || null
+            replyTo: populatedMessage?.replyTo || null,
         };
         return formattedMessage;
     }
     async deleteMessage(messageId, requesterUserDehiveId) {
         if (!mongoose_2.Types.ObjectId.isValid(messageId)) {
-            throw new common_1.BadRequestException('Invalid message id');
+            throw new common_1.BadRequestException("Invalid message id");
         }
         if (!mongoose_2.Types.ObjectId.isValid(requesterUserDehiveId)) {
-            throw new common_1.BadRequestException('Invalid user id');
+            throw new common_1.BadRequestException("Invalid user id");
         }
         const msg = await this.channelMessageModel.findById(messageId);
         if (!msg)
-            throw new common_1.NotFoundException('Message not found');
+            throw new common_1.NotFoundException("Message not found");
         if (String(msg.senderId) !== requesterUserDehiveId) {
-            throw new common_1.BadRequestException('You can only delete your own message');
+            throw new common_1.BadRequestException("You can only delete your own message");
         }
         msg.isDeleted = true;
-        msg.content = '[deleted]';
+        msg.content = "[deleted]";
         msg.attachments = [];
         await msg.save();
         const populatedMessage = await this.channelMessageModel
             .findById(msg._id)
-            .populate('replyTo', 'content senderId createdAt')
+            .populate("replyTo", "content senderId createdAt")
             .lean();
         const formattedMessage = {
             ...populatedMessage,
-            replyTo: populatedMessage?.replyTo || null
+            replyTo: populatedMessage?.replyTo || null,
         };
         return formattedMessage;
     }
     async listUploads(params) {
         const { serverId, userId, type, page, limit } = params;
         if (!serverId || !mongoose_2.Types.ObjectId.isValid(serverId)) {
-            throw new common_1.BadRequestException('Invalid serverId');
+            throw new common_1.BadRequestException("Invalid serverId");
         }
         if (!userId || !mongoose_2.Types.ObjectId.isValid(userId)) {
-            throw new common_1.BadRequestException('Invalid user_dehive_id');
+            throw new common_1.BadRequestException("Invalid user_dehive_id");
         }
         const membership = await this.userDehiveServerModel.exists({
-            user_dehive_id: new mongoose_2.Types.ObjectId(userId),
+            user_dehive_id: userId,
             server_id: new mongoose_2.Types.ObjectId(serverId),
         });
         if (!membership) {
-            throw new common_1.BadRequestException('User is not a member of this server');
+            throw new common_1.BadRequestException("User is not a member of this server");
         }
         const query = {
             serverId: new mongoose_2.Types.ObjectId(serverId),
@@ -2447,11 +2488,11 @@ let MessagingService = class MessagingService {
                 enum_1.AttachmentType.FILE,
             ]);
             if (!allowed.has(type)) {
-                throw new common_1.BadRequestException('Invalid type');
+                throw new common_1.BadRequestException("Invalid type");
             }
             query.type = type;
         }
-        const skip = (page - 1) * limit;
+        const skip = page * limit;
         const [items, total] = await Promise.all([
             this.uploadModel
                 .find(query)
@@ -2461,10 +2502,9 @@ let MessagingService = class MessagingService {
                 .lean(),
             this.uploadModel.countDocuments(query),
         ]);
+        const totalPages = Math.ceil(total / limit);
+        const isLastPage = page >= totalPages - 1;
         return {
-            page,
-            limit,
-            total,
             items: items.map((u) => ({
                 _id: u._id,
                 type: u.type,
@@ -2478,6 +2518,12 @@ let MessagingService = class MessagingService {
                 thumbnailUrl: u.thumbnailUrl,
                 createdAt: u?.createdAt,
             })),
+            metadata: {
+                page,
+                limit,
+                total: items.length,
+                is_last_page: isLastPage,
+            },
         };
     }
 };
@@ -2538,33 +2584,33 @@ class CreateChannelDto {
 exports.CreateChannelDto = CreateChannelDto;
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The name of the new channel.',
-        example: 'general-chat',
+        description: "The name of the new channel.",
+        example: "general-chat",
     }),
-    (0, class_validator_1.IsString)({ message: 'Name must be a string.' }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'Name cannot be empty.' }),
-    (0, class_validator_1.Length)(1, 100, { message: 'Name must be between 1 and 100 characters.' }),
+    (0, class_validator_1.IsString)({ message: "Name must be a string." }),
+    (0, class_validator_1.IsNotEmpty)({ message: "Name cannot be empty." }),
+    (0, class_validator_1.Length)(1, 100, { message: "Name must be between 1 and 100 characters." }),
     __metadata("design:type", String)
 ], CreateChannelDto.prototype, "name", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The type of the channel.',
+        description: "The type of the channel.",
         enum: ChannelType,
         example: ChannelType.TEXT,
     }),
-    (0, class_validator_1.IsEnum)(ChannelType, { message: 'Type must be either TEXT or VOICE.' }),
-    (0, class_validator_1.IsNotEmpty)({ message: 'Type cannot be empty.' }),
+    (0, class_validator_1.IsEnum)(ChannelType, { message: "Type must be either TEXT or VOICE." }),
+    (0, class_validator_1.IsNotEmpty)({ message: "Type cannot be empty." }),
     __metadata("design:type", String)
 ], CreateChannelDto.prototype, "type", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({
-        description: 'The topic of the channel (optional).',
-        example: 'General discussion for all members.',
+        description: "The topic of the channel (optional).",
+        example: "General discussion for all members.",
         required: false,
     }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.Length)(0, 1024, { message: 'Topic must not exceed 1024 characters.' }),
+    (0, class_validator_1.Length)(0, 1024, { message: "Topic must not exceed 1024 characters." }),
     __metadata("design:type", String)
 ], CreateChannelDto.prototype, "topic", void 0);
 
@@ -2601,11 +2647,11 @@ __decorate([
     __metadata("design:type", String)
 ], Category.prototype, "name", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Server', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Server", required: true }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Category.prototype, "server_id", void 0);
 exports.Category = Category = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'category', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "category", timestamps: true })
 ], Category);
 exports.CategorySchema = mongoose_1.SchemaFactory.createForClass(Category);
 
@@ -2649,7 +2695,7 @@ __decorate([
     __metadata("design:type", String)
 ], Channel.prototype, "type", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Category', required: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Category", required: true }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], Channel.prototype, "category_id", void 0);
 __decorate([
@@ -2657,7 +2703,7 @@ __decorate([
     __metadata("design:type", String)
 ], Channel.prototype, "topic", void 0);
 exports.Channel = Channel = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'channel', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "channel", timestamps: true })
 ], Channel);
 exports.ChannelSchema = mongoose_1.SchemaFactory.createForClass(Channel);
 
@@ -2717,7 +2763,7 @@ __decorate([
     __metadata("design:type", Array)
 ], Server.prototype, "tags", void 0);
 exports.Server = Server = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'server', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "server", timestamps: true })
 ], Server);
 exports.ServerSchema = mongoose_1.SchemaFactory.createForClass(Server);
 
@@ -2801,14 +2847,14 @@ exports.UserDehiveServer = UserDehiveServer;
 __decorate([
     (0, mongoose_1.Prop)({
         type: mongoose_2.Types.ObjectId,
-        ref: 'UserDehive',
+        ref: "UserDehive",
         required: true,
         index: true,
     }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], UserDehiveServer.prototype, "user_dehive_id", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Server', required: true, index: true }),
+    (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: "Server", required: true, index: true }),
     __metadata("design:type", mongoose_2.Types.ObjectId)
 ], UserDehiveServer.prototype, "server_id", void 0);
 __decorate([
@@ -2828,7 +2874,7 @@ __decorate([
     __metadata("design:type", Date)
 ], UserDehiveServer.prototype, "joined_at", void 0);
 exports.UserDehiveServer = UserDehiveServer = __decorate([
-    (0, mongoose_1.Schema)({ collection: 'user_dehive_server', timestamps: true })
+    (0, mongoose_1.Schema)({ collection: "user_dehive_server", timestamps: true })
 ], UserDehiveServer);
 exports.UserDehiveServerSchema = mongoose_1.SchemaFactory.createForClass(UserDehiveServer);
 exports.UserDehiveServerSchema.index({
@@ -2876,7 +2922,7 @@ __decorate([
     (0, mongoose_1.Prop)({
         type: String,
         enum: enum_1.enumUserRole,
-        default: 'USER',
+        default: "USER",
     }),
     __metadata("design:type", String)
 ], UserDehive.prototype, "dehive_role", void 0);
@@ -2887,8 +2933,8 @@ __decorate([
 __decorate([
     (0, mongoose_1.Prop)({
         type: String,
-        enum: ['ACTIVE', 'INACTIVE', 'BANNED'],
-        default: 'ACTIVE',
+        enum: ["ACTIVE", "INACTIVE", "BANNED"],
+        default: "ACTIVE",
     }),
     __metadata("design:type", String)
 ], UserDehive.prototype, "status", void 0);
@@ -2901,7 +2947,7 @@ __decorate([
     __metadata("design:type", Date)
 ], UserDehive.prototype, "last_login", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: String, default: '' }),
+    (0, mongoose_1.Prop)({ type: String, default: "" }),
     __metadata("design:type", String)
 ], UserDehive.prototype, "bio", void 0);
 __decorate([
@@ -2918,7 +2964,7 @@ __decorate([
 ], UserDehive.prototype, "banned_by_servers", void 0);
 exports.UserDehive = UserDehive = __decorate([
     (0, mongoose_1.Schema)({
-        collection: 'user_dehive',
+        collection: "user_dehive",
         timestamps: true,
     })
 ], UserDehive);
@@ -3225,20 +3271,20 @@ async function bootstrap() {
     const app = await core_1.NestFactory.create(channel_messaging_module_1.MessagingModule);
     const configService = app.get(config_1.ConfigService);
     app.useWebSocketAdapter(new platform_socket_io_1.IoAdapter(app));
-    app.enableCors({ origin: '*' });
-    app.setGlobalPrefix('api');
+    app.enableCors({ origin: "*" });
+    app.setGlobalPrefix("api");
     app.useGlobalPipes(new common_1.ValidationPipe({ whitelist: true, transform: true }));
-    app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+    app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
     const config = new swagger_1.DocumentBuilder()
-        .setTitle('Dehive - Channel Messaging Service')
-        .setDescription('API and WebSocket documentation for real-time channel chat.')
-        .setVersion('1.0')
-        .addTag('Channel Messages')
+        .setTitle("Dehive - Channel Messaging Service")
+        .setDescription("API and WebSocket documentation for real-time channel chat.")
+        .setVersion("1.0")
+        .addTag("Channel Messages")
         .build();
     const document = swagger_1.SwaggerModule.createDocument(app, config);
-    swagger_1.SwaggerModule.setup('api-docs', app, document);
-    const port = configService.get('CHANNEL_MESSAGING_PORT') || 4003;
-    const host = configService.get('CLOUD_HOST') || 'localhost';
+    swagger_1.SwaggerModule.setup("api-docs", app, document);
+    const port = configService.get("CHANNEL_MESSAGING_PORT") || 4003;
+    const host = configService.get("CLOUD_HOST") || "localhost";
     await app.listen(port, host);
     console.log(`[Dehive] Channel-Messaging service is running on: ${await app.getUrl()}`);
     console.log(`[Dehive] Swagger UI available at: http://localhost:${port}/api-docs`);

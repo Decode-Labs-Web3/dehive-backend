@@ -550,10 +550,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         `[WebSocket] 📨 UPLOAD IDS: ${JSON.stringify(parsedData.uploadIds)}`,
       );
 
-      const savedMessage = await this.messagingService.createMessage(
+      const savedMessage = (await this.messagingService.createMessage(
         parsedData,
         meta.userDehiveId,
-      );
+      )) as any;
 
       console.log(`[WebSocket] ✅ MESSAGE SAVED: ${savedMessage._id}`);
 
