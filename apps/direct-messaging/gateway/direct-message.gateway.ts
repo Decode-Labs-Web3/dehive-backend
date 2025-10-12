@@ -65,7 +65,10 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return {
       _id: message._id,
       conversationId: message.conversationId,
-      senderId: message.senderId,
+      sender: {
+        dehive_id: message.senderId,
+        username: `User_${String(message.senderId)}`,
+      },
       content: message.content,
       attachments: message.attachments || [],
       isEdited: message.isEdited || false,

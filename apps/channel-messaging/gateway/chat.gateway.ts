@@ -451,16 +451,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const messageToBroadcast = {
         _id: savedMessage._id,
+        conversationId: savedMessage.conversationId?.toString?.(),
         sender: {
           dehive_id: savedMessage.senderId,
-          username: `User_${savedMessage.senderId.toString().slice(-4)}`,
+          username: `User_${savedMessage.senderId.toString()}`,
         },
         content: savedMessage.content,
         attachments: savedMessage.attachments || [],
-        conversationId: savedMessage.conversationId?.toString?.(),
-        createdAt: savedMessage.createdAt,
-        isEdited: savedMessage.isEdited,
+        isEdited: savedMessage.isEdited || false,
+        editedAt: savedMessage.editedAt || null,
+        isDeleted: savedMessage.isDeleted || false,
         replyTo: savedMessage.replyTo || null,
+        createdAt: savedMessage.createdAt,
+        updatedAt: savedMessage.updatedAt,
       };
 
       // Broadcast to all clients in the conversation room
@@ -512,12 +515,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       const payload = {
         _id: updated._id,
-        content: updated.content,
-        isEdited: true,
-        editedAt: (updated as unknown as { editedAt?: Date }).editedAt,
         conversationId: (
           updated.conversationId as unknown as Types.ObjectId
         ).toString(),
+        sender: {
+          dehive_id: updated.senderId,
+          username: `User_${updated.senderId?.toString() || 'Unknown'}`,
+        },
+        content: updated.content,
+        attachments: updated.attachments || [],
+        isEdited: true,
+        editedAt: (updated as unknown as { editedAt?: Date }).editedAt,
+        isDeleted: updated.isDeleted || false,
+        replyTo: updated.replyTo || null,
+        createdAt: (updated as { createdAt?: Date }).createdAt,
+        updatedAt: (updated as { updatedAt?: Date }).updatedAt,
       };
       this.server
         .to(String(payload.conversationId))
@@ -557,10 +569,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
       const payload = {
         _id: updated._id,
-        isDeleted: true,
         conversationId: (
           updated.conversationId as unknown as Types.ObjectId
         ).toString(),
+        sender: {
+          dehive_id: updated.senderId,
+          username: `User_${updated.senderId?.toString() || 'Unknown'}`,
+        },
+        content: updated.content,
+        attachments: updated.attachments || [],
+        isEdited: updated.isEdited || false,
+        editedAt: updated.editedAt || null,
+        isDeleted: true,
+        replyTo: updated.replyTo || null,
+        createdAt: (updated as { createdAt?: Date }).createdAt,
+        updatedAt: (updated as { updatedAt?: Date }).updatedAt,
       };
       this.server
         .to(String(payload.conversationId))
@@ -572,78 +595,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     }
   }
-
-  @SubscribeMessage("leaveRoom")
-  async handleLeaveRoom(
-    @MessageBody() data: string | { conversationId?: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    const meta = this.meta.get(client);
-    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-      return this.send(client, "error", {
-        message: "Please identify yourself first.",
-      });
-    }
-
-    try {
-      // Parse JSON string if needed
-      let parsedData: { conversationId?: string };
-      if (typeof data === "string") {
-        parsedData = JSON.parse(data);
-      } else {
-        parsedData = data;
-      }
-
-      if (parsedData?.conversationId) {
-        // Leave specific room
-        if (meta.currentRooms?.has(parsedData.conversationId)) {
-          await client.leave(parsedData.conversationId);
-          meta.currentRooms.delete(parsedData.conversationId);
-          this.send(client, "leftRoom", {
-            conversationId: parsedData.conversationId,
-            message: "Left room successfully",
-          });
-        } else {
-          this.send(client, "error", {
-            message: "You are not in this room.",
-          });
-        }
-      } else {
-        // Leave all rooms
-        if (meta.currentRooms) {
-          meta.currentRooms.forEach((roomId) => {
-            client.leave(roomId);
-          });
-          meta.currentRooms.clear();
-        }
-        this.send(client, "leftAllRooms", {
-          message: "Left all rooms successfully",
-        });
-      }
-    } catch (error) {
-      console.error("[WebSocket] Error handling leaveRoom:", error);
-      this.send(client, "error", {
-        message: "Failed to leave room.",
-        details: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  @SubscribeMessage("getCurrentRooms")
-  handleGetCurrentRooms(@ConnectedSocket() client: Socket) {
-    const meta = this.meta.get(client);
-    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-      return this.send(client, "error", {
-        message: "Please identify yourself first.",
-      });
-    }
-
-    this.send(client, "currentRooms", {
-      rooms: Array.from(meta.currentRooms || []),
-      message: "Current rooms retrieved successfully",
-    });
-  }
-
   @SubscribeMessage("ping")
   handlePing(@ConnectedSocket() client: Socket) {
     this.send(client, "pong", {

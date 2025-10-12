@@ -765,36 +765,29 @@ let ChatGateway = class ChatGateway {
                 },
             });
         }
-        const { serverId, categoryId, channelId } = parsedData;
+        const { serverId, channelId } = parsedData;
         console.log("[WebSocket] joinChannel raw data:", data);
         console.log("[WebSocket] joinChannel parsed data:", JSON.stringify(parsedData, null, 2));
         console.log("[WebSocket] Extracted values:", {
             serverId,
-            categoryId,
             channelId,
         });
         if (!serverId ||
-            !categoryId ||
             !channelId ||
             !mongoose_2.Types.ObjectId.isValid(serverId) ||
-            !mongoose_2.Types.ObjectId.isValid(categoryId) ||
             !mongoose_2.Types.ObjectId.isValid(channelId)) {
             console.log("[WebSocket] Validation failed:", {
                 serverId: { value: serverId, valid: mongoose_2.Types.ObjectId.isValid(serverId) },
-                categoryId: {
-                    value: categoryId,
-                    valid: mongoose_2.Types.ObjectId.isValid(categoryId),
-                },
                 channelId: {
                     value: channelId,
                     valid: mongoose_2.Types.ObjectId.isValid(channelId),
                 },
             });
             return this.send(client, "error", {
-                message: "Invalid payload. serverId, categoryId, and channelId are required and must be valid ObjectIds.",
+                message: "Invalid payload. serverId and channelId are required and must be valid ObjectIds.",
                 details: {
                     received: data,
-                    extracted: { serverId, categoryId, channelId },
+                    extracted: { serverId, channelId },
                 },
             });
         }
@@ -858,28 +851,14 @@ let ChatGateway = class ChatGateway {
                     details: { channelId },
                 });
             }
-            if (channel.category_id.toString() !== categoryId) {
-                console.log("[WebSocket] Channel does not belong to category:", {
-                    channelCategoryId: channel.category_id.toString(),
-                    expectedCategoryId: categoryId,
-                });
-                return this.send(client, "error", {
-                    message: "Channel does not belong to the specified category.",
-                    details: {
-                        channelId,
-                        channelCategoryId: channel.category_id.toString(),
-                        expectedCategoryId: categoryId,
-                    },
-                });
-            }
             console.log("[WebSocket] Channel validation passed");
             console.log("[WebSocket] Checking category...");
-            const category = await this.categoryModel.findById(categoryId);
+            const category = await this.categoryModel.findById(channel.category_id);
             if (!category) {
-                console.log("[WebSocket] Category not found:", categoryId);
+                console.log("[WebSocket] Category not found:", channel.category_id);
                 return this.send(client, "error", {
                     message: "Category not found.",
-                    details: { categoryId },
+                    details: { categoryId: channel.category_id },
                 });
             }
             if (category.server_id.toString() !== serverId) {
@@ -890,7 +869,7 @@ let ChatGateway = class ChatGateway {
                 return this.send(client, "error", {
                     message: "Category does not belong to the specified server.",
                     details: {
-                        categoryId,
+                        categoryId: channel.category_id,
                         categoryServerId: category.server_id.toString(),
                         expectedServerId: serverId,
                     },
@@ -919,75 +898,6 @@ let ChatGateway = class ChatGateway {
             console.error("[WebSocket] Error handling joinChannel:", error);
             this.send(client, "error", {
                 message: "Failed to join channel.",
-                details: error instanceof Error ? error.message : String(error),
-            });
-        }
-    }
-    async handleJoinConversation(payload, client) {
-        const meta = this.meta.get(client);
-        if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-            return this.send(client, "error", {
-                message: 'Please identify yourself first by sending an "identity" event.',
-            });
-        }
-        let conversationId = "";
-        if (typeof payload === "string") {
-            conversationId = payload;
-        }
-        else if (payload && typeof payload === "object") {
-            conversationId = payload.conversationId;
-        }
-        if (!mongoose_2.Types.ObjectId.isValid(conversationId)) {
-            return this.send(client, "error", {
-                message: "Invalid conversationId.",
-            });
-        }
-        try {
-            const conversation = await this.channelConversationModel.findById(conversationId);
-            if (!conversation) {
-                return this.send(client, "error", {
-                    message: "Conversation not found.",
-                });
-            }
-            const channel = await this.channelModel.findById(conversation.channelId);
-            if (!channel) {
-                return this.send(client, "error", {
-                    message: "Channel not found.",
-                });
-            }
-            const category = await this.categoryModel.findById(channel.category_id);
-            if (!category) {
-                return this.send(client, "error", {
-                    message: "Category not found.",
-                });
-            }
-            const isMember = await this.userDehiveServerModel.findOne({
-                user_dehive_id: new mongoose_2.Types.ObjectId(meta.userDehiveId),
-                server_id: category.server_id,
-            });
-            if (!isMember) {
-                return this.send(client, "error", {
-                    message: "Access denied. You are not a member of this server.",
-                });
-            }
-            if (meta.currentRooms) {
-                meta.currentRooms.forEach((roomId) => {
-                    client.leave(roomId);
-                });
-                meta.currentRooms.clear();
-            }
-            await client.join(conversationId);
-            meta.currentRooms?.add(conversationId);
-            console.log(`[WebSocket] User ${meta.userDehiveId} joined conversation room: ${conversationId}`);
-            this.send(client, "joinedConversation", {
-                conversationId,
-                message: `You have successfully joined conversation ${conversationId}`,
-            });
-        }
-        catch (error) {
-            console.error("[WebSocket] Error handling joinConversation:", error);
-            this.send(client, "error", {
-                message: "Failed to join conversation.",
                 details: error instanceof Error ? error.message : String(error),
             });
         }
@@ -1240,14 +1150,6 @@ __decorate([
     __metadata("design:paramtypes", [Object, socket_io_1.Socket]),
     __metadata("design:returntype", Promise)
 ], ChatGateway.prototype, "handleJoinChannel", null);
-__decorate([
-    (0, websockets_1.SubscribeMessage)("joinConversation"),
-    __param(0, (0, websockets_1.MessageBody)()),
-    __param(1, (0, websockets_1.ConnectedSocket)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, socket_io_1.Socket]),
-    __metadata("design:returntype", Promise)
-], ChatGateway.prototype, "handleJoinConversation", null);
 __decorate([
     (0, websockets_1.SubscribeMessage)("sendMessage"),
     __param(0, (0, websockets_1.MessageBody)()),
