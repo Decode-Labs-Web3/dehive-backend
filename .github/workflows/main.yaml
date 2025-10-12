@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +23,7 @@ jobs:
 
       # 3️⃣ Cài dependencies
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       # 4️⃣ Check lint
       - name: Run lint
@@ -37,10 +37,11 @@ jobs:
       - name: Build project
         run: npm run build
 
-      # 7️⃣ In log build process
-      - name: Log build directory
-        run: find dist -name "main.js" -type f
-
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
       # 8️⃣ Deploy lên server qua SSH
       - name: Deploy with PM2
         uses: appleboy/ssh-action@v1.2.0
@@ -49,11 +50,12 @@ jobs:
           username: ${{ secrets.USERNAME }}    # ví dụ ubuntu hoặc root
           key: ${{ secrets.SSH_PRIVATE_KEY }}      # private key lưu trong GitHub Secrets
           script: |
-            cd /home/${{ secrets.USERNAME }}/myapp  # đường dẫn code trên VM
-            git pull origin main
-            npm install
-            npm run build
-            pm2 delete all || true
+            cd /home/pasondev/dehive-backend
+            git fetch origin
+            git checkout main
+            git reset --hard origin/main
+            git clean -fd
+            npm ci
             pm2 start "npm run start:prod" --name "dehive-app"
             pm2 save
             pm2 status
