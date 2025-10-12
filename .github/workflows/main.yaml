@@ -48,7 +48,10 @@ jobs:
             sudo rm -rf node_modules package-lock.json
             npm ci
             npm run build
-            pm2 stop all || true
+            pm2 delete all || true
+            pm2 kill || true
+            sleep 2
             pm2 start "npm run start:prod" --name "dehive-backend"
             pm2 save
+            pm2 startup
             pm2 status
