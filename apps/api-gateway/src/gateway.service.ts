@@ -281,7 +281,7 @@ export class GatewayService {
   }
 
   private cleanHeaders(
-    headers: Record<string, string>,
+    headers: Record<string, string> | undefined,
   ): Record<string, string> {
     if (!headers) return {};
 

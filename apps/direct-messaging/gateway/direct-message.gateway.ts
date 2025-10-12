@@ -81,7 +81,7 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
       attachments: message.attachments || [],
       isEdited: message.isEdited || false,
       editedAt: message.editedAt || null,
-      isDeleted: (message as any).isDeleted || false,
+      isDeleted: (message as { isDeleted?: boolean }).isDeleted || false,
       replyTo: message.replyTo || null,
       createdAt: (message as { createdAt: unknown }).createdAt,
       updatedAt: (message as { updatedAt: unknown }).updatedAt,
@@ -272,7 +272,18 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
         String(conv.userA) === selfId ? String(conv.userB) : String(conv.userA);
 
       const messageToBroadcast = await this.formatMessageData(
-        savedMessage as any,
+        savedMessage as {
+          _id: unknown;
+          conversationId: unknown;
+          senderId: unknown;
+          content: unknown;
+          attachments?: unknown[];
+          isEdited?: boolean;
+          editedAt?: unknown;
+          replyTo?: unknown;
+          createdAt?: unknown;
+          updatedAt?: unknown;
+        },
       );
 
       // Ensure messageToBroadcast is properly serialized
