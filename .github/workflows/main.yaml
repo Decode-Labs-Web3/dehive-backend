@@ -40,10 +40,15 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /home/pasondev/dehive-backend
+            git config --global --add safe.directory /home/pasondev/dehive-backend
             git fetch origin
             git checkout main
             git reset --hard origin/main
             git clean -fd
+            sudo rm -rf node_modules package-lock.json
             npm ci
-            npm run build:all
-            pm2 restart ecosystem.config.js --update-env
+            npm run build
+            pm2 stop all || true
+            pm2 start "npm run start:prod" --name "dehive-backend"
+            pm2 save
+            pm2 status
