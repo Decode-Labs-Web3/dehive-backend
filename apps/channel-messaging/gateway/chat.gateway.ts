@@ -145,7 +145,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage("joinChannel")
   async handleJoinChannel(
     @MessageBody()
-    data: string | { serverId: string; categoryId: string; channelId: string },
+    data: string | { serverId: string; channelId: string },
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
@@ -157,7 +157,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     // Parse JSON string if needed
-    let parsedData: { serverId: string; categoryId: string; channelId: string };
+    let parsedData: { serverId: string; channelId: string };
     try {
       if (typeof data === "string") {
         parsedData = JSON.parse(data);
@@ -174,7 +174,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     }
 
-    const { serverId, categoryId, channelId } = parsedData;
+    const { serverId, channelId } = parsedData;
 
     // Debug logging
     console.log("[WebSocket] joinChannel raw data:", data);
@@ -184,24 +184,17 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
     console.log("[WebSocket] Extracted values:", {
       serverId,
-      categoryId,
       channelId,
     });
 
     if (
       !serverId ||
-      !categoryId ||
       !channelId ||
       !Types.ObjectId.isValid(serverId) ||
-      !Types.ObjectId.isValid(categoryId) ||
       !Types.ObjectId.isValid(channelId)
     ) {
       console.log("[WebSocket] Validation failed:", {
         serverId: { value: serverId, valid: Types.ObjectId.isValid(serverId) },
-        categoryId: {
-          value: categoryId,
-          valid: Types.ObjectId.isValid(categoryId),
-        },
         channelId: {
           value: channelId,
           valid: Types.ObjectId.isValid(channelId),
@@ -210,10 +203,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       return this.send(client, "error", {
         message:
-          "Invalid payload. serverId, categoryId, and channelId are required and must be valid ObjectIds.",
+          "Invalid payload. serverId and channelId are required and must be valid ObjectIds.",
         details: {
           received: data,
-          extracted: { serverId, categoryId, channelId },
+          extracted: { serverId, channelId },
         },
       });
     }
@@ -299,30 +292,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
       }
 
-      if (channel.category_id.toString() !== categoryId) {
-        console.log("[WebSocket] Channel does not belong to category:", {
-          channelCategoryId: channel.category_id.toString(),
-          expectedCategoryId: categoryId,
-        });
-        return this.send(client, "error", {
-          message: "Channel does not belong to the specified category.",
-          details: {
-            channelId,
-            channelCategoryId: channel.category_id.toString(),
-            expectedCategoryId: categoryId,
-          },
-        });
-      }
-
       console.log("[WebSocket] Channel validation passed");
 
       console.log("[WebSocket] Checking category...");
-      const category = await this.categoryModel.findById(categoryId);
+      const category = await this.categoryModel.findById(channel.category_id);
       if (!category) {
-        console.log("[WebSocket] Category not found:", categoryId);
+        console.log("[WebSocket] Category not found:", channel.category_id);
         return this.send(client, "error", {
           message: "Category not found.",
-          details: { categoryId },
+          details: { categoryId: channel.category_id },
         });
       }
 
@@ -334,7 +312,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return this.send(client, "error", {
           message: "Category does not belong to the specified server.",
           details: {
-            categoryId,
+            categoryId: channel.category_id,
             categoryServerId: category.server_id.toString(),
             expectedServerId: serverId,
           },
@@ -382,95 +360,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  @SubscribeMessage("joinConversation")
-  async handleJoinConversation(
-    @MessageBody()
-    payload: string | { conversationId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    const meta = this.meta.get(client);
-    if (!meta?.userDehiveId || !meta?.isAuthenticated) {
-      return this.send(client, "error", {
-        message:
-          'Please identify yourself first by sending an "identity" event.',
-      });
-    }
-    let conversationId = "";
-    if (typeof payload === "string") {
-      conversationId = payload;
-    } else if (payload && typeof payload === "object") {
-      conversationId = payload.conversationId;
-    }
-    if (!Types.ObjectId.isValid(conversationId)) {
-      return this.send(client, "error", {
-        message: "Invalid conversationId.",
-      });
-    }
-
-    try {
-      // Verify user has access to this conversation
-      const conversation =
-        await this.channelConversationModel.findById(conversationId);
-      if (!conversation) {
-        return this.send(client, "error", {
-          message: "Conversation not found.",
-        });
-      }
-
-      // Check if user is member of the server that owns this channel
-      const channel = await this.channelModel.findById(conversation.channelId);
-      if (!channel) {
-        return this.send(client, "error", {
-          message: "Channel not found.",
-        });
-      }
-
-      const category = await this.categoryModel.findById(channel.category_id);
-      if (!category) {
-        return this.send(client, "error", {
-          message: "Category not found.",
-        });
-      }
-
-      const isMember = await this.userDehiveServerModel.findOne({
-        user_dehive_id: new Types.ObjectId(meta.userDehiveId),
-        server_id: category.server_id,
-      });
-
-      if (!isMember) {
-        return this.send(client, "error", {
-          message: "Access denied. You are not a member of this server.",
-        });
-      }
-
-      // Leave previous rooms if any
-      if (meta.currentRooms) {
-        meta.currentRooms.forEach((roomId) => {
-          client.leave(roomId);
-        });
-        meta.currentRooms.clear();
-      }
-
-      // Join new room
-      await client.join(conversationId);
-      meta.currentRooms?.add(conversationId);
-
-      console.log(
-        `[WebSocket] User ${meta.userDehiveId} joined conversation room: ${conversationId}`,
-      );
-
-      this.send(client, "joinedConversation", {
-        conversationId,
-        message: `You have successfully joined conversation ${conversationId}`,
-      });
-    } catch (error) {
-      console.error("[WebSocket] Error handling joinConversation:", error);
-      this.send(client, "error", {
-        message: "Failed to join conversation.",
-        details: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
 
   @SubscribeMessage("sendMessage")
   async handleMessage(
