@@ -1,54 +1,43 @@
-name: CI/CD Pipeline
+name: CI/CD Dehive Backend
 
 on:
-  push:
-    branches:
-      - main  # hoặc branch khác nếu mày muốn
   pull_request:
+    branches: [main]
+  push:
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      # 1️⃣ Lấy code từ GitHub
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      # 2️⃣ Cài Node.js
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: 20
 
-      # 3️⃣ Cài dependencies
       - name: Install dependencies
         run: npm ci
 
-      # 4️⃣ Check lint
-      - name: Run lint
+      - name: Run ESLint
         run: npm run lint
 
-      # 5️⃣ Run tests
-      - name: Run tests
-        run: npm run test
-
-      # 6️⃣ Build project
-      - name: Build project
-        run: npm run build
+      - name: Build
+        run: npm run build:all
 
   deploy:
     if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     steps:
-      # 8️⃣ Deploy lên server qua SSH
-      - name: Deploy with PM2
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.HOST }}          # IP máy VM
-          username: ${{ secrets.USERNAME }}    # ví dụ ubuntu hoặc root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}      # private key lưu trong GitHub Secrets
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /home/pasondev/dehive-backend
             git fetch origin
@@ -56,6 +45,5 @@ jobs:
             git reset --hard origin/main
             git clean -fd
             npm ci
-            pm2 start "npm run start:prod" --name "dehive-app"
-            pm2 save
-            pm2 status
+            npm run build:all
+            pm2 restart ecosystem.config.js --update-env

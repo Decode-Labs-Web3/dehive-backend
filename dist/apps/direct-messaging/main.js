@@ -105,7 +105,7 @@ let DecodeApiClient = DecodeApiClient_1 = class DecodeApiClient {
             return sessionData?.access_token || null;
         }
         catch (error) {
-            this.logger.error(`Failed to parse session data for key session:${sessionId}`);
+            this.logger.error(`Failed to parse session data for key session:${sessionId}`, error);
             return null;
         }
     }
@@ -1493,13 +1493,13 @@ let DirectMessagingController = class DirectMessagingController {
         if (req.method !== "GET") {
             throw new common_1.HttpException(`Method ${req.method} not allowed for this endpoint. Only GET is allowed.`, common_1.HttpStatus.METHOD_NOT_ALLOWED);
         }
-        const sessionId = req.headers['x-session-id'];
-        const fingerprintHash = req.headers['x-fingerprint-hashed'];
+        const sessionId = req.headers["x-session-id"];
+        const fingerprintHash = req.headers["x-fingerprint-hashed"];
         console.log(`[DM-CONTROLLER] Headers:`, {
-            'x-session-id': req.headers['x-session-id'],
-            'x-fingerprint-hashed': req.headers['x-fingerprint-hashed'],
+            "x-session-id": req.headers["x-session-id"],
+            "x-fingerprint-hashed": req.headers["x-fingerprint-hashed"],
             sessionId,
-            fingerprintHash
+            fingerprintHash,
         });
         const data = await this.service.listMessages(selfId, conversationId, query, sessionId, fingerprintHash);
         return { success: true, statusCode: 200, message: "OK", data };
@@ -1595,6 +1595,7 @@ __decorate([
         required: true,
     }),
     (0, swagger_1.ApiParam)({ name: "conversationId" }),
+    openapi.ApiResponse({ status: 200 }),
     __param(0, (0, current_user_decorator_1.CurrentUser)("_id")),
     __param(1, (0, common_1.Param)("conversationId")),
     __param(2, (0, common_1.Query)()),
