@@ -1,11 +1,89 @@
 /******/ (() => { // webpackBootstrap
 /******/ 	"use strict";
-/******/ 	var __webpack_modules__ = ({
+/******/ 	var __webpack_modules__ = ([
+/* 0 */,
+/* 1 */
+/***/ ((module) => {
 
-/***/ "./apps/auth/src/auth.controller.ts":
-/*!******************************************!*\
-  !*** ./apps/auth/src/auth.controller.ts ***!
-  \******************************************/
+module.exports = require("@nestjs/core");
+
+/***/ }),
+/* 2 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AuthModule = void 0;
+const common_1 = __webpack_require__(3);
+const auth_controller_1 = __webpack_require__(4);
+const session_service_1 = __webpack_require__(5);
+const register_service_1 = __webpack_require__(19);
+const user_service_1 = __webpack_require__(16);
+const mongoose_1 = __webpack_require__(17);
+const user_dehive_schema_1 = __webpack_require__(21);
+const config_1 = __webpack_require__(12);
+const decode_api_client_1 = __webpack_require__(7);
+const redis_infrastructure_1 = __webpack_require__(13);
+const ioredis_1 = __webpack_require__(14);
+const axios_1 = __webpack_require__(8);
+const configuration_1 = __webpack_require__(22);
+let AuthModule = class AuthModule {
+};
+exports.AuthModule = AuthModule;
+exports.AuthModule = AuthModule = __decorate([
+    (0, common_1.Module)({
+        imports: [
+            config_1.ConfigModule.forRoot({
+                isGlobal: true,
+                load: [configuration_1.default],
+            }),
+            mongoose_1.MongooseModule.forRootAsync({
+                imports: [config_1.ConfigModule],
+                useFactory: (config) => ({
+                    uri: config.get("MONGO_URI"),
+                    dbName: "dehive_db",
+                }),
+                inject: [config_1.ConfigService],
+            }),
+            axios_1.HttpModule,
+            ioredis_1.RedisModule.forRootAsync({
+                imports: [config_1.ConfigModule],
+                useFactory: (config) => ({
+                    type: "single",
+                    url: config.get("REDIS_URI"),
+                }),
+                inject: [config_1.ConfigService],
+            }),
+            mongoose_1.MongooseModule.forFeature([
+                { name: "UserDehive", schema: user_dehive_schema_1.UserDehiveSchema },
+            ]),
+        ],
+        controllers: [auth_controller_1.AuthController],
+        providers: [
+            session_service_1.SessionService,
+            register_service_1.RegisterService,
+            user_service_1.UserService,
+            decode_api_client_1.DecodeApiClient,
+            redis_infrastructure_1.RedisInfrastructure,
+        ],
+    })
+], AuthModule);
+
+
+/***/ }),
+/* 3 */
+/***/ ((module) => {
+
+module.exports = require("@nestjs/common");
+
+/***/ }),
+/* 4 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -24,11 +102,11 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.AuthController = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const session_service_1 = __webpack_require__(/*! ./services/session.service */ "./apps/auth/src/services/session.service.ts");
-const register_service_1 = __webpack_require__(/*! ./services/register.service */ "./apps/auth/src/services/register.service.ts");
-const decode_auth_guard_1 = __webpack_require__(/*! ./common/guards/decode-auth.guard */ "./apps/auth/src/common/guards/decode-auth.guard.ts");
-const user_service_1 = __webpack_require__(/*! ./services/user.service */ "./apps/auth/src/services/user.service.ts");
+const common_1 = __webpack_require__(3);
+const session_service_1 = __webpack_require__(5);
+const register_service_1 = __webpack_require__(19);
+const decode_auth_guard_1 = __webpack_require__(20);
+const user_service_1 = __webpack_require__(16);
 let AuthController = class AuthController {
     sessionService;
     registerService;
@@ -141,11 +219,7 @@ exports.AuthController = AuthController = __decorate([
 
 
 /***/ }),
-
-/***/ "./apps/auth/src/auth.module.ts":
-/*!**************************************!*\
-  !*** ./apps/auth/src/auth.module.ts ***!
-  \**************************************/
+/* 5 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -155,70 +229,131 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.AuthModule = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const auth_controller_1 = __webpack_require__(/*! ./auth.controller */ "./apps/auth/src/auth.controller.ts");
-const session_service_1 = __webpack_require__(/*! ./services/session.service */ "./apps/auth/src/services/session.service.ts");
-const register_service_1 = __webpack_require__(/*! ./services/register.service */ "./apps/auth/src/services/register.service.ts");
-const user_service_1 = __webpack_require__(/*! ./services/user.service */ "./apps/auth/src/services/user.service.ts");
-const mongoose_1 = __webpack_require__(/*! @nestjs/mongoose */ "@nestjs/mongoose");
-const user_dehive_schema_1 = __webpack_require__(/*! ./schemas/user-dehive.schema */ "./apps/auth/src/schemas/user-dehive.schema.ts");
-const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
-const decode_api_client_1 = __webpack_require__(/*! ./infrastructure/external-services/decode-api.client */ "./apps/auth/src/infrastructure/external-services/decode-api.client.ts");
-const redis_infrastructure_1 = __webpack_require__(/*! ./infrastructure/redis.infrastructure */ "./apps/auth/src/infrastructure/redis.infrastructure.ts");
-const ioredis_1 = __webpack_require__(/*! @nestjs-modules/ioredis */ "@nestjs-modules/ioredis");
-const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
-const configuration_1 = __webpack_require__(/*! ./config/configuration */ "./apps/auth/src/config/configuration.ts");
-let AuthModule = class AuthModule {
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-exports.AuthModule = AuthModule;
-exports.AuthModule = AuthModule = __decorate([
-    (0, common_1.Module)({
-        imports: [
-            config_1.ConfigModule.forRoot({
-                isGlobal: true,
-                load: [configuration_1.default],
-            }),
-            mongoose_1.MongooseModule.forRootAsync({
-                imports: [config_1.ConfigModule],
-                useFactory: (config) => ({
-                    uri: config.get("MONGO_URI"),
-                    dbName: "dehive_db",
-                }),
-                inject: [config_1.ConfigService],
-            }),
-            axios_1.HttpModule,
-            ioredis_1.RedisModule.forRootAsync({
-                imports: [config_1.ConfigModule],
-                useFactory: (config) => ({
-                    type: "single",
-                    url: config.get("REDIS_URI"),
-                }),
-                inject: [config_1.ConfigService],
-            }),
-            mongoose_1.MongooseModule.forFeature([
-                { name: "UserDehive", schema: user_dehive_schema_1.UserDehiveSchema },
-            ]),
-        ],
-        controllers: [auth_controller_1.AuthController],
-        providers: [
-            session_service_1.SessionService,
-            register_service_1.RegisterService,
-            user_service_1.UserService,
-            decode_api_client_1.DecodeApiClient,
-            redis_infrastructure_1.RedisInfrastructure,
-        ],
-    })
-], AuthModule);
+var _a, _b, _c, _d;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SessionService = void 0;
+const common_1 = __webpack_require__(3);
+const uuid_1 = __webpack_require__(6);
+const decode_api_client_1 = __webpack_require__(7);
+const redis_infrastructure_1 = __webpack_require__(13);
+const user_service_1 = __webpack_require__(16);
+const register_service_1 = __webpack_require__(19);
+let SessionService = class SessionService {
+    decodeApiClient;
+    redis;
+    userService;
+    registerService;
+    constructor(decodeApiClient, redis, userService, registerService) {
+        this.decodeApiClient = decodeApiClient;
+        this.redis = redis;
+        this.userService = userService;
+        this.registerService = registerService;
+    }
+    async createDecodeSession(sso_token, fingerprint_hashed) {
+        const create_decode_session_response = await this.decodeApiClient.createDecodeSession(sso_token);
+        if (!create_decode_session_response ||
+            !create_decode_session_response.success ||
+            !create_decode_session_response.data ||
+            !create_decode_session_response.data.access_token) {
+            throw new common_1.BadRequestException("Failed to create decode session", create_decode_session_response?.message ||
+                "Invalid response from decode API");
+        }
+        const user_exists = await this.userService.userExists(create_decode_session_response.data.user_id.toString());
+        if (!user_exists.success) {
+            const register_response = await this.registerService.register(create_decode_session_response.data.user_id.toString());
+            if (!register_response.success) {
+                return {
+                    success: false,
+                    message: register_response.message,
+                    statusCode: register_response.statusCode,
+                };
+            }
+        }
+        const session_id = await this.storeSession(create_decode_session_response.data, null);
+        const user_profile_response = await this.decodeApiClient.getMyProfile(session_id, fingerprint_hashed);
+        if (!user_profile_response ||
+            !user_profile_response.success ||
+            !user_profile_response.data) {
+            throw new common_1.BadRequestException("Failed to get user profile after creating session", user_profile_response?.message || "Invalid user profile response");
+        }
+        const user_profile_data = user_profile_response.data;
+        const user_dehive_data = await this.userService.userExists(user_profile_data._id);
+        if (!user_dehive_data.success) {
+            await this.registerService.register(user_profile_data._id);
+        }
+        await this.updateSessionWithUserProfile(session_id, user_profile_data);
+        return {
+            success: true,
+            statusCode: common_1.HttpStatus.OK,
+            message: "Decode session created",
+            data: {
+                session_id: session_id,
+                expires_at: create_decode_session_response.data?.expires_at,
+            },
+        };
+    }
+    async checkValidSession(session_id) {
+        const session_data = (await this.redis.get(`session:${session_id}`));
+        if (!session_data) {
+            return {
+                success: false,
+                message: "Session not found",
+                statusCode: common_1.HttpStatus.NOT_FOUND,
+            };
+        }
+        return {
+            success: true,
+            message: "Session found",
+            statusCode: common_1.HttpStatus.OK,
+            data: session_data,
+        };
+    }
+    async storeSession(session_data, user_profile_data) {
+        const session_id = (0, uuid_1.v4)();
+        const session_key = `session:${session_id}`;
+        const session_value = {
+            session_token: session_data.session_token,
+            access_token: session_data.access_token,
+            expires_at: session_data.expires_at,
+            user: user_profile_data
+                ? user_profile_data
+                : null,
+        };
+        const expires_countdown = Math.floor((new Date(session_data.expires_at).getTime() - Date.now()) / 1000);
+        await this.redis.set(session_key, session_value, expires_countdown);
+        return session_id;
+    }
+    async updateSessionWithUserProfile(session_id, user_profile_data) {
+        const session_key = `session:${session_id}`;
+        const existing_session = (await this.redis.get(session_key));
+        if (existing_session) {
+            const updated_session = {
+                ...existing_session,
+                user: user_profile_data,
+            };
+            const expires_countdown = Math.floor((new Date(existing_session.expires_at).getTime() - Date.now()) / 1000);
+            await this.redis.set(session_key, updated_session, expires_countdown);
+        }
+    }
+};
+exports.SessionService = SessionService;
+exports.SessionService = SessionService = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [typeof (_a = typeof decode_api_client_1.DecodeApiClient !== "undefined" && decode_api_client_1.DecodeApiClient) === "function" ? _a : Object, typeof (_b = typeof redis_infrastructure_1.RedisInfrastructure !== "undefined" && redis_infrastructure_1.RedisInfrastructure) === "function" ? _b : Object, typeof (_c = typeof user_service_1.UserService !== "undefined" && user_service_1.UserService) === "function" ? _c : Object, typeof (_d = typeof register_service_1.RegisterService !== "undefined" && register_service_1.RegisterService) === "function" ? _d : Object])
+], SessionService);
 
 
 /***/ }),
+/* 6 */
+/***/ ((module) => {
 
-/***/ "./apps/auth/src/common/filters/http-exception.filter.ts":
-/*!***************************************************************!*\
-  !*** ./apps/auth/src/common/filters/http-exception.filter.ts ***!
-  \***************************************************************/
+module.exports = require("uuid");
+
+/***/ }),
+/* 7 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -228,96 +363,282 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-var HttpExceptionFilter_1;
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.HttpExceptionFilter = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const axios_1 = __webpack_require__(/*! axios */ "axios");
-let HttpExceptionFilter = HttpExceptionFilter_1 = class HttpExceptionFilter {
-    logger = new common_1.Logger(HttpExceptionFilter_1.name);
-    catch(exception, host) {
-        const ctx = host.switchToHttp();
-        const response = ctx.getResponse();
-        const request = ctx.getRequest();
-        let status;
-        let message;
-        let error;
-        if (exception instanceof common_1.HttpException) {
-            status = exception.getStatus();
-            const exceptionResponse = exception.getResponse();
-            if (typeof exceptionResponse === "string") {
-                message = exceptionResponse;
-            }
-            else if (typeof exceptionResponse === "object" &&
-                exceptionResponse !== null) {
-                const responseObj = exceptionResponse;
-                message = responseObj.message || exception.message;
-                error =
-                    typeof responseObj.error === "string" ||
-                        typeof responseObj.error === "object"
-                        ? responseObj.error
-                        : "Service communication failed";
-            }
-            else {
-                message = exception.message;
-            }
+exports.DecodeApiClient = void 0;
+const common_1 = __webpack_require__(3);
+const axios_1 = __webpack_require__(8);
+const base_http_client_1 = __webpack_require__(9);
+const config_1 = __webpack_require__(12);
+const redis_infrastructure_1 = __webpack_require__(13);
+let DecodeApiClient = class DecodeApiClient extends base_http_client_1.BaseHttpClient {
+    redisInfrastructure;
+    constructor(httpService, configService, redisInfrastructure) {
+        super(httpService, configService.get("services.decode_api_gateway.url") ||
+            "http://localhost:4000");
+        this.redisInfrastructure = redisInfrastructure;
+    }
+    async createDecodeSession(sso_token) {
+        const session_response = await this.post("/auth/sso/validate", {
+            sso_token: sso_token,
+        });
+        return session_response;
+    }
+    async refreshDecodeSession(refresh_token) {
+        return this.post("/auth/refresh-session", {
+            refresh_token: refresh_token,
+        });
+    }
+    async getUser(user_id, session_id, fingerprint_hashed) {
+        const access_token = await this.getAccessToken(session_id);
+        const config = {
+            headers: {
+                Authorization: "Bearer " + access_token,
+                "X-Fingerprint-Hashed": fingerprint_hashed,
+            },
+        };
+        const user_decode_response = await this.get(`/users/profile/${user_id}`, config);
+        return user_decode_response;
+    }
+    async getMyProfile(session_id, fingerprint_hashed) {
+        const access_token = await this.getAccessToken(session_id);
+        const config = {
+            headers: {
+                Authorization: "Bearer " + access_token,
+                "X-Fingerprint-Hashed": fingerprint_hashed,
+            },
+        };
+        const get_me_response = await this.get(`/users/profile/me`, config);
+        console.log("getMyProfile get_me_response", get_me_response.data);
+        return get_me_response;
+    }
+    async getAccessToken(session_id) {
+        const session_key = `session:${session_id}`;
+        const session_data = (await this.redisInfrastructure.get(session_key));
+        return session_data.access_token;
+    }
+};
+exports.DecodeApiClient = DecodeApiClient;
+exports.DecodeApiClient = DecodeApiClient = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [typeof (_a = typeof axios_1.HttpService !== "undefined" && axios_1.HttpService) === "function" ? _a : Object, typeof (_b = typeof config_1.ConfigService !== "undefined" && config_1.ConfigService) === "function" ? _b : Object, typeof (_c = typeof redis_infrastructure_1.RedisInfrastructure !== "undefined" && redis_infrastructure_1.RedisInfrastructure) === "function" ? _c : Object])
+], DecodeApiClient);
+
+
+/***/ }),
+/* 8 */
+/***/ ((module) => {
+
+module.exports = require("@nestjs/axios");
+
+/***/ }),
+/* 9 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.BaseHttpClient = void 0;
+const common_1 = __webpack_require__(3);
+const axios_1 = __webpack_require__(8);
+const rxjs_1 = __webpack_require__(10);
+const axios_2 = __webpack_require__(11);
+let BaseHttpClient = class BaseHttpClient {
+    httpService;
+    baseURL;
+    logger = new common_1.Logger(this.constructor.name);
+    constructor(httpService, baseURL) {
+        this.httpService = httpService;
+        this.baseURL = baseURL;
+    }
+    async get(url, config) {
+        try {
+            console.log("base http client get", `${this.baseURL}${url}`, config);
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.baseURL}${url}`, config));
+            console.log("base http client response", response.data);
+            return response.data;
         }
-        else if (exception instanceof axios_1.AxiosError) {
-            if (exception.response) {
-                status = exception.response.status;
-                const responseData = exception.response.data;
-                message = responseData?.message || "External service error";
-                const errorData = responseData?.error;
-                error =
-                    typeof errorData === "string" || typeof errorData === "object"
-                        ? errorData
-                        : "Service communication failed";
-            }
-            else if (exception.request) {
-                status = common_1.HttpStatus.SERVICE_UNAVAILABLE;
-                message = "Service temporarily unavailable";
-                error = "External service is not responding";
-            }
-            else {
-                status = common_1.HttpStatus.INTERNAL_SERVER_ERROR;
-                message = "Internal server error";
-                error = "Network configuration error";
-            }
+        catch (error) {
+            this.handleError(error, "GET", url);
         }
-        else if (exception instanceof Error) {
-            status = common_1.HttpStatus.INTERNAL_SERVER_ERROR;
-            message = "Internal server error";
-            error = exception.message;
+    }
+    async post(url, data, config) {
+        try {
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.post(`${this.baseURL}${url}`, data, config));
+            return response.data;
+        }
+        catch (error) {
+            this.handleError(error, "POST", url);
+        }
+    }
+    async put(url, data, config) {
+        try {
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.put(`${this.baseURL}${url}`, data, config));
+            return response.data;
+        }
+        catch (error) {
+            this.handleError(error, "PUT", url);
+        }
+    }
+    async delete(url, config) {
+        try {
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.delete(`${this.baseURL}${url}`, config));
+            return response.data;
+        }
+        catch (error) {
+            this.handleError(error, "DELETE", url);
+        }
+    }
+    handleError(error, method, url) {
+        this.logger.error(`HTTP ${method} ${this.baseURL}${url} failed: ${error instanceof Error ? error.message : String(error)}`);
+        if (error instanceof axios_2.AxiosError) {
+            throw error;
+        }
+        throw new Error(`Network error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+};
+exports.BaseHttpClient = BaseHttpClient;
+exports.BaseHttpClient = BaseHttpClient = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [typeof (_a = typeof axios_1.HttpService !== "undefined" && axios_1.HttpService) === "function" ? _a : Object, String])
+], BaseHttpClient);
+
+
+/***/ }),
+/* 10 */
+/***/ ((module) => {
+
+module.exports = require("rxjs");
+
+/***/ }),
+/* 11 */
+/***/ ((module) => {
+
+module.exports = require("axios");
+
+/***/ }),
+/* 12 */
+/***/ ((module) => {
+
+module.exports = require("@nestjs/config");
+
+/***/ }),
+/* 13 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.RedisInfrastructure = void 0;
+const common_1 = __webpack_require__(3);
+const ioredis_1 = __webpack_require__(14);
+const ioredis_2 = __webpack_require__(15);
+let RedisInfrastructure = class RedisInfrastructure {
+    redis;
+    constructor(redis) {
+        this.redis = redis;
+    }
+    async set(key, value, ttl) {
+        const serializedValue = typeof value === "string" ? value : JSON.stringify(value);
+        if (ttl) {
+            await this.redis.setex(key, ttl, serializedValue);
         }
         else {
-            status = common_1.HttpStatus.INTERNAL_SERVER_ERROR;
-            message = "Internal server error";
-            error = "Unknown error occurred";
+            await this.redis.set(key, serializedValue);
         }
-        this.logger.error(`${request.method} ${request.url} - ${status}: ${message}`);
-        const errorResponse = {
-            success: false,
-            statusCode: status,
-            message,
-            error,
-            timestamp: new Date().toISOString(),
-            path: request.url,
-        };
-        response.status(status).json(errorResponse);
+    }
+    async get(key) {
+        const value = await this.redis.get(key);
+        if (!value)
+            return null;
+        try {
+            return JSON.parse(value);
+        }
+        catch {
+            return value;
+        }
+    }
+    async del(key) {
+        await this.redis.del(key);
+    }
+    async exists(key) {
+        const result = await this.redis.exists(key);
+        return result === 1;
+    }
+    async ttl(key) {
+        return await this.redis.ttl(key);
+    }
+    async incr(key) {
+        return await this.redis.incr(key);
+    }
+    async expire(key, ttl) {
+        await this.redis.expire(key, ttl);
+    }
+    async mdel(keys) {
+        if (keys.length > 0) {
+            await this.redis.del(...keys);
+        }
+    }
+    async ping() {
+        return await this.redis.ping();
+    }
+    async getConnectionInfo() {
+        const info = await this.redis.info();
+        return info;
+    }
+    async flushAll() {
+        await this.redis.flushall();
+    }
+    async flushDb() {
+        await this.redis.flushdb();
     }
 };
-exports.HttpExceptionFilter = HttpExceptionFilter;
-exports.HttpExceptionFilter = HttpExceptionFilter = HttpExceptionFilter_1 = __decorate([
-    (0, common_1.Catch)()
-], HttpExceptionFilter);
+exports.RedisInfrastructure = RedisInfrastructure;
+exports.RedisInfrastructure = RedisInfrastructure = __decorate([
+    (0, common_1.Injectable)(),
+    __param(0, (0, ioredis_1.InjectRedis)()),
+    __metadata("design:paramtypes", [typeof (_a = typeof ioredis_2.Redis !== "undefined" && ioredis_2.Redis) === "function" ? _a : Object])
+], RedisInfrastructure);
 
 
 /***/ }),
+/* 14 */
+/***/ ((module) => {
 
-/***/ "./apps/auth/src/common/filters/validation-exception.filter.ts":
-/*!*********************************************************************!*\
-  !*** ./apps/auth/src/common/filters/validation-exception.filter.ts ***!
-  \*********************************************************************/
+module.exports = require("@nestjs-modules/ioredis");
+
+/***/ }),
+/* 15 */
+/***/ ((module) => {
+
+module.exports = require("ioredis");
+
+/***/ }),
+/* 16 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -327,62 +648,304 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-var ValidationExceptionFilter_1;
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a, _b, _c;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.ValidationExceptionFilter = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-let ValidationExceptionFilter = ValidationExceptionFilter_1 = class ValidationExceptionFilter {
-    logger = new common_1.Logger(ValidationExceptionFilter_1.name);
-    catch(exception, host) {
-        const ctx = host.switchToHttp();
-        const response = ctx.getResponse();
-        const request = ctx.getRequest();
-        const exceptionResponse = exception.getResponse();
-        let validationDetails = [];
-        if (typeof exceptionResponse === "object" && exceptionResponse !== null) {
-            const responseObj = exceptionResponse;
-            if (Array.isArray(responseObj.message)) {
-                validationDetails = responseObj.message.map((msg) => ({
-                    field: "unknown",
-                    message: msg,
-                }));
+exports.UserService = void 0;
+const common_1 = __webpack_require__(3);
+const decode_api_client_1 = __webpack_require__(7);
+const mongoose_1 = __webpack_require__(17);
+const mongoose_2 = __webpack_require__(18);
+const redis_infrastructure_1 = __webpack_require__(13);
+let UserService = class UserService {
+    decodeApiClient;
+    userDehiveModel;
+    redis;
+    constructor(decodeApiClient, userDehiveModel, redis) {
+        this.decodeApiClient = decodeApiClient;
+        this.userDehiveModel = userDehiveModel;
+        this.redis = redis;
+    }
+    async getUser(input) {
+        const { user_dehive_id, session_id, fingerprint_hashed } = input;
+        try {
+            const user_decode = await this.getUserDecodeProfile({
+                user_id: user_dehive_id,
+                session_id,
+                fingerprint_hashed,
+            });
+            if (!user_decode.success || !user_decode.data) {
+                return {
+                    success: false,
+                    message: user_decode.message,
+                    statusCode: user_decode.statusCode,
+                };
             }
-            else if (responseObj.message) {
-                validationDetails = [
-                    {
-                        field: "request",
-                        message: responseObj.message,
-                    },
-                ];
+            const user_decode_data = user_decode.data;
+            let user_dehive_data = await this.userDehiveModel.findById(user_dehive_id);
+            if (!user_dehive_data) {
+                const newUserDehive = new this.userDehiveModel({
+                    _id: user_dehive_id,
+                    user_id: user_dehive_id,
+                    bio: "",
+                    banner_color: null,
+                    server_count: 0,
+                    status: "offline",
+                    last_login: new Date(),
+                });
+                user_dehive_data = await newUserDehive.save();
             }
+            const user = {
+                _id: user_dehive_data._id,
+                dehive_role: user_dehive_data.dehive_role,
+                role_subscription: user_dehive_data.role_subscription,
+                status: user_dehive_data.status,
+                server_count: user_dehive_data.server_count,
+                username: user_decode_data.username,
+                display_name: user_decode_data.display_name,
+                bio: user_decode_data.bio,
+                avatar_ipfs_hash: user_decode_data.avatar_ipfs_hash,
+                last_login: user_decode_data.last_login,
+                primary_wallet: user_decode_data.primary_wallet,
+                following_number: user_decode_data.following_number,
+                followers_number: user_decode_data.followers_number,
+                is_following: user_decode_data.is_following,
+                is_follower: user_decode_data.is_follower,
+                is_blocked: user_decode_data.is_blocked,
+                is_blocked_by: user_decode_data.is_blocked_by,
+                mutual_followers_number: user_decode_data.mutual_followers_number,
+                mutual_followers_list: user_decode_data.mutual_followers_list,
+                is_active: user_decode_data.is_active,
+                last_account_deactivation: user_decode_data.last_account_deactivation,
+            };
+            return {
+                success: true,
+                message: "User found",
+                statusCode: common_1.HttpStatus.OK,
+                data: user,
+            };
         }
-        this.logger.warn(`Validation failed for ${request.method} ${request.url}: ${validationDetails.map((d) => d.message).join(", ")}`);
-        const errorResponse = {
-            success: false,
-            statusCode: 400,
-            message: "Validation failed",
-            error: {
-                type: "validation",
-                details: validationDetails,
-            },
-            timestamp: new Date().toISOString(),
-            path: request.url,
+        catch (error) {
+            return {
+                success: false,
+                message: error.message,
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+            };
+        }
+    }
+    async getMyProfile(input) {
+        const { session_id, fingerprint_hashed } = input;
+        try {
+            const user_decode = await this.getMyDecodeProfile({
+                session_id,
+                fingerprint_hashed,
+            });
+            if (!user_decode.success || !user_decode.data) {
+                return {
+                    success: false,
+                    message: user_decode.message,
+                    statusCode: common_1.HttpStatus.NOT_FOUND,
+                };
+            }
+            const user_decode_data = user_decode.data;
+            let user_dehive_data = await this.userDehiveModel.findById(user_decode_data._id);
+            if (!user_dehive_data) {
+                const newUserDehive = new this.userDehiveModel({
+                    _id: user_decode_data._id,
+                    user_id: user_decode_data._id,
+                    bio: "",
+                    banner_color: null,
+                    server_count: 0,
+                    status: "offline",
+                    last_login: new Date(),
+                });
+                user_dehive_data = await newUserDehive.save();
+            }
+            const user = {
+                _id: user_dehive_data._id,
+                dehive_role: user_dehive_data.dehive_role,
+                role_subscription: user_dehive_data.role_subscription,
+                status: user_dehive_data.status,
+                server_count: user_dehive_data.server_count,
+                username: user_decode_data.username,
+                display_name: user_decode_data.display_name,
+                bio: user_decode_data.bio,
+                avatar_ipfs_hash: user_decode_data.avatar_ipfs_hash,
+                last_login: user_decode_data.last_login,
+                primary_wallet: user_decode_data.primary_wallet,
+                following_number: user_decode_data.following_number,
+                followers_number: user_decode_data.followers_number,
+                is_following: user_decode_data.is_following,
+                is_follower: user_decode_data.is_follower,
+                is_blocked: user_decode_data.is_blocked,
+                is_blocked_by: user_decode_data.is_blocked_by,
+                mutual_followers_number: user_decode_data.mutual_followers_number,
+                mutual_followers_list: user_decode_data.mutual_followers_list,
+                is_active: user_decode_data.is_active,
+                last_account_deactivation: user_decode_data.last_account_deactivation,
+            };
+            console.log("user service get my decode profile user_decode_data", user_decode_data);
+            const redis_cache_data = (await this.redis.get(`session:${session_id}`));
+            if (redis_cache_data) {
+                redis_cache_data.user =
+                    user_decode_data;
+                await this.redis.set(`session:${session_id}`, redis_cache_data);
+            }
+            return {
+                success: true,
+                message: "User found",
+                statusCode: common_1.HttpStatus.OK,
+                data: user,
+            };
+        }
+        catch (error) {
+            return {
+                success: false,
+                message: error.message,
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+            };
+        }
+    }
+    async userExists(user_id) {
+        const user_dehive_data = await this.userDehiveModel.findById(user_id);
+        if (!user_dehive_data) {
+            return {
+                success: false,
+                message: "User not found",
+                statusCode: common_1.HttpStatus.NOT_FOUND,
+            };
+        }
+        return {
+            success: true,
+            message: "User exists",
+            statusCode: common_1.HttpStatus.OK,
+            data: user_dehive_data ? true : false,
         };
-        response.status(400).json(errorResponse);
+    }
+    async getUserDecodeProfile(input) {
+        const { user_id, session_id, fingerprint_hashed } = input;
+        try {
+            const user_decode = await this.decodeApiClient.getUser(user_id, session_id, fingerprint_hashed);
+            if (!user_decode.success) {
+                return {
+                    success: false,
+                    message: user_decode.message,
+                    statusCode: user_decode.statusCode,
+                };
+            }
+            return user_decode;
+        }
+        catch (error) {
+            return {
+                success: false,
+                message: error.message,
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+            };
+        }
+    }
+    async getMyDecodeProfile(input) {
+        const { session_id, fingerprint_hashed } = input;
+        try {
+            console.log("user service get my decode profile input", session_id, fingerprint_hashed);
+            const user_decode = await this.decodeApiClient.getMyProfile(session_id, fingerprint_hashed);
+            if (!user_decode.success) {
+                return {
+                    success: false,
+                    message: user_decode.message,
+                    statusCode: user_decode.statusCode,
+                };
+            }
+            return {
+                success: true,
+                message: "User found",
+                statusCode: common_1.HttpStatus.OK,
+                data: user_decode.data,
+            };
+        }
+        catch (error) {
+            return {
+                success: false,
+                message: error.message,
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+            };
+        }
     }
 };
-exports.ValidationExceptionFilter = ValidationExceptionFilter;
-exports.ValidationExceptionFilter = ValidationExceptionFilter = ValidationExceptionFilter_1 = __decorate([
-    (0, common_1.Catch)(common_1.BadRequestException)
-], ValidationExceptionFilter);
+exports.UserService = UserService;
+exports.UserService = UserService = __decorate([
+    (0, common_1.Injectable)(),
+    __param(1, (0, mongoose_1.InjectModel)("UserDehive")),
+    __metadata("design:paramtypes", [typeof (_a = typeof decode_api_client_1.DecodeApiClient !== "undefined" && decode_api_client_1.DecodeApiClient) === "function" ? _a : Object, typeof (_b = typeof mongoose_2.Model !== "undefined" && mongoose_2.Model) === "function" ? _b : Object, typeof (_c = typeof redis_infrastructure_1.RedisInfrastructure !== "undefined" && redis_infrastructure_1.RedisInfrastructure) === "function" ? _c : Object])
+], UserService);
 
 
 /***/ }),
+/* 17 */
+/***/ ((module) => {
 
-/***/ "./apps/auth/src/common/guards/decode-auth.guard.ts":
-/*!**********************************************************!*\
-  !*** ./apps/auth/src/common/guards/decode-auth.guard.ts ***!
-  \**********************************************************/
+module.exports = require("@nestjs/mongoose");
+
+/***/ }),
+/* 18 */
+/***/ ((module) => {
+
+module.exports = require("mongoose");
+
+/***/ }),
+/* 19 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.RegisterService = void 0;
+const common_1 = __webpack_require__(3);
+const mongoose_1 = __webpack_require__(17);
+const mongoose_2 = __webpack_require__(18);
+let RegisterService = class RegisterService {
+    userDehiveModel;
+    constructor(userDehiveModel) {
+        this.userDehiveModel = userDehiveModel;
+    }
+    async register(user_id) {
+        const create_user = await this.userDehiveModel.create({
+            _id: user_id,
+        });
+        return {
+            success: true,
+            statusCode: common_1.HttpStatus.CREATED,
+            message: "User created",
+            data: create_user,
+        };
+    }
+};
+exports.RegisterService = RegisterService;
+exports.RegisterService = RegisterService = __decorate([
+    (0, common_1.Injectable)(),
+    __param(0, (0, mongoose_1.InjectModel)("UserDehive")),
+    __metadata("design:paramtypes", [typeof (_a = typeof mongoose_2.Model !== "undefined" && mongoose_2.Model) === "function" ? _a : Object])
+], RegisterService);
+
+
+/***/ }),
+/* 20 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -399,14 +962,14 @@ var DecodeAuthGuard_1;
 var _a, _b, _c, _d, _e;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DecodeAuthGuard = exports.Public = exports.Permissions = exports.Roles = exports.PUBLIC_KEY = exports.PERMISSIONS_KEY = exports.ROLES_KEY = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const core_1 = __webpack_require__(/*! @nestjs/core */ "@nestjs/core");
-const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
-const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
-const axios_2 = __webpack_require__(/*! axios */ "axios");
-const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
-const redis_infrastructure_1 = __webpack_require__(/*! ../../infrastructure/redis.infrastructure */ "./apps/auth/src/infrastructure/redis.infrastructure.ts");
-const decode_api_client_1 = __webpack_require__(/*! ../../infrastructure/external-services/decode-api.client */ "./apps/auth/src/infrastructure/external-services/decode-api.client.ts");
+const common_1 = __webpack_require__(3);
+const core_1 = __webpack_require__(1);
+const config_1 = __webpack_require__(12);
+const axios_1 = __webpack_require__(8);
+const axios_2 = __webpack_require__(11);
+const rxjs_1 = __webpack_require__(10);
+const redis_infrastructure_1 = __webpack_require__(13);
+const decode_api_client_1 = __webpack_require__(7);
 exports.ROLES_KEY = "roles";
 exports.PERMISSIONS_KEY = "permissions";
 exports.PUBLIC_KEY = "public";
@@ -650,308 +1213,7 @@ exports.DecodeAuthGuard = DecodeAuthGuard = DecodeAuthGuard_1 = __decorate([
 
 
 /***/ }),
-
-/***/ "./apps/auth/src/config/configuration.ts":
-/*!***********************************************!*\
-  !*** ./apps/auth/src/config/configuration.ts ***!
-  \***********************************************/
-/***/ ((__unused_webpack_module, exports) => {
-
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports["default"] = () => ({
-    apiGateway: {
-        port: parseInt(process.env.API_GATEWAY_PORT || "4000", 10),
-        host: process.env.API_GATEWAY_HOST
-            ? process.env.API_GATEWAY_HOST.replace("http://", "").replace("https://", "")
-            : "0.0.0.0",
-    },
-    environment: process.env.NODE_ENV || "development",
-    MONGO_URI: process.env.MONGO_URI || "mongodb://localhost:27017/dehive-auth",
-    REDIS_URI: process.env.REDIS_URI || "redis://localhost:6379",
-    services: {
-        decode_api_gateway: {
-            url: process.env.DECODE_API_GATEWAY_HOST &&
-                process.env.DECODE_API_GATEWAY_PORT
-                ? `http://${process.env.DECODE_API_GATEWAY_HOST}:${process.env.DECODE_API_GATEWAY_PORT}`
-                : "http://localhost:4000",
-        },
-        decode_auth: {
-            url: process.env.DECODE_AUTH_HOST && process.env.DECODE_AUTH_PORT
-                ? `http://${process.env.DECODE_AUTH_HOST}:${process.env.DECODE_AUTH_PORT}`
-                : "http://localhost:4001",
-        },
-    },
-});
-
-
-/***/ }),
-
-/***/ "./apps/auth/src/infrastructure/external-services/base-http.client.ts":
-/*!****************************************************************************!*\
-  !*** ./apps/auth/src/infrastructure/external-services/base-http.client.ts ***!
-  \****************************************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var _a;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.BaseHttpClient = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
-const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
-const axios_2 = __webpack_require__(/*! axios */ "axios");
-let BaseHttpClient = class BaseHttpClient {
-    httpService;
-    baseURL;
-    logger = new common_1.Logger(this.constructor.name);
-    constructor(httpService, baseURL) {
-        this.httpService = httpService;
-        this.baseURL = baseURL;
-    }
-    async get(url, config) {
-        try {
-            console.log("base http client get", `${this.baseURL}${url}`, config);
-            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.baseURL}${url}`, config));
-            console.log("base http client response", response.data);
-            return response.data;
-        }
-        catch (error) {
-            this.handleError(error, "GET", url);
-        }
-    }
-    async post(url, data, config) {
-        try {
-            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.post(`${this.baseURL}${url}`, data, config));
-            return response.data;
-        }
-        catch (error) {
-            this.handleError(error, "POST", url);
-        }
-    }
-    async put(url, data, config) {
-        try {
-            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.put(`${this.baseURL}${url}`, data, config));
-            return response.data;
-        }
-        catch (error) {
-            this.handleError(error, "PUT", url);
-        }
-    }
-    async delete(url, config) {
-        try {
-            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.delete(`${this.baseURL}${url}`, config));
-            return response.data;
-        }
-        catch (error) {
-            this.handleError(error, "DELETE", url);
-        }
-    }
-    handleError(error, method, url) {
-        this.logger.error(`HTTP ${method} ${this.baseURL}${url} failed: ${error instanceof Error ? error.message : String(error)}`);
-        if (error instanceof axios_2.AxiosError) {
-            throw error;
-        }
-        throw new Error(`Network error: ${error instanceof Error ? error.message : String(error)}`);
-    }
-};
-exports.BaseHttpClient = BaseHttpClient;
-exports.BaseHttpClient = BaseHttpClient = __decorate([
-    (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [typeof (_a = typeof axios_1.HttpService !== "undefined" && axios_1.HttpService) === "function" ? _a : Object, String])
-], BaseHttpClient);
-
-
-/***/ }),
-
-/***/ "./apps/auth/src/infrastructure/external-services/decode-api.client.ts":
-/*!*****************************************************************************!*\
-  !*** ./apps/auth/src/infrastructure/external-services/decode-api.client.ts ***!
-  \*****************************************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var _a, _b, _c;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.DecodeApiClient = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
-const base_http_client_1 = __webpack_require__(/*! ./base-http.client */ "./apps/auth/src/infrastructure/external-services/base-http.client.ts");
-const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
-const redis_infrastructure_1 = __webpack_require__(/*! ../redis.infrastructure */ "./apps/auth/src/infrastructure/redis.infrastructure.ts");
-let DecodeApiClient = class DecodeApiClient extends base_http_client_1.BaseHttpClient {
-    redisInfrastructure;
-    constructor(httpService, configService, redisInfrastructure) {
-        super(httpService, configService.get("services.decode_api_gateway.url") ||
-            "http://localhost:4000");
-        this.redisInfrastructure = redisInfrastructure;
-    }
-    async createDecodeSession(sso_token) {
-        const session_response = await this.post("/auth/sso/validate", {
-            sso_token: sso_token,
-        });
-        return session_response;
-    }
-    async refreshDecodeSession(refresh_token) {
-        return this.post("/auth/refresh-session", {
-            refresh_token: refresh_token,
-        });
-    }
-    async getUser(user_id, session_id, fingerprint_hashed) {
-        const access_token = await this.getAccessToken(session_id);
-        const config = {
-            headers: {
-                Authorization: "Bearer " + access_token,
-                "X-Fingerprint-Hashed": fingerprint_hashed,
-            },
-        };
-        const user_decode_response = await this.get(`/users/profile/${user_id}`, config);
-        return user_decode_response;
-    }
-    async getMyProfile(session_id, fingerprint_hashed) {
-        const access_token = await this.getAccessToken(session_id);
-        const config = {
-            headers: {
-                Authorization: "Bearer " + access_token,
-                "X-Fingerprint-Hashed": fingerprint_hashed,
-            },
-        };
-        const get_me_response = await this.get(`/users/profile/me`, config);
-        console.log("getMyProfile get_me_response", get_me_response.data);
-        return get_me_response;
-    }
-    async getAccessToken(session_id) {
-        const session_key = `session:${session_id}`;
-        const session_data = (await this.redisInfrastructure.get(session_key));
-        return session_data.access_token;
-    }
-};
-exports.DecodeApiClient = DecodeApiClient;
-exports.DecodeApiClient = DecodeApiClient = __decorate([
-    (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [typeof (_a = typeof axios_1.HttpService !== "undefined" && axios_1.HttpService) === "function" ? _a : Object, typeof (_b = typeof config_1.ConfigService !== "undefined" && config_1.ConfigService) === "function" ? _b : Object, typeof (_c = typeof redis_infrastructure_1.RedisInfrastructure !== "undefined" && redis_infrastructure_1.RedisInfrastructure) === "function" ? _c : Object])
-], DecodeApiClient);
-
-
-/***/ }),
-
-/***/ "./apps/auth/src/infrastructure/redis.infrastructure.ts":
-/*!**************************************************************!*\
-  !*** ./apps/auth/src/infrastructure/redis.infrastructure.ts ***!
-  \**************************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var _a;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RedisInfrastructure = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const ioredis_1 = __webpack_require__(/*! @nestjs-modules/ioredis */ "@nestjs-modules/ioredis");
-const ioredis_2 = __webpack_require__(/*! ioredis */ "ioredis");
-let RedisInfrastructure = class RedisInfrastructure {
-    redis;
-    constructor(redis) {
-        this.redis = redis;
-    }
-    async set(key, value, ttl) {
-        const serializedValue = typeof value === "string" ? value : JSON.stringify(value);
-        if (ttl) {
-            await this.redis.setex(key, ttl, serializedValue);
-        }
-        else {
-            await this.redis.set(key, serializedValue);
-        }
-    }
-    async get(key) {
-        const value = await this.redis.get(key);
-        if (!value)
-            return null;
-        try {
-            return JSON.parse(value);
-        }
-        catch {
-            return value;
-        }
-    }
-    async del(key) {
-        await this.redis.del(key);
-    }
-    async exists(key) {
-        const result = await this.redis.exists(key);
-        return result === 1;
-    }
-    async ttl(key) {
-        return await this.redis.ttl(key);
-    }
-    async incr(key) {
-        return await this.redis.incr(key);
-    }
-    async expire(key, ttl) {
-        await this.redis.expire(key, ttl);
-    }
-    async mdel(keys) {
-        if (keys.length > 0) {
-            await this.redis.del(...keys);
-        }
-    }
-    async ping() {
-        return await this.redis.ping();
-    }
-    async getConnectionInfo() {
-        const info = await this.redis.info();
-        return info;
-    }
-    async flushAll() {
-        await this.redis.flushall();
-    }
-    async flushDb() {
-        await this.redis.flushdb();
-    }
-};
-exports.RedisInfrastructure = RedisInfrastructure;
-exports.RedisInfrastructure = RedisInfrastructure = __decorate([
-    (0, common_1.Injectable)(),
-    __param(0, (0, ioredis_1.InjectRedis)()),
-    __metadata("design:paramtypes", [typeof (_a = typeof ioredis_2.Redis !== "undefined" && ioredis_2.Redis) === "function" ? _a : Object])
-], RedisInfrastructure);
-
-
-/***/ }),
-
-/***/ "./apps/auth/src/schemas/user-dehive.schema.ts":
-/*!*****************************************************!*\
-  !*** ./apps/auth/src/schemas/user-dehive.schema.ts ***!
-  \*****************************************************/
+/* 21 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -967,8 +1229,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var _a, _b;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.UserDehiveSchema = exports.UserDehive = void 0;
-const mongoose_1 = __webpack_require__(/*! @nestjs/mongoose */ "@nestjs/mongoose");
-const mongoose_2 = __webpack_require__(/*! mongoose */ "mongoose");
+const mongoose_1 = __webpack_require__(17);
+const mongoose_2 = __webpack_require__(18);
 let UserDehive = class UserDehive extends mongoose_2.Document {
     dehive_role;
     role_subscription;
@@ -1035,63 +1297,39 @@ exports.UserDehiveSchema = mongoose_1.SchemaFactory.createForClass(UserDehive);
 
 
 /***/ }),
-
-/***/ "./apps/auth/src/services/register.service.ts":
-/*!****************************************************!*\
-  !*** ./apps/auth/src/services/register.service.ts ***!
-  \****************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+/* 22 */
+/***/ ((__unused_webpack_module, exports) => {
 
 
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var _a;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.RegisterService = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const mongoose_1 = __webpack_require__(/*! @nestjs/mongoose */ "@nestjs/mongoose");
-const mongoose_2 = __webpack_require__(/*! mongoose */ "mongoose");
-let RegisterService = class RegisterService {
-    userDehiveModel;
-    constructor(userDehiveModel) {
-        this.userDehiveModel = userDehiveModel;
-    }
-    async register(user_id) {
-        const create_user = await this.userDehiveModel.create({
-            _id: user_id,
-        });
-        return {
-            success: true,
-            statusCode: common_1.HttpStatus.CREATED,
-            message: "User created",
-            data: create_user,
-        };
-    }
-};
-exports.RegisterService = RegisterService;
-exports.RegisterService = RegisterService = __decorate([
-    (0, common_1.Injectable)(),
-    __param(0, (0, mongoose_1.InjectModel)("UserDehive")),
-    __metadata("design:paramtypes", [typeof (_a = typeof mongoose_2.Model !== "undefined" && mongoose_2.Model) === "function" ? _a : Object])
-], RegisterService);
+exports["default"] = () => ({
+    apiGateway: {
+        port: parseInt(process.env.API_GATEWAY_PORT || "4000", 10),
+        host: process.env.API_GATEWAY_HOST
+            ? process.env.API_GATEWAY_HOST.replace("http://", "").replace("https://", "")
+            : "0.0.0.0",
+    },
+    environment: process.env.NODE_ENV || "development",
+    MONGO_URI: process.env.MONGO_URI || "mongodb://localhost:27017/dehive-auth",
+    REDIS_URI: process.env.REDIS_URI || "redis://localhost:6379",
+    services: {
+        decode_api_gateway: {
+            url: process.env.DECODE_API_GATEWAY_HOST &&
+                process.env.DECODE_API_GATEWAY_PORT
+                ? `http://${process.env.DECODE_API_GATEWAY_HOST}:${process.env.DECODE_API_GATEWAY_PORT}`
+                : "http://localhost:4000",
+        },
+        decode_auth: {
+            url: process.env.DECODE_AUTH_HOST && process.env.DECODE_AUTH_PORT
+                ? `http://${process.env.DECODE_AUTH_HOST}:${process.env.DECODE_AUTH_PORT}`
+                : "http://localhost:4001",
+        },
+    },
+});
 
 
 /***/ }),
-
-/***/ "./apps/auth/src/services/session.service.ts":
-/*!***************************************************!*\
-  !*** ./apps/auth/src/services/session.service.ts ***!
-  \***************************************************/
+/* 23 */
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 
@@ -1101,487 +1339,153 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var _a, _b, _c, _d;
+var HttpExceptionFilter_1;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.SessionService = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const uuid_1 = __webpack_require__(/*! uuid */ "uuid");
-const decode_api_client_1 = __webpack_require__(/*! ../infrastructure/external-services/decode-api.client */ "./apps/auth/src/infrastructure/external-services/decode-api.client.ts");
-const redis_infrastructure_1 = __webpack_require__(/*! ../infrastructure/redis.infrastructure */ "./apps/auth/src/infrastructure/redis.infrastructure.ts");
-const user_service_1 = __webpack_require__(/*! ./user.service */ "./apps/auth/src/services/user.service.ts");
-const register_service_1 = __webpack_require__(/*! ./register.service */ "./apps/auth/src/services/register.service.ts");
-let SessionService = class SessionService {
-    decodeApiClient;
-    redis;
-    userService;
-    registerService;
-    constructor(decodeApiClient, redis, userService, registerService) {
-        this.decodeApiClient = decodeApiClient;
-        this.redis = redis;
-        this.userService = userService;
-        this.registerService = registerService;
-    }
-    async createDecodeSession(sso_token, fingerprint_hashed) {
-        const create_decode_session_response = await this.decodeApiClient.createDecodeSession(sso_token);
-        if (!create_decode_session_response ||
-            !create_decode_session_response.success ||
-            !create_decode_session_response.data ||
-            !create_decode_session_response.data.access_token) {
-            throw new common_1.BadRequestException("Failed to create decode session", create_decode_session_response?.message ||
-                "Invalid response from decode API");
-        }
-        const user_exists = await this.userService.userExists(create_decode_session_response.data.user_id.toString());
-        if (!user_exists.success) {
-            const register_response = await this.registerService.register(create_decode_session_response.data.user_id.toString());
-            if (!register_response.success) {
-                return {
-                    success: false,
-                    message: register_response.message,
-                    statusCode: register_response.statusCode,
-                };
+exports.HttpExceptionFilter = void 0;
+const common_1 = __webpack_require__(3);
+const axios_1 = __webpack_require__(11);
+let HttpExceptionFilter = HttpExceptionFilter_1 = class HttpExceptionFilter {
+    logger = new common_1.Logger(HttpExceptionFilter_1.name);
+    catch(exception, host) {
+        const ctx = host.switchToHttp();
+        const response = ctx.getResponse();
+        const request = ctx.getRequest();
+        let status;
+        let message;
+        let error;
+        if (exception instanceof common_1.HttpException) {
+            status = exception.getStatus();
+            const exceptionResponse = exception.getResponse();
+            if (typeof exceptionResponse === "string") {
+                message = exceptionResponse;
+            }
+            else if (typeof exceptionResponse === "object" &&
+                exceptionResponse !== null) {
+                const responseObj = exceptionResponse;
+                message = responseObj.message || exception.message;
+                error =
+                    typeof responseObj.error === "string" ||
+                        typeof responseObj.error === "object"
+                        ? responseObj.error
+                        : "Service communication failed";
+            }
+            else {
+                message = exception.message;
             }
         }
-        const session_id = await this.storeSession(create_decode_session_response.data, null);
-        const user_profile_response = await this.decodeApiClient.getMyProfile(session_id, fingerprint_hashed);
-        if (!user_profile_response ||
-            !user_profile_response.success ||
-            !user_profile_response.data) {
-            throw new common_1.BadRequestException("Failed to get user profile after creating session", user_profile_response?.message || "Invalid user profile response");
+        else if (exception instanceof axios_1.AxiosError) {
+            if (exception.response) {
+                status = exception.response.status;
+                const responseData = exception.response.data;
+                message = responseData?.message || "External service error";
+                const errorData = responseData?.error;
+                error =
+                    typeof errorData === "string" || typeof errorData === "object"
+                        ? errorData
+                        : "Service communication failed";
+            }
+            else if (exception.request) {
+                status = common_1.HttpStatus.SERVICE_UNAVAILABLE;
+                message = "Service temporarily unavailable";
+                error = "External service is not responding";
+            }
+            else {
+                status = common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+                message = "Internal server error";
+                error = "Network configuration error";
+            }
         }
-        const user_profile_data = user_profile_response.data;
-        const user_dehive_data = await this.userService.userExists(user_profile_data._id);
-        if (!user_dehive_data.success) {
-            await this.registerService.register(user_profile_data._id);
+        else if (exception instanceof Error) {
+            status = common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            message = "Internal server error";
+            error = exception.message;
         }
-        await this.updateSessionWithUserProfile(session_id, user_profile_data);
-        return {
-            success: true,
-            statusCode: common_1.HttpStatus.OK,
-            message: "Decode session created",
-            data: {
-                session_id: session_id,
-                expires_at: create_decode_session_response.data?.expires_at,
+        else {
+            status = common_1.HttpStatus.INTERNAL_SERVER_ERROR;
+            message = "Internal server error";
+            error = "Unknown error occurred";
+        }
+        this.logger.error(`${request.method} ${request.url} - ${status}: ${message}`);
+        const errorResponse = {
+            success: false,
+            statusCode: status,
+            message,
+            error,
+            timestamp: new Date().toISOString(),
+            path: request.url,
+        };
+        response.status(status).json(errorResponse);
+    }
+};
+exports.HttpExceptionFilter = HttpExceptionFilter;
+exports.HttpExceptionFilter = HttpExceptionFilter = HttpExceptionFilter_1 = __decorate([
+    (0, common_1.Catch)()
+], HttpExceptionFilter);
+
+
+/***/ }),
+/* 24 */
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var ValidationExceptionFilter_1;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ValidationExceptionFilter = void 0;
+const common_1 = __webpack_require__(3);
+let ValidationExceptionFilter = ValidationExceptionFilter_1 = class ValidationExceptionFilter {
+    logger = new common_1.Logger(ValidationExceptionFilter_1.name);
+    catch(exception, host) {
+        const ctx = host.switchToHttp();
+        const response = ctx.getResponse();
+        const request = ctx.getRequest();
+        const exceptionResponse = exception.getResponse();
+        let validationDetails = [];
+        if (typeof exceptionResponse === "object" && exceptionResponse !== null) {
+            const responseObj = exceptionResponse;
+            if (Array.isArray(responseObj.message)) {
+                validationDetails = responseObj.message.map((msg) => ({
+                    field: "unknown",
+                    message: msg,
+                }));
+            }
+            else if (responseObj.message) {
+                validationDetails = [
+                    {
+                        field: "request",
+                        message: responseObj.message,
+                    },
+                ];
+            }
+        }
+        this.logger.warn(`Validation failed for ${request.method} ${request.url}: ${validationDetails.map((d) => d.message).join(", ")}`);
+        const errorResponse = {
+            success: false,
+            statusCode: 400,
+            message: "Validation failed",
+            error: {
+                type: "validation",
+                details: validationDetails,
             },
+            timestamp: new Date().toISOString(),
+            path: request.url,
         };
-    }
-    async checkValidSession(session_id) {
-        const session_data = (await this.redis.get(`session:${session_id}`));
-        if (!session_data) {
-            return {
-                success: false,
-                message: "Session not found",
-                statusCode: common_1.HttpStatus.NOT_FOUND,
-            };
-        }
-        return {
-            success: true,
-            message: "Session found",
-            statusCode: common_1.HttpStatus.OK,
-            data: session_data,
-        };
-    }
-    async storeSession(session_data, user_profile_data) {
-        const session_id = (0, uuid_1.v4)();
-        const session_key = `session:${session_id}`;
-        const session_value = {
-            session_token: session_data.session_token,
-            access_token: session_data.access_token,
-            expires_at: session_data.expires_at,
-            user: user_profile_data
-                ? user_profile_data
-                : null,
-        };
-        const expires_countdown = Math.floor((new Date(session_data.expires_at).getTime() - Date.now()) / 1000);
-        await this.redis.set(session_key, session_value, expires_countdown);
-        return session_id;
-    }
-    async updateSessionWithUserProfile(session_id, user_profile_data) {
-        const session_key = `session:${session_id}`;
-        const existing_session = (await this.redis.get(session_key));
-        if (existing_session) {
-            const updated_session = {
-                ...existing_session,
-                user: user_profile_data,
-            };
-            const expires_countdown = Math.floor((new Date(existing_session.expires_at).getTime() - Date.now()) / 1000);
-            await this.redis.set(session_key, updated_session, expires_countdown);
-        }
+        response.status(400).json(errorResponse);
     }
 };
-exports.SessionService = SessionService;
-exports.SessionService = SessionService = __decorate([
-    (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [typeof (_a = typeof decode_api_client_1.DecodeApiClient !== "undefined" && decode_api_client_1.DecodeApiClient) === "function" ? _a : Object, typeof (_b = typeof redis_infrastructure_1.RedisInfrastructure !== "undefined" && redis_infrastructure_1.RedisInfrastructure) === "function" ? _b : Object, typeof (_c = typeof user_service_1.UserService !== "undefined" && user_service_1.UserService) === "function" ? _c : Object, typeof (_d = typeof register_service_1.RegisterService !== "undefined" && register_service_1.RegisterService) === "function" ? _d : Object])
-], SessionService);
+exports.ValidationExceptionFilter = ValidationExceptionFilter;
+exports.ValidationExceptionFilter = ValidationExceptionFilter = ValidationExceptionFilter_1 = __decorate([
+    (0, common_1.Catch)(common_1.BadRequestException)
+], ValidationExceptionFilter);
 
-
-/***/ }),
-
-/***/ "./apps/auth/src/services/user.service.ts":
-/*!************************************************!*\
-  !*** ./apps/auth/src/services/user.service.ts ***!
-  \************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-    return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __metadata = (this && this.__metadata) || function (k, v) {
-    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
-};
-var __param = (this && this.__param) || function (paramIndex, decorator) {
-    return function (target, key) { decorator(target, key, paramIndex); }
-};
-var _a, _b, _c;
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.UserService = void 0;
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const decode_api_client_1 = __webpack_require__(/*! ../infrastructure/external-services/decode-api.client */ "./apps/auth/src/infrastructure/external-services/decode-api.client.ts");
-const mongoose_1 = __webpack_require__(/*! @nestjs/mongoose */ "@nestjs/mongoose");
-const mongoose_2 = __webpack_require__(/*! mongoose */ "mongoose");
-const redis_infrastructure_1 = __webpack_require__(/*! ../infrastructure/redis.infrastructure */ "./apps/auth/src/infrastructure/redis.infrastructure.ts");
-let UserService = class UserService {
-    decodeApiClient;
-    userDehiveModel;
-    redis;
-    constructor(decodeApiClient, userDehiveModel, redis) {
-        this.decodeApiClient = decodeApiClient;
-        this.userDehiveModel = userDehiveModel;
-        this.redis = redis;
-    }
-    async getUser(input) {
-        const { user_dehive_id, session_id, fingerprint_hashed } = input;
-        try {
-            const user_decode = await this.getUserDecodeProfile({
-                user_id: user_dehive_id,
-                session_id,
-                fingerprint_hashed,
-            });
-            if (!user_decode.success || !user_decode.data) {
-                return {
-                    success: false,
-                    message: user_decode.message,
-                    statusCode: user_decode.statusCode,
-                };
-            }
-            const user_decode_data = user_decode.data;
-            let user_dehive_data = await this.userDehiveModel.findById(user_dehive_id);
-            if (!user_dehive_data) {
-                const newUserDehive = new this.userDehiveModel({
-                    _id: user_dehive_id,
-                    user_id: user_dehive_id,
-                    bio: "",
-                    banner_color: null,
-                    server_count: 0,
-                    status: "offline",
-                    last_login: new Date(),
-                });
-                user_dehive_data = await newUserDehive.save();
-            }
-            const user = {
-                _id: user_dehive_data._id,
-                dehive_role: user_dehive_data.dehive_role,
-                role_subscription: user_dehive_data.role_subscription,
-                status: user_dehive_data.status,
-                server_count: user_dehive_data.server_count,
-                username: user_decode_data.username,
-                display_name: user_decode_data.display_name,
-                bio: user_decode_data.bio,
-                avatar_ipfs_hash: user_decode_data.avatar_ipfs_hash,
-                last_login: user_decode_data.last_login,
-                primary_wallet: user_decode_data.primary_wallet,
-                following_number: user_decode_data.following_number,
-                followers_number: user_decode_data.followers_number,
-                is_following: user_decode_data.is_following,
-                is_follower: user_decode_data.is_follower,
-                is_blocked: user_decode_data.is_blocked,
-                is_blocked_by: user_decode_data.is_blocked_by,
-                mutual_followers_number: user_decode_data.mutual_followers_number,
-                mutual_followers_list: user_decode_data.mutual_followers_list,
-                is_active: user_decode_data.is_active,
-                last_account_deactivation: user_decode_data.last_account_deactivation,
-            };
-            return {
-                success: true,
-                message: "User found",
-                statusCode: common_1.HttpStatus.OK,
-                data: user,
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                message: error.message,
-                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
-            };
-        }
-    }
-    async getMyProfile(input) {
-        const { session_id, fingerprint_hashed } = input;
-        try {
-            const user_decode = await this.getMyDecodeProfile({
-                session_id,
-                fingerprint_hashed,
-            });
-            if (!user_decode.success || !user_decode.data) {
-                return {
-                    success: false,
-                    message: user_decode.message,
-                    statusCode: common_1.HttpStatus.NOT_FOUND,
-                };
-            }
-            const user_decode_data = user_decode.data;
-            let user_dehive_data = await this.userDehiveModel.findById(user_decode_data._id);
-            if (!user_dehive_data) {
-                const newUserDehive = new this.userDehiveModel({
-                    _id: user_decode_data._id,
-                    user_id: user_decode_data._id,
-                    bio: "",
-                    banner_color: null,
-                    server_count: 0,
-                    status: "offline",
-                    last_login: new Date(),
-                });
-                user_dehive_data = await newUserDehive.save();
-            }
-            const user = {
-                _id: user_dehive_data._id,
-                dehive_role: user_dehive_data.dehive_role,
-                role_subscription: user_dehive_data.role_subscription,
-                status: user_dehive_data.status,
-                server_count: user_dehive_data.server_count,
-                username: user_decode_data.username,
-                display_name: user_decode_data.display_name,
-                bio: user_decode_data.bio,
-                avatar_ipfs_hash: user_decode_data.avatar_ipfs_hash,
-                last_login: user_decode_data.last_login,
-                primary_wallet: user_decode_data.primary_wallet,
-                following_number: user_decode_data.following_number,
-                followers_number: user_decode_data.followers_number,
-                is_following: user_decode_data.is_following,
-                is_follower: user_decode_data.is_follower,
-                is_blocked: user_decode_data.is_blocked,
-                is_blocked_by: user_decode_data.is_blocked_by,
-                mutual_followers_number: user_decode_data.mutual_followers_number,
-                mutual_followers_list: user_decode_data.mutual_followers_list,
-                is_active: user_decode_data.is_active,
-                last_account_deactivation: user_decode_data.last_account_deactivation,
-            };
-            console.log("user service get my decode profile user_decode_data", user_decode_data);
-            const redis_cache_data = (await this.redis.get(`session:${session_id}`));
-            if (redis_cache_data) {
-                redis_cache_data.user =
-                    user_decode_data;
-                await this.redis.set(`session:${session_id}`, redis_cache_data);
-            }
-            return {
-                success: true,
-                message: "User found",
-                statusCode: common_1.HttpStatus.OK,
-                data: user,
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                message: error.message,
-                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
-            };
-        }
-    }
-    async userExists(user_id) {
-        const user_dehive_data = await this.userDehiveModel.findById(user_id);
-        if (!user_dehive_data) {
-            return {
-                success: false,
-                message: "User not found",
-                statusCode: common_1.HttpStatus.NOT_FOUND,
-            };
-        }
-        return {
-            success: true,
-            message: "User exists",
-            statusCode: common_1.HttpStatus.OK,
-            data: user_dehive_data ? true : false,
-        };
-    }
-    async getUserDecodeProfile(input) {
-        const { user_id, session_id, fingerprint_hashed } = input;
-        try {
-            const user_decode = await this.decodeApiClient.getUser(user_id, session_id, fingerprint_hashed);
-            if (!user_decode.success) {
-                return {
-                    success: false,
-                    message: user_decode.message,
-                    statusCode: user_decode.statusCode,
-                };
-            }
-            return user_decode;
-        }
-        catch (error) {
-            return {
-                success: false,
-                message: error.message,
-                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
-            };
-        }
-    }
-    async getMyDecodeProfile(input) {
-        const { session_id, fingerprint_hashed } = input;
-        try {
-            console.log("user service get my decode profile input", session_id, fingerprint_hashed);
-            const user_decode = await this.decodeApiClient.getMyProfile(session_id, fingerprint_hashed);
-            if (!user_decode.success) {
-                return {
-                    success: false,
-                    message: user_decode.message,
-                    statusCode: user_decode.statusCode,
-                };
-            }
-            return {
-                success: true,
-                message: "User found",
-                statusCode: common_1.HttpStatus.OK,
-                data: user_decode.data,
-            };
-        }
-        catch (error) {
-            return {
-                success: false,
-                message: error.message,
-                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
-            };
-        }
-    }
-};
-exports.UserService = UserService;
-exports.UserService = UserService = __decorate([
-    (0, common_1.Injectable)(),
-    __param(1, (0, mongoose_1.InjectModel)("UserDehive")),
-    __metadata("design:paramtypes", [typeof (_a = typeof decode_api_client_1.DecodeApiClient !== "undefined" && decode_api_client_1.DecodeApiClient) === "function" ? _a : Object, typeof (_b = typeof mongoose_2.Model !== "undefined" && mongoose_2.Model) === "function" ? _b : Object, typeof (_c = typeof redis_infrastructure_1.RedisInfrastructure !== "undefined" && redis_infrastructure_1.RedisInfrastructure) === "function" ? _c : Object])
-], UserService);
-
-
-/***/ }),
-
-/***/ "@nestjs-modules/ioredis":
-/*!******************************************!*\
-  !*** external "@nestjs-modules/ioredis" ***!
-  \******************************************/
-/***/ ((module) => {
-
-module.exports = require("@nestjs-modules/ioredis");
-
-/***/ }),
-
-/***/ "@nestjs/axios":
-/*!********************************!*\
-  !*** external "@nestjs/axios" ***!
-  \********************************/
-/***/ ((module) => {
-
-module.exports = require("@nestjs/axios");
-
-/***/ }),
-
-/***/ "@nestjs/common":
-/*!*********************************!*\
-  !*** external "@nestjs/common" ***!
-  \*********************************/
-/***/ ((module) => {
-
-module.exports = require("@nestjs/common");
-
-/***/ }),
-
-/***/ "@nestjs/config":
-/*!*********************************!*\
-  !*** external "@nestjs/config" ***!
-  \*********************************/
-/***/ ((module) => {
-
-module.exports = require("@nestjs/config");
-
-/***/ }),
-
-/***/ "@nestjs/core":
-/*!*******************************!*\
-  !*** external "@nestjs/core" ***!
-  \*******************************/
-/***/ ((module) => {
-
-module.exports = require("@nestjs/core");
-
-/***/ }),
-
-/***/ "@nestjs/mongoose":
-/*!***********************************!*\
-  !*** external "@nestjs/mongoose" ***!
-  \***********************************/
-/***/ ((module) => {
-
-module.exports = require("@nestjs/mongoose");
-
-/***/ }),
-
-/***/ "axios":
-/*!************************!*\
-  !*** external "axios" ***!
-  \************************/
-/***/ ((module) => {
-
-module.exports = require("axios");
-
-/***/ }),
-
-/***/ "ioredis":
-/*!**************************!*\
-  !*** external "ioredis" ***!
-  \**************************/
-/***/ ((module) => {
-
-module.exports = require("ioredis");
-
-/***/ }),
-
-/***/ "mongoose":
-/*!***************************!*\
-  !*** external "mongoose" ***!
-  \***************************/
-/***/ ((module) => {
-
-module.exports = require("mongoose");
-
-/***/ }),
-
-/***/ "rxjs":
-/*!***********************!*\
-  !*** external "rxjs" ***!
-  \***********************/
-/***/ ((module) => {
-
-module.exports = require("rxjs");
-
-/***/ }),
-
-/***/ "uuid":
-/*!***********************!*\
-  !*** external "uuid" ***!
-  \***********************/
-/***/ ((module) => {
-
-module.exports = require("uuid");
 
 /***/ })
-
-/******/ 	});
+/******/ 	]);
 /************************************************************************/
 /******/ 	// The module cache
 /******/ 	var __webpack_module_cache__ = {};
@@ -1612,16 +1516,13 @@ var __webpack_exports__ = {};
 // This entry needs to be wrapped in an IIFE because it needs to be isolated against other modules in the chunk.
 (() => {
 var exports = __webpack_exports__;
-/*!*******************************!*\
-  !*** ./apps/auth/src/main.ts ***!
-  \*******************************/
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const core_1 = __webpack_require__(/*! @nestjs/core */ "@nestjs/core");
-const auth_module_1 = __webpack_require__(/*! ./auth.module */ "./apps/auth/src/auth.module.ts");
-const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
-const http_exception_filter_1 = __webpack_require__(/*! ./common/filters/http-exception.filter */ "./apps/auth/src/common/filters/http-exception.filter.ts");
-const validation_exception_filter_1 = __webpack_require__(/*! ./common/filters/validation-exception.filter */ "./apps/auth/src/common/filters/validation-exception.filter.ts");
+const core_1 = __webpack_require__(1);
+const auth_module_1 = __webpack_require__(2);
+const common_1 = __webpack_require__(3);
+const http_exception_filter_1 = __webpack_require__(23);
+const validation_exception_filter_1 = __webpack_require__(24);
 async function bootstrap() {
     const app = await core_1.NestFactory.create(auth_module_1.AuthModule);
     app.useGlobalFilters(new validation_exception_filter_1.ValidationExceptionFilter(), new http_exception_filter_1.HttpExceptionFilter());

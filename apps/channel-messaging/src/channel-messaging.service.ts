@@ -10,6 +10,9 @@ import * as fs from "fs";
 import * as path from "path";
 import { AuthServiceClient } from "./auth-service.client";
 import { DecodeApiClient } from "../clients/decode-api.client";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
+import { UserProfile } from "../interfaces/user-profile.interface";
 import { randomUUID } from "crypto";
 import {
   ChannelMessage,
@@ -54,6 +57,7 @@ export class MessagingService {
     private readonly configService: ConfigService,
     private readonly authClient: AuthServiceClient,
     private readonly decodeClient: DecodeApiClient,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   private detectAttachmentType(mime: string): AttachmentType {
@@ -701,5 +705,47 @@ export class MessagingService {
         is_last_page: isLastPage,
       },
     };
+  }
+
+  async getUserProfile(userDehiveId: string): Promise<Partial<UserProfile>> {
+    try {
+      // First check cache for any previously fetched profile
+      const cacheKey = `user_profile:${userDehiveId}`;
+      const cachedData = await this.redis.get(cacheKey);
+
+      if (cachedData) {
+        const profile = JSON.parse(cachedData);
+        console.log(
+          `[CHANNEL-MESSAGING] Retrieved cached profile for ${userDehiveId} in WebSocket`,
+        );
+        return profile;
+      }
+
+      // Fallback to basic profile if no cache
+      console.log(
+        `[CHANNEL-MESSAGING] No cached profile found for ${userDehiveId}, using fallback in WebSocket`,
+      );
+      return {
+        user_id: userDehiveId,
+        user_dehive_id: userDehiveId,
+        username: `User_${userDehiveId}`,
+        display_name: `User_${userDehiveId}`,
+        avatar: null,
+        avatar_ipfs_hash: null,
+      };
+    } catch (error) {
+      console.error(
+        `[CHANNEL-MESSAGING] Error getting user profile for ${userDehiveId}:`,
+        error,
+      );
+      return {
+        user_id: userDehiveId,
+        user_dehive_id: userDehiveId,
+        username: `User_${userDehiveId}`,
+        display_name: `User_${userDehiveId}`,
+        avatar: null,
+        avatar_ipfs_hash: null,
+      };
+    }
   }
 }

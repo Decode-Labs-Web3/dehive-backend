@@ -68,6 +68,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.emit(event, data);
   }
 
+  private async getUserProfile(userDehiveId: string): Promise<{
+    username: string;
+    display_name: string;
+    avatar_ipfs_hash: string | null;
+  }> {
+    // Use service method to get user profile (same as direct-messaging)
+    const userProfile =
+      await this.messagingService.getUserProfile(userDehiveId);
+
+    return {
+      username: userProfile.username || `User_${userDehiveId}`,
+      display_name: userProfile.display_name || `User_${userDehiveId}`,
+      avatar_ipfs_hash:
+        userProfile.avatar_ipfs_hash || userProfile.avatar || null,
+    };
+  }
+
   handleConnection(client: Socket) {
     console.log("[WebSocket] Client connected. Awaiting identity.");
     this.meta.set(client, {
@@ -460,14 +477,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Get user profile for the sender
       await this.userDehiveModel.findById(savedMessage.senderId).lean();
 
+      // Get user profile from Decode API
+      const userProfile = await this.getUserProfile(
+        savedMessage.senderId.toString(),
+      );
+
       const messageToBroadcast = {
         _id: savedMessage._id,
         conversationId: savedMessage.conversationId?.toString?.(),
         sender: {
           dehive_id: savedMessage.senderId,
-          username: `User_${savedMessage.senderId.toString()}`,
-          display_name: `User_${savedMessage.senderId.toString()}`,
-          avatar_ipfs_hash: null,
+          username: userProfile.username,
+          display_name: userProfile.display_name,
+          avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
         },
         content: savedMessage.content,
         attachments: savedMessage.attachments || [],
@@ -526,6 +548,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         meta.userDehiveId,
         parsedData.content,
       );
+
+      // Get user profile from Decode API
+      const userProfile = await this.getUserProfile(
+        updated.senderId?.toString() || "Unknown",
+      );
+
       const payload = {
         _id: updated._id,
         conversationId: (
@@ -533,9 +561,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         ).toString(),
         sender: {
           dehive_id: updated.senderId,
-          username: `User_${updated.senderId?.toString() || "Unknown"}`,
-          display_name: `User_${updated.senderId?.toString() || "Unknown"}`,
-          avatar_ipfs_hash: null,
+          username: userProfile.username,
+          display_name: userProfile.display_name,
+          avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
         },
         content: updated.content,
         attachments: updated.attachments || [],
@@ -582,6 +610,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         parsedData.messageId,
         meta.userDehiveId,
       );
+
+      // Get user profile from Decode API
+      const userProfile = await this.getUserProfile(
+        updated.senderId?.toString() || "Unknown",
+      );
+
       const payload = {
         _id: updated._id,
         conversationId: (
@@ -589,9 +623,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         ).toString(),
         sender: {
           dehive_id: updated.senderId,
-          username: `User_${updated.senderId?.toString() || "Unknown"}`,
-          display_name: `User_${updated.senderId?.toString() || "Unknown"}`,
-          avatar_ipfs_hash: null,
+          username: userProfile.username,
+          display_name: userProfile.display_name,
+          avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
         },
         content: updated.content,
         attachments: updated.attachments || [],
