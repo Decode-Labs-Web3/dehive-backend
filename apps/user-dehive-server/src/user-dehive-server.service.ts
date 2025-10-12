@@ -692,7 +692,7 @@ export class UserDehiveServerService {
         );
         return {
           membership_id: m._id.toString(),
-          ...userProfile,
+          ...(userProfile as Record<string, unknown>),
           role: m.role,
           is_muted: m.is_muted,
           joined_at: m.joined_at,
@@ -741,7 +741,7 @@ export class UserDehiveServerService {
       .map((s) => s.server_id);
 
     return {
-      ...targetUserProfile,
+      ...(targetUserProfile as Record<string, unknown>),
       mutual_servers_count: mutualServers.length,
       mutual_servers: mutualServers,
     };
