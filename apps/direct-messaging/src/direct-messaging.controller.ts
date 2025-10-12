@@ -143,14 +143,14 @@ export class DirectMessagingController {
     }
 
     // Get session ID from headers to get access token from Redis
-    const sessionId = req.headers['x-session-id'] as string;
-    const fingerprintHash = req.headers['x-fingerprint-hashed'] as string;
+    const sessionId = req.headers["x-session-id"] as string;
+    const fingerprintHash = req.headers["x-fingerprint-hashed"] as string;
 
     console.log(`[DM-CONTROLLER] Headers:`, {
-      'x-session-id': req.headers['x-session-id'],
-      'x-fingerprint-hashed': req.headers['x-fingerprint-hashed'],
+      "x-session-id": req.headers["x-session-id"],
+      "x-fingerprint-hashed": req.headers["x-fingerprint-hashed"],
       sessionId,
-      fingerprintHash
+      fingerprintHash,
     });
 
     const data = await this.service.listMessages(
@@ -158,7 +158,7 @@ export class DirectMessagingController {
       conversationId,
       query,
       sessionId,
-      fingerprintHash
+      fingerprintHash,
     );
     return { success: true, statusCode: 200, message: "OK", data };
   }

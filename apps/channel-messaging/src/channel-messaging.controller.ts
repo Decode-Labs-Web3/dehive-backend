@@ -218,7 +218,7 @@ export class MessagingController {
       data: {
         conversationId: String(conversation._id),
         channelId: String(conversation.channelId),
-        createdAt: (conversation as any).createdAt,
+        createdAt: (conversation as { createdAt?: Date }).createdAt,
       },
     };
   }

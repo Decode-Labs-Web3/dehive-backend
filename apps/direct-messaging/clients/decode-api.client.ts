@@ -124,7 +124,10 @@ export class DecodeApiClient {
       const sessionData = JSON.parse(sessionRaw);
       return sessionData?.access_token || null;
     } catch (error) {
-      this.logger.error(`Failed to parse session data for key session:${sessionId}`);
+      this.logger.error(
+        `Failed to parse session data for key session:${sessionId}`,
+        error,
+      );
       return null;
     }
   }

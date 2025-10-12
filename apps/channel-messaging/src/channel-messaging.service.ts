@@ -415,7 +415,15 @@ export class MessagingService {
   async getMessagesByConversationId(
     conversationId: string,
     getMessagesDto: GetMessagesDto,
-  ): Promise<{ items: unknown[]; metadata: any }> {
+  ): Promise<{
+    items: unknown[];
+    metadata: {
+      page: number;
+      limit: number;
+      total: number;
+      is_last_page: boolean;
+    };
+  }> {
     const { page = 0, limit = 10 } = getMessagesDto;
     const skip = page * limit;
 
@@ -499,9 +507,9 @@ export class MessagingService {
         editedAt: msg.editedAt,
         replyTo: msg.replyTo || null,
 
-        createdAt: (msg as any).createdAt,
+        createdAt: (msg as { createdAt?: Date }).createdAt,
 
-        updatedAt: (msg as any).updatedAt,
+        updatedAt: (msg as { updatedAt?: Date }).updatedAt,
       };
     });
 

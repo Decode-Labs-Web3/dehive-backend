@@ -481,12 +481,20 @@ export class DirectMessagingService {
     const formattedItems = await Promise.all(
       items.map(async (item) => {
         // Get user profile for sender - use decode API if session ID is available
-        this.logger.log(`Getting profile for sender ${item.senderId}, sessionId: ${sessionId}, fingerprintHash: ${fingerprintHash}`);
+        this.logger.log(
+          `Getting profile for sender ${item.senderId}, sessionId: ${sessionId}, fingerprintHash: ${fingerprintHash}`,
+        );
         let userProfile;
         if (sessionId && fingerprintHash) {
-          userProfile = await this.getUserProfileFromDecode(String(item.senderId), sessionId, fingerprintHash);
+          userProfile = await this.getUserProfileFromDecode(
+            String(item.senderId),
+            sessionId,
+            fingerprintHash,
+          );
           if (!userProfile) {
-            this.logger.warn(`Failed to get profile from decode API for ${item.senderId}, using fallback`);
+            this.logger.warn(
+              `Failed to get profile from decode API for ${item.senderId}, using fallback`,
+            );
             userProfile = await this.getUserProfile(String(item.senderId));
           }
         } else {
@@ -499,7 +507,8 @@ export class DirectMessagingService {
           sender: {
             dehive_id: item.senderId,
             username: userProfile.username || `User_${String(item.senderId)}`,
-            display_name: userProfile.display_name || `User_${String(item.senderId)}`,
+            display_name:
+              userProfile.display_name || `User_${String(item.senderId)}`,
             avatar_ipfs_hash: userProfile.avatar_ipfs_hash || null,
           },
           content: item.content,
@@ -508,11 +517,11 @@ export class DirectMessagingService {
           editedAt: item.editedAt || null,
           isDeleted: item.isDeleted || false,
           replyTo: item.replyTo || null,
-          createdAt: (item as any).createdAt,
-          updatedAt: (item as any).updatedAt,
+          createdAt: (item as { createdAt?: Date }).createdAt,
+          updatedAt: (item as { updatedAt?: Date }).updatedAt,
           __v: item.__v,
         };
-      })
+      }),
     );
 
     return {
@@ -673,7 +682,10 @@ export class DirectMessagingService {
    * Cache user profile in Redis
    * This should be called when user authenticates or profile is updated
    */
-  async cacheUserProfile(userDehiveId: string, profile: Partial<UserProfile>): Promise<void> {
+  async cacheUserProfile(
+    userDehiveId: string,
+    profile: Partial<UserProfile>,
+  ): Promise<void> {
     try {
       const cacheKey = `user_profile:${userDehiveId}`;
       const cacheData = {
@@ -682,14 +694,18 @@ export class DirectMessagingService {
         display_name: profile.display_name || `User_${userDehiveId}`,
         avatar_ipfs_hash: profile.avatar_ipfs_hash || undefined,
         bio: profile.bio || null,
-        is_verified: (profile as any).is_verified || false,
+        is_verified:
+          (profile as { is_verified?: boolean }).is_verified || false,
       };
 
       // Cache for 1 hour (3600 seconds)
       await this.redis.setex(cacheKey, 3600, JSON.stringify(cacheData));
       this.logger.log(`Cached user profile for ${userDehiveId}`);
     } catch (error) {
-      this.logger.error(`Error caching user profile for ${userDehiveId}:`, error);
+      this.logger.error(
+        `Error caching user profile for ${userDehiveId}:`,
+        error,
+      );
     }
   }
 
@@ -705,12 +721,16 @@ export class DirectMessagingService {
 
       if (cachedData) {
         const profile = JSON.parse(cachedData);
-        this.logger.log(`Retrieved cached profile for ${userDehiveId} in WebSocket`);
+        this.logger.log(
+          `Retrieved cached profile for ${userDehiveId} in WebSocket`,
+        );
         return profile;
       }
 
       // Fallback to basic profile if no cache
-      this.logger.log(`No cached profile found for ${userDehiveId}, using fallback in WebSocket`);
+      this.logger.log(
+        `No cached profile found for ${userDehiveId}, using fallback in WebSocket`,
+      );
       return {
         _id: userDehiveId,
         username: `User_${userDehiveId}`,
@@ -718,7 +738,10 @@ export class DirectMessagingService {
         avatar_ipfs_hash: undefined,
       };
     } catch (error) {
-      this.logger.error(`Error getting user profile for ${userDehiveId}:`, error);
+      this.logger.error(
+        `Error getting user profile for ${userDehiveId}:`,
+        error,
+      );
       return {
         _id: userDehiveId,
         username: `User_${userDehiveId}`,
@@ -739,7 +762,9 @@ export class DirectMessagingService {
   ): Promise<Partial<UserProfile> | null> {
     try {
       // Try to get from decode API using session ID (no cache check)
-      this.logger.log(`Fetching profile for ${userDehiveId} from decode API using session ${sessionId}`);
+      this.logger.log(
+        `Fetching profile for ${userDehiveId} from decode API using session ${sessionId}`,
+      );
       const profile = await this.decodeApiClient.getUserProfile(
         sessionId,
         fingerprintHash,
@@ -749,17 +774,24 @@ export class DirectMessagingService {
       if (profile) {
         // Cache the profile for future use
         await this.cacheUserProfile(userDehiveId, profile);
-        this.logger.log(`Successfully fetched and cached profile for ${userDehiveId}:`, profile);
+        this.logger.log(
+          `Successfully fetched and cached profile for ${userDehiveId}:`,
+          profile,
+        );
         return profile;
       }
 
       // If decode API fails, return null to force fallback in calling method
-      this.logger.warn(`Failed to get profile from decode API for ${userDehiveId}`);
+      this.logger.warn(
+        `Failed to get profile from decode API for ${userDehiveId}`,
+      );
       return null;
     } catch (error) {
-      this.logger.error(`Error getting user profile from decode API for ${userDehiveId}:`, error);
+      this.logger.error(
+        `Error getting user profile from decode API for ${userDehiveId}:`,
+        error,
+      );
       return null;
     }
   }
-
 }

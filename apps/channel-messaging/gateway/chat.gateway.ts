@@ -360,7 +360,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-
   @SubscribeMessage("sendMessage")
   async handleMessage(
     @MessageBody() data: string | CreateMessageDto,
@@ -442,7 +441,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const savedMessage = (await this.messagingService.createMessage(
         parsedData,
         meta.userDehiveId,
-      )) as any;
+      )) as {
+        _id: string;
+        conversationId: string;
+        senderId: string;
+        content: string;
+        attachments?: unknown[];
+        isEdited?: boolean;
+        editedAt?: Date;
+        isDeleted?: boolean;
+        replyTo?: string;
+        createdAt?: Date;
+        updatedAt?: Date;
+      };
 
       console.log(`[WebSocket] ✅ MESSAGE SAVED: ${savedMessage._id}`);
 
@@ -520,7 +531,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         ).toString(),
         sender: {
           dehive_id: updated.senderId,
-          username: `User_${updated.senderId?.toString() || 'Unknown'}`,
+          username: `User_${updated.senderId?.toString() || "Unknown"}`,
         },
         content: updated.content,
         attachments: updated.attachments || [],
@@ -574,7 +585,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         ).toString(),
         sender: {
           dehive_id: updated.senderId,
-          username: `User_${updated.senderId?.toString() || 'Unknown'}`,
+          username: `User_${updated.senderId?.toString() || "Unknown"}`,
         },
         content: updated.content,
         attachments: updated.attachments || [],
