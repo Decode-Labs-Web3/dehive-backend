@@ -9,6 +9,7 @@ import { ConfigService } from "@nestjs/config";
 import * as fs from "fs";
 import * as path from "path";
 import { AuthServiceClient } from "./auth-service.client";
+import { DecodeApiClient } from "../clients/decode-api.client";
 import { randomUUID } from "crypto";
 import {
   ChannelMessage,
@@ -52,6 +53,7 @@ export class MessagingService {
     private readonly userDehiveModel: Model<UserDehiveDocument>,
     private readonly configService: ConfigService,
     private readonly authClient: AuthServiceClient,
+    private readonly decodeClient: DecodeApiClient,
   ) {}
 
   private detectAttachmentType(mime: string): AttachmentType {
@@ -415,6 +417,8 @@ export class MessagingService {
   async getMessagesByConversationId(
     conversationId: string,
     getMessagesDto: GetMessagesDto,
+    sessionId?: string,
+    fingerprintHash?: string,
   ): Promise<{
     items: unknown[];
     metadata: {
@@ -474,8 +478,37 @@ export class MessagingService {
       })
       .filter((id): id is string => Boolean(id));
 
-    // 3. Batch get profiles from auth service (with cache)
-    const profiles = await this.authClient.batchGetProfiles(userIds);
+    // 3. Batch get profiles from decode service (with cache)
+    console.log("[CHANNEL-MESSAGING] Debug getMessagesByConversationId:", {
+      userIds,
+      sessionId,
+      fingerprintHash,
+      hasSessionId: !!sessionId,
+      hasFingerprintHash: !!fingerprintHash,
+    });
+
+    const profiles = await this.decodeClient.batchGetProfiles(
+      userIds,
+      sessionId,
+      fingerprintHash,
+    );
+
+    console.log("[CHANNEL-MESSAGING] Profiles received:", {
+      requestedUserIds: userIds,
+      receivedProfiles: Object.keys(profiles),
+      profiles: profiles,
+    });
+
+    // Debug avatar data specifically
+    Object.keys(profiles).forEach((userId) => {
+      const profile = profiles[userId];
+      console.log(`[CHANNEL-MESSAGING] Profile for ${userId}:`, {
+        username: profile?.username,
+        display_name: profile?.display_name,
+        avatar: profile?.avatar,
+        fullProfile: profile,
+      });
+    });
 
     // 4. Map messages with user profiles
     const items = messages.map((msg) => {
@@ -483,32 +516,25 @@ export class MessagingService {
         _id: Types.ObjectId;
       };
       const userId = sender?._id?.toString() || "";
-      const profile = profiles[userId] || {
-        username: "Unknown User",
-        display_name: "Unknown User",
-        avatar: null,
-      };
+      const profile = profiles[userId];
 
       return {
         _id: msg._id,
-        content: msg.content,
         conversationId: msg.conversationId,
-        channelId: msg.channelId,
-        senderId: sender?._id,
         sender: {
-          user_id: userId,
-          user_dehive_id: sender?._id?.toString() || "",
-          username: profile.username,
-          display_name: profile.display_name || profile.username,
-          avatar: profile.avatar,
+          dehive_id: sender?._id?.toString() || "",
+          username: profile?.username || `User_${userId}`,
+          display_name: profile?.display_name || `User_${userId}`,
+          avatar_ipfs_hash:
+            profile?.avatar_ipfs_hash || profile?.avatar || null,
         },
-        attachments: msg.attachments,
-        isEdited: msg.isEdited,
-        editedAt: msg.editedAt,
+        content: msg.content,
+        attachments: msg.attachments || [],
+        isEdited: msg.isEdited || false,
+        editedAt: msg.editedAt || null,
+        isDeleted: msg.isDeleted || false,
         replyTo: msg.replyTo || null,
-
         createdAt: (msg as { createdAt?: Date }).createdAt,
-
         updatedAt: (msg as { updatedAt?: Date }).updatedAt,
       };
     });
@@ -655,6 +681,8 @@ export class MessagingService {
     return {
       items: items.map((u) => ({
         _id: u._id,
+        ownerId: u.ownerId,
+        serverId: u.serverId,
         type: u.type,
         url: u.url,
         name: u.name,

@@ -466,6 +466,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         sender: {
           dehive_id: savedMessage.senderId,
           username: `User_${savedMessage.senderId.toString()}`,
+          display_name: `User_${savedMessage.senderId.toString()}`,
+          avatar_ipfs_hash: null,
         },
         content: savedMessage.content,
         attachments: savedMessage.attachments || [],
@@ -532,6 +534,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         sender: {
           dehive_id: updated.senderId,
           username: `User_${updated.senderId?.toString() || "Unknown"}`,
+          display_name: `User_${updated.senderId?.toString() || "Unknown"}`,
+          avatar_ipfs_hash: null,
         },
         content: updated.content,
         attachments: updated.attachments || [],
@@ -586,6 +590,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         sender: {
           dehive_id: updated.senderId,
           username: `User_${updated.senderId?.toString() || "Unknown"}`,
+          display_name: `User_${updated.senderId?.toString() || "Unknown"}`,
+          avatar_ipfs_hash: null,
         },
         content: updated.content,
         attachments: updated.attachments || [],

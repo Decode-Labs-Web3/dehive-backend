@@ -2,6 +2,134 @@
 /******/ 	"use strict";
 /******/ 	var __webpack_modules__ = ({
 
+/***/ "./apps/channel-messaging/clients/decode-api.client.ts":
+/*!*************************************************************!*\
+  !*** ./apps/channel-messaging/clients/decode-api.client.ts ***!
+  \*************************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var DecodeApiClient_1;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DecodeApiClient = void 0;
+const common_1 = __webpack_require__(/*! @nestjs/common */ "@nestjs/common");
+const axios_1 = __webpack_require__(/*! @nestjs/axios */ "@nestjs/axios");
+const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
+const rxjs_1 = __webpack_require__(/*! rxjs */ "rxjs");
+const ioredis_1 = __webpack_require__(/*! @nestjs-modules/ioredis */ "@nestjs-modules/ioredis");
+const ioredis_2 = __webpack_require__(/*! ioredis */ "ioredis");
+let DecodeApiClient = DecodeApiClient_1 = class DecodeApiClient {
+    httpService;
+    configService;
+    redis;
+    logger = new common_1.Logger(DecodeApiClient_1.name);
+    decodeApiUrl;
+    constructor(httpService, configService, redis) {
+        this.httpService = httpService;
+        this.configService = configService;
+        this.redis = redis;
+        const host = this.configService.get("DECODE_API_GATEWAY_HOST");
+        const port = this.configService.get("DECODE_API_GATEWAY_PORT");
+        if (!host || !port) {
+            throw new Error("DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!");
+        }
+        this.decodeApiUrl = `http://${host}:${port}`;
+    }
+    async getUserProfile(sessionId, fingerprintHash, userDehiveId) {
+        try {
+            const accessToken = await this.getAccessTokenFromSession(sessionId);
+            if (!accessToken) {
+                this.logger.warn(`Access token not found for session: ${sessionId}`);
+                return null;
+            }
+            this.logger.log(`Calling Decode API: GET ${this.decodeApiUrl}/users/profile/${userDehiveId}`);
+            const response = await (0, rxjs_1.firstValueFrom)(this.httpService.get(`${this.decodeApiUrl}/users/profile/${userDehiveId}`, {
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    "x-fingerprint-hashed": fingerprintHash,
+                },
+            }));
+            this.logger.log(`Decode API response: ${JSON.stringify(response.data, null, 2)}`);
+            this.logger.log(`Successfully retrieved user profile from Decode API.`);
+            return response.data.data;
+        }
+        catch (error) {
+            this.logger.error(`Error Response Status: ${error.response?.status}`);
+            this.logger.error(`Error Response Data: ${JSON.stringify(error.response?.data)}`);
+            return null;
+        }
+    }
+    async batchGetProfiles(userDehiveIds, sessionId, fingerprintHash) {
+        const profiles = {};
+        if (!sessionId || !fingerprintHash) {
+            this.logger.warn("Session ID or fingerprint hash not provided for batch profile fetch");
+            return profiles;
+        }
+        try {
+            const accessToken = await this.getAccessTokenFromSession(sessionId);
+            if (!accessToken) {
+                this.logger.warn(`Access token not found for session: ${sessionId}`);
+                return profiles;
+            }
+            const profilePromises = userDehiveIds.map(async (userDehiveId) => {
+                try {
+                    const profile = await this.getUserProfile(sessionId, fingerprintHash, userDehiveId);
+                    if (profile) {
+                        profiles[userDehiveId] = profile;
+                    }
+                }
+                catch (error) {
+                    this.logger.error(`Failed to fetch profile for user ${userDehiveId}:`, error);
+                }
+            });
+            await Promise.all(profilePromises);
+            this.logger.log(`Successfully fetched ${Object.keys(profiles).length} profiles out of ${userDehiveIds.length} requested`);
+            return profiles;
+        }
+        catch (error) {
+            this.logger.error("Error in batch profile fetch:", error);
+            return profiles;
+        }
+    }
+    async getAccessTokenFromSession(sessionId) {
+        try {
+            const sessionKey = `session:${sessionId}`;
+            const sessionRaw = await this.redis.get(sessionKey);
+            if (!sessionRaw)
+                return null;
+            const sessionData = JSON.parse(sessionRaw);
+            return sessionData?.access_token || null;
+        }
+        catch (error) {
+            this.logger.error(`Failed to parse session data for key session:${sessionId}`, error);
+            return null;
+        }
+    }
+};
+exports.DecodeApiClient = DecodeApiClient;
+exports.DecodeApiClient = DecodeApiClient = DecodeApiClient_1 = __decorate([
+    (0, common_1.Injectable)(),
+    __param(2, (0, ioredis_1.InjectRedis)()),
+    __metadata("design:paramtypes", [axios_1.HttpService,
+        config_1.ConfigService,
+        ioredis_2.Redis])
+], DecodeApiClient);
+
+
+/***/ }),
+
 /***/ "./apps/channel-messaging/common/decorators/current-user.decorator.ts":
 /*!****************************************************************************!*\
   !*** ./apps/channel-messaging/common/decorators/current-user.decorator.ts ***!
@@ -114,6 +242,8 @@ let AuthGuard = AuthGuard_1 = class AuthGuard {
                     email: session_check_response.data.user.email || "",
                     username: session_check_response.data.user.username || "",
                     role: "user",
+                    session_id: sessionId,
+                    fingerprint_hash: request.headers["x-fingerprint-hashed"],
                 };
                 request["sessionId"] = sessionId;
                 console.log("✅ [CHANNEL-MESSAGING AUTH GUARD] User attached to request:", request["user"]);
@@ -973,6 +1103,8 @@ let ChatGateway = class ChatGateway {
                 sender: {
                     dehive_id: savedMessage.senderId,
                     username: `User_${savedMessage.senderId.toString()}`,
+                    display_name: `User_${savedMessage.senderId.toString()}`,
+                    avatar_ipfs_hash: null,
                 },
                 content: savedMessage.content,
                 attachments: savedMessage.attachments || [],
@@ -1018,7 +1150,9 @@ let ChatGateway = class ChatGateway {
                 conversationId: updated.conversationId.toString(),
                 sender: {
                     dehive_id: updated.senderId,
-                    username: `User_${updated.senderId?.toString() || 'Unknown'}`,
+                    username: `User_${updated.senderId?.toString() || "Unknown"}`,
+                    display_name: `User_${updated.senderId?.toString() || "Unknown"}`,
+                    avatar_ipfs_hash: null,
                 },
                 content: updated.content,
                 attachments: updated.attachments || [],
@@ -1061,7 +1195,9 @@ let ChatGateway = class ChatGateway {
                 conversationId: updated.conversationId.toString(),
                 sender: {
                     dehive_id: updated.senderId,
-                    username: `User_${updated.senderId?.toString() || 'Unknown'}`,
+                    username: `User_${updated.senderId?.toString() || "Unknown"}`,
+                    display_name: `User_${updated.senderId?.toString() || "Unknown"}`,
+                    avatar_ipfs_hash: null,
                 },
                 content: updated.content,
                 attachments: updated.attachments || [],
@@ -1568,15 +1704,9 @@ let MessagingController = class MessagingController {
             data: savedMessage,
         };
     }
-    getMessages(conversationId, query) {
-        return this.messagingService
-            .getMessagesByConversationId(conversationId, query)
-            .then((messages) => ({
-            success: true,
-            statusCode: 200,
-            message: "Fetched conversation messages successfully",
-            data: messages,
-        }));
+    async getMessages(conversationId, query, user) {
+        const data = await this.messagingService.getMessagesByConversationId(conversationId, query, user.session_id, user.fingerprint_hash);
+        return { success: true, statusCode: 200, message: "OK", data };
     }
     async upload(file, body, userId) {
         const result = await this.messagingService.handleUpload(file, body, userId);
@@ -1661,9 +1791,10 @@ __decorate([
     openapi.ApiResponse({ status: 200 }),
     __param(0, (0, common_1.Param)("conversationId")),
     __param(1, (0, common_1.Query)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, get_messages_dto_1.GetMessagesDto]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:paramtypes", [String, get_messages_dto_1.GetMessagesDto, Object]),
+    __metadata("design:returntype", Promise)
 ], MessagingController.prototype, "getMessages", null);
 __decorate([
     (0, common_1.Post)("files/upload"),
@@ -1799,6 +1930,7 @@ const chat_gateway_1 = __webpack_require__(/*! ../gateway/chat.gateway */ "./app
 const channel_messaging_controller_1 = __webpack_require__(/*! ./channel-messaging.controller */ "./apps/channel-messaging/src/channel-messaging.controller.ts");
 const channel_messaging_service_1 = __webpack_require__(/*! ./channel-messaging.service */ "./apps/channel-messaging/src/channel-messaging.service.ts");
 const auth_service_client_1 = __webpack_require__(/*! ./auth-service.client */ "./apps/channel-messaging/src/auth-service.client.ts");
+const decode_api_client_1 = __webpack_require__(/*! ../clients/decode-api.client */ "./apps/channel-messaging/clients/decode-api.client.ts");
 const channel_message_schema_1 = __webpack_require__(/*! ../schemas/channel-message.schema */ "./apps/channel-messaging/schemas/channel-message.schema.ts");
 const upload_schema_1 = __webpack_require__(/*! ../schemas/upload.schema */ "./apps/channel-messaging/schemas/upload.schema.ts");
 const user_dehive_schema_1 = __webpack_require__(/*! ../../user-dehive-server/schemas/user-dehive.schema */ "./apps/user-dehive-server/schemas/user-dehive.schema.ts");
@@ -1850,7 +1982,13 @@ exports.MessagingModule = MessagingModule = __decorate([
             ]),
         ],
         controllers: [channel_messaging_controller_1.MessagingController],
-        providers: [channel_messaging_service_1.MessagingService, chat_gateway_1.ChatGateway, auth_guard_1.AuthGuard, auth_service_client_1.AuthServiceClient],
+        providers: [
+            channel_messaging_service_1.MessagingService,
+            chat_gateway_1.ChatGateway,
+            auth_guard_1.AuthGuard,
+            auth_service_client_1.AuthServiceClient,
+            decode_api_client_1.DecodeApiClient,
+        ],
     })
 ], MessagingModule);
 
@@ -1885,6 +2023,7 @@ const config_1 = __webpack_require__(/*! @nestjs/config */ "@nestjs/config");
 const fs = __webpack_require__(/*! fs */ "fs");
 const path = __webpack_require__(/*! path */ "path");
 const auth_service_client_1 = __webpack_require__(/*! ./auth-service.client */ "./apps/channel-messaging/src/auth-service.client.ts");
+const decode_api_client_1 = __webpack_require__(/*! ../clients/decode-api.client */ "./apps/channel-messaging/clients/decode-api.client.ts");
 const crypto_1 = __webpack_require__(/*! crypto */ "crypto");
 const channel_message_schema_1 = __webpack_require__(/*! ../schemas/channel-message.schema */ "./apps/channel-messaging/schemas/channel-message.schema.ts");
 const channel_conversation_schema_1 = __webpack_require__(/*! ../schemas/channel-conversation.schema */ "./apps/channel-messaging/schemas/channel-conversation.schema.ts");
@@ -1904,7 +2043,8 @@ let MessagingService = class MessagingService {
     userDehiveModel;
     configService;
     authClient;
-    constructor(channelMessageModel, channelConversationModel, uploadModel, userDehiveServerModel, userDehiveModel, configService, authClient) {
+    decodeClient;
+    constructor(channelMessageModel, channelConversationModel, uploadModel, userDehiveServerModel, userDehiveModel, configService, authClient, decodeClient) {
         this.channelMessageModel = channelMessageModel;
         this.channelConversationModel = channelConversationModel;
         this.uploadModel = uploadModel;
@@ -1912,6 +2052,7 @@ let MessagingService = class MessagingService {
         this.userDehiveModel = userDehiveModel;
         this.configService = configService;
         this.authClient = authClient;
+        this.decodeClient = decodeClient;
     }
     detectAttachmentType(mime) {
         if (mime.startsWith("image/"))
@@ -2170,7 +2311,7 @@ let MessagingService = class MessagingService {
         }, { upsert: true, new: true });
         return conversation;
     }
-    async getMessagesByConversationId(conversationId, getMessagesDto) {
+    async getMessagesByConversationId(conversationId, getMessagesDto, sessionId, fingerprintHash) {
         const { page = 0, limit = 10 } = getMessagesDto;
         const skip = page * limit;
         if (!mongoose_2.Types.ObjectId.isValid(conversationId)) {
@@ -2210,31 +2351,46 @@ let MessagingService = class MessagingService {
             return sender?._id?.toString();
         })
             .filter((id) => Boolean(id));
-        const profiles = await this.authClient.batchGetProfiles(userIds);
+        console.log('[CHANNEL-MESSAGING] Debug getMessagesByConversationId:', {
+            userIds,
+            sessionId,
+            fingerprintHash,
+            hasSessionId: !!sessionId,
+            hasFingerprintHash: !!fingerprintHash
+        });
+        const profiles = await this.decodeClient.batchGetProfiles(userIds, sessionId, fingerprintHash);
+        console.log('[CHANNEL-MESSAGING] Profiles received:', {
+            requestedUserIds: userIds,
+            receivedProfiles: Object.keys(profiles),
+            profiles: profiles
+        });
+        Object.keys(profiles).forEach(userId => {
+            const profile = profiles[userId];
+            console.log(`[CHANNEL-MESSAGING] Profile for ${userId}:`, {
+                username: profile?.username,
+                display_name: profile?.display_name,
+                avatar: profile?.avatar,
+                fullProfile: profile
+            });
+        });
         const items = messages.map((msg) => {
             const sender = msg.senderId;
             const userId = sender?._id?.toString() || "";
-            const profile = profiles[userId] || {
-                username: "Unknown User",
-                display_name: "Unknown User",
-                avatar: null,
-            };
+            const profile = profiles[userId];
             return {
                 _id: msg._id,
-                content: msg.content,
                 conversationId: msg.conversationId,
-                channelId: msg.channelId,
-                senderId: sender?._id,
                 sender: {
-                    user_id: userId,
-                    user_dehive_id: sender?._id?.toString() || "",
-                    username: profile.username,
-                    display_name: profile.display_name || profile.username,
-                    avatar: profile.avatar,
+                    dehive_id: sender?._id?.toString() || "",
+                    username: profile?.username || `User_${userId}`,
+                    display_name: profile?.display_name || `User_${userId}`,
+                    avatar_ipfs_hash: profile?.avatar_ipfs_hash || profile?.avatar || null,
                 },
-                attachments: msg.attachments,
-                isEdited: msg.isEdited,
-                editedAt: msg.editedAt,
+                content: msg.content,
+                attachments: msg.attachments || [],
+                isEdited: msg.isEdited || false,
+                editedAt: msg.editedAt || null,
+                isDeleted: msg.isDeleted || false,
                 replyTo: msg.replyTo || null,
                 createdAt: msg.createdAt,
                 updatedAt: msg.updatedAt,
@@ -2355,6 +2511,8 @@ let MessagingService = class MessagingService {
         return {
             items: items.map((u) => ({
                 _id: u._id,
+                ownerId: u.ownerId,
+                serverId: u.serverId,
                 type: u.type,
                 url: u.url,
                 name: u.name,
@@ -2389,7 +2547,8 @@ exports.MessagingService = MessagingService = __decorate([
         mongoose_2.Model,
         mongoose_2.Model,
         config_1.ConfigService,
-        auth_service_client_1.AuthServiceClient])
+        auth_service_client_1.AuthServiceClient,
+        decode_api_client_1.DecodeApiClient])
 ], MessagingService);
 
 

@@ -28,6 +28,7 @@ import { CreateMessageDto } from "../dto/create-message.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { UseGuards } from "@nestjs/common";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 
 @ApiTags("Channel Messages")
 @Controller("messages")
@@ -84,18 +85,18 @@ export class MessagingController {
     description: "No messages found for the channel.",
   })
   @UsePipes(new ValidationPipe({ transform: true }))
-  getMessages(
+  async getMessages(
     @Param("conversationId") conversationId: string,
     @Query() query: GetMessagesDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.messagingService
-      .getMessagesByConversationId(conversationId, query)
-      .then((messages) => ({
-        success: true,
-        statusCode: 200,
-        message: "Fetched conversation messages successfully",
-        data: messages,
-      }));
+    const data = await this.messagingService.getMessagesByConversationId(
+      conversationId,
+      query,
+      user.session_id,
+      user.fingerprint_hash,
+    );
+    return { success: true, statusCode: 200, message: "OK", data };
   }
 
   @Post("files/upload")

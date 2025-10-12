@@ -7,6 +7,7 @@ import { ChatGateway } from "../gateway/chat.gateway";
 import { MessagingController } from "./channel-messaging.controller";
 import { MessagingService } from "./channel-messaging.service";
 import { AuthServiceClient } from "./auth-service.client";
+import { DecodeApiClient } from "../clients/decode-api.client";
 import {
   ChannelMessage,
   ChannelMessageSchema,
@@ -69,6 +70,12 @@ import { AuthGuard } from "../common/guards/auth.guard";
     ]),
   ],
   controllers: [MessagingController],
-  providers: [MessagingService, ChatGateway, AuthGuard, AuthServiceClient],
+  providers: [
+    MessagingService,
+    ChatGateway,
+    AuthGuard,
+    AuthServiceClient,
+    DecodeApiClient,
+  ],
 })
 export class MessagingModule {}

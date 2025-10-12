@@ -92,6 +92,10 @@ export class AuthGuard implements CanActivate {
           email: session_check_response.data.user.email || "",
           username: session_check_response.data.user.username || "",
           role: "user" as const,
+          session_id: sessionId,
+          fingerprint_hash: request.headers["x-fingerprint-hashed"] as
+            | string
+            | undefined,
         };
         request["sessionId"] = sessionId;
         console.log(
