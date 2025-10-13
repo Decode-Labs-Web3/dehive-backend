@@ -25,7 +25,9 @@ jobs:
             git reset --hard origin/main
 
             echo "🧹 Cleaning old files..."
-            rm -rf node_modules package-lock.json
+            rm -rf node_modules
+            rm -rf dist
+            rm package-lock.json
 
             echo "📦 Installing dependencies..."
             npm ci
