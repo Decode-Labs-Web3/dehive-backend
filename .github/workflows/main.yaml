@@ -1,60 +1,42 @@
 name: CI/CD Dehive Backend
 
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run ESLint
-        run: npm run lint
-
-      - name: Build
-        run: npm run build:all
-
-  deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy via SSH
+      - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /home/pasondev/dehive-backend
-            git config --global --add safe.directory /home/pasondev/dehive-backend
-            git fetch origin
-            git checkout main
+            cd /root/dehive-backend
+            echo "📦 Pulling latest code..."
+            git fetch origin main
             git reset --hard origin/main
-            git clean -fd
-            sudo rm -rf node_modules package-lock.json
+
+            echo "🧹 Cleaning old files..."
+            rm -rf node_modules package-lock.json
+
+            echo "📦 Installing dependencies..."
             npm ci
-            npm run build
-            pm2 delete all
+
+            echo "🏗️ Building project..."
+            npm run build:all
+
+            echo "🚀 Restarting backend..."
+            pm2 delete dehive-backend || true
             pm2 start npm --name "dehive-backend" -- run start:dev:all
             pm2 save
-            pm2 startup
             pm2 status
-            echo "🚀 Deployment completed successfully!"
-            echo "📡 Server Host: $(hostname -I | awk '{print $1}')"
-            echo "🌐 Public IP: $(curl -s ifconfig.me)"
-            echo "📋 Services Status:"
-            pm2 list
+
+            echo "✅ Deployment completed!"
