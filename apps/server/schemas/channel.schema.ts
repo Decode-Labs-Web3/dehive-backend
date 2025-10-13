@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document, Types } from "mongoose";
-import { ChannelType } from "../dto/create-channel.dto";
+import { ChannelType } from "../enum/enum";
 
 @Schema({ collection: "channel", timestamps: true })
 export class Channel {

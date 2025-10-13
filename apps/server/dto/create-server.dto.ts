@@ -1,5 +1,13 @@
-import { IsString, IsNotEmpty, MaxLength, IsOptional } from "class-validator";
+import {
+  IsString,
+  IsNotEmpty,
+  MaxLength,
+  IsOptional,
+  IsArray,
+  IsEnum,
+} from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
+import { ServerTag } from "../enum/enum";
 
 export class CreateServerDto {
   @ApiProperty({
@@ -20,4 +28,17 @@ export class CreateServerDto {
   @IsOptional()
   @MaxLength(500)
   readonly description?: string;
+
+  @ApiProperty({
+    description:
+      "Tags for the server (optional). If not provided, will be empty array.",
+    example: ["gaming", "friends"],
+    required: false,
+    enum: ServerTag,
+    isArray: true,
+  })
+  @IsArray()
+  @IsOptional()
+  @IsEnum(ServerTag, { each: true })
+  readonly tags?: ServerTag[];
 }

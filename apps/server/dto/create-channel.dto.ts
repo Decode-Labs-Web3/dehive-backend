@@ -6,11 +6,7 @@ import {
   IsOptional,
 } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
-
-export enum ChannelType {
-  TEXT = "TEXT",
-  VOICE = "VOICE",
-}
+import { ChannelType } from "../enum/enum";
 
 export class CreateChannelDto {
   @ApiProperty({

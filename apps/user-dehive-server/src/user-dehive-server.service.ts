@@ -26,6 +26,9 @@ import { GenerateInviteDto } from "../dto/generate-invite.dto";
 import { KickBanDto } from "../dto/kick-ban.dto";
 import { UnbanDto } from "../dto/unban.dto";
 import { UpdateNotificationDto } from "../dto/update-notification.dto";
+import { UpdateBioDto } from "../dto/update-bio.dto";
+import { UpdateAvatarDto } from "../dto/update-avatar.dto";
+import { UpdateDisplayNameDto } from "../dto/update-display-name.dto";
 import { ServerRole } from "../enum/enum";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
@@ -665,7 +668,7 @@ export class UserDehiveServerService {
       avatar: decodeData.avatar_ipfs_hash,
       status: dehiveData.status,
       server_count: dehiveData.server_count,
-      bio: dehiveData.bio,
+      bio: decodeData.bio,
       banner_color: dehiveData.banner_color,
       is_banned: dehiveData.is_banned,
     };
@@ -749,5 +752,101 @@ export class UserDehiveServerService {
 
   private async invalidateMemberListCache(serverId: string): Promise<void> {
     await this.redis.del(`server_members:${serverId}`);
+  }
+
+  async updateBio(
+    dto: UpdateBioDto,
+    userId: string,
+    sessionId: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const accessToken =
+        await this.decodeApiClient.getAccessTokenFromSession(sessionId);
+      if (!accessToken) {
+        throw new NotFoundException("Access token not found.");
+      }
+
+      await this.decodeApiClient.updateBio(dto, accessToken, fingerprintHash);
+
+      // Get current user profile after update
+      const currentUserProfile =
+        await this.decodeApiClient.getCurrentUserProfile(
+          accessToken,
+          fingerprintHash,
+        );
+
+      return currentUserProfile;
+    } catch (error) {
+      throw new BadRequestException("Failed to update bio: " + error.message);
+    }
+  }
+
+  async updateAvatar(
+    dto: UpdateAvatarDto,
+    userId: string,
+    sessionId: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const accessToken =
+        await this.decodeApiClient.getAccessTokenFromSession(sessionId);
+      if (!accessToken) {
+        throw new NotFoundException("Access token not found.");
+      }
+
+      await this.decodeApiClient.updateAvatar(
+        dto,
+        accessToken,
+        fingerprintHash,
+      );
+
+      // Get current user profile after update
+      const currentUserProfile =
+        await this.decodeApiClient.getCurrentUserProfile(
+          accessToken,
+          fingerprintHash,
+        );
+
+      return currentUserProfile;
+    } catch (error) {
+      throw new BadRequestException(
+        "Failed to update avatar: " + error.message,
+      );
+    }
+  }
+
+  async updateDisplayName(
+    dto: UpdateDisplayNameDto,
+    userId: string,
+    sessionId: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const accessToken =
+        await this.decodeApiClient.getAccessTokenFromSession(sessionId);
+      if (!accessToken) {
+        throw new NotFoundException("Access token not found.");
+      }
+
+      await this.decodeApiClient.updateDisplayName(
+        dto,
+        accessToken,
+        fingerprintHash,
+      );
+
+      // Get current user profile after update
+      const currentUserProfile =
+        await this.decodeApiClient.getCurrentUserProfile(
+          accessToken,
+          fingerprintHash,
+        );
+
+      return currentUserProfile;
+    } catch (error) {
+      throw new BadRequestException(
+        "Failed to update display name: " + error.message,
+      );
+    }
   }
 }

@@ -69,7 +69,7 @@ export class ServerService {
         owner_id: ownerBaseId, // Use ownerBaseId directly as string (same as Auth service _id)
         member_count: 1,
         is_private: false,
-        tags: [],
+        tags: createServerDto.tags || [], // Use provided tags or empty array
       };
 
       const createdServers = await this.serverModel.create([newServerData], {
@@ -613,5 +613,45 @@ export class ServerService {
     } finally {
       void session.endSession();
     }
+  }
+
+  async updateServerTags(
+    serverId: string,
+    tags: string[],
+    actorId: string,
+  ): Promise<Server> {
+    const serverObjectId = new Types.ObjectId(serverId);
+
+    // Check if server exists
+    const server = await this.serverModel.findById(serverObjectId);
+    if (!server) {
+      throw new NotFoundException("Server not found.");
+    }
+
+    // Check if user is owner or moderator
+    const userServerRole = await this.userDehiveServerModel.findOne({
+      server_id: serverObjectId,
+      user_dehive_id: actorId,
+      role: { $in: [ServerRole.OWNER, ServerRole.MODERATOR] },
+    });
+
+    if (!userServerRole) {
+      throw new ForbiddenException(
+        "You do not have permission to update server tags.",
+      );
+    }
+
+    // Update server tags
+    const updatedServer = await this.serverModel.findByIdAndUpdate(
+      serverObjectId,
+      { tags },
+      { new: true },
+    );
+
+    if (!updatedServer) {
+      throw new NotFoundException("Server not found after update.");
+    }
+
+    return updatedServer;
   }
 }

@@ -1,18 +1,10 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document, ObjectId, HydratedDocument } from "mongoose";
-import { enumUserRole } from "../enum/enum";
 @Schema({
   collection: "user_dehive",
   timestamps: true,
 })
 export class UserDehive extends Document {
-  @Prop({
-    type: String,
-    enum: enumUserRole,
-    default: "USER",
-  })
-  dehive_role: string;
-
   @Prop({ type: String })
   role_subscription: ObjectId;
 
@@ -28,10 +20,6 @@ export class UserDehive extends Document {
 
   @Prop({ type: Date })
   last_login: Date;
-
-  // Profile fields
-  @Prop({ type: String, default: "" })
-  bio: string;
 
   @Prop({ type: String })
   banner_color: string;

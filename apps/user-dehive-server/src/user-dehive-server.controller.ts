@@ -5,8 +5,10 @@ import {
   Get,
   Param,
   Patch,
+  Put,
   Delete,
   UseGuards,
+  Headers,
 } from "@nestjs/common";
 import { UserDehiveServerService } from "./user-dehive-server.service";
 import { AssignRoleDto } from "../dto/assign-role.dto";
@@ -18,6 +20,9 @@ import { LeaveServerDto } from "../dto/leave-server.dto";
 import { UnbanDto } from "../dto/unban.dto";
 import { UpdateNotificationDto } from "../dto/update-notification.dto";
 import { GetServerMembersDto } from "../dto/get-server-members.dto";
+import { UpdateBioDto } from "../dto/update-bio.dto";
+import { UpdateAvatarDto } from "../dto/update-avatar.dto";
+import { UpdateDisplayNameDto } from "../dto/update-display-name.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
@@ -308,5 +313,110 @@ export class UserDehiveServerController {
     @CurrentUser() currentUser: AuthenticatedUser,
   ) {
     return this.service.getEnrichedUserProfile(targetUserId, currentUser);
+  }
+
+  @Put("profile/bio")
+  @ApiOperation({
+    summary: "Update user bio",
+    description: "Updates user bio by calling external API.",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Bio updated successfully.",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Bad Request (e.g., bio too long).",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "User profile not found.",
+  })
+  updateBio(
+    @Body() dto: UpdateBioDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Headers("x-fingerprint-hashed") fingerprintHash: string,
+  ) {
+    return this.service.updateBio(
+      dto,
+      user._id,
+      user.session_id,
+      fingerprintHash,
+    );
+  }
+
+  @Put("profile/avatar")
+  @ApiOperation({
+    summary: "Update user avatar",
+    description: "Updates user avatar by calling external API.",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Avatar updated successfully.",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Bad Request (e.g., invalid IPFS hash).",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "User profile not found.",
+  })
+  updateAvatar(
+    @Body() dto: UpdateAvatarDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Headers("x-fingerprint-hashed") fingerprintHash: string,
+  ) {
+    return this.service.updateAvatar(
+      dto,
+      user._id,
+      user.session_id,
+      fingerprintHash,
+    );
+  }
+
+  @Put("profile/display-name")
+  @ApiOperation({
+    summary: "Update user display name",
+    description: "Updates user display name by calling external API.",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Display name updated successfully.",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Bad Request (e.g., display name too long).",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "User profile not found.",
+  })
+  updateDisplayName(
+    @Body() dto: UpdateDisplayNameDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Headers("x-fingerprint-hashed") fingerprintHash: string,
+  ) {
+    return this.service.updateDisplayName(
+      dto,
+      user._id,
+      user.session_id,
+      fingerprintHash,
+    );
   }
 }

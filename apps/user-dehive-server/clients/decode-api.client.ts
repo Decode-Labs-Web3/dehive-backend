@@ -61,9 +61,105 @@ export class DecodeApiClient {
     }
   }
 
-  private async getAccessTokenFromSession(
-    sessionId: string,
-  ): Promise<string | null> {
+  async updateBio(
+    dto: { bio: string },
+    accessToken: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.put<{ data: UserProfile }>(
+          `${this.decodeApiUrl}/users/profile/bio`,
+          dto,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "x-fingerprint-hashed": fingerprintHash,
+            },
+          },
+        ),
+      );
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Failed to update bio:`, error.stack);
+      throw error;
+    }
+  }
+
+  async updateAvatar(
+    dto: { avatar_ipfs_hash: string },
+    accessToken: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.put<{ data: UserProfile }>(
+          `${this.decodeApiUrl}/users/profile/avatar`,
+          dto,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "x-fingerprint-hashed": fingerprintHash,
+            },
+          },
+        ),
+      );
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Failed to update avatar:`, error.stack);
+      throw error;
+    }
+  }
+
+  async updateDisplayName(
+    dto: { display_name: string },
+    accessToken: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.put<{ data: UserProfile }>(
+          `${this.decodeApiUrl}/users/profile/display-name`,
+          dto,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "x-fingerprint-hashed": fingerprintHash,
+            },
+          },
+        ),
+      );
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Failed to update display name:`, error.stack);
+      throw error;
+    }
+  }
+
+  async getCurrentUserProfile(
+    accessToken: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<{ data: UserProfile }>(
+          `${this.decodeApiUrl}/users/profile/me`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "x-fingerprint-hashed": fingerprintHash,
+            },
+          },
+        ),
+      );
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Failed to get current user profile:`, error.stack);
+      throw error;
+    }
+  }
+
+  async getAccessTokenFromSession(sessionId: string): Promise<string | null> {
     const sessionKey = `session:${sessionId}`;
     const sessionRaw = await this.redis.get(sessionKey);
     if (!sessionRaw) return null;

@@ -11,6 +11,7 @@ import {
 import { ServerService } from "./server.service";
 import { CreateServerDto } from "../dto/create-server.dto";
 import { UpdateServerDto } from "../dto/update-server.dto";
+import { UpdateServerTagsDto } from "../dto/update-server-tags.dto";
 import { CreateCategoryDto } from "../dto/create-category.dto";
 import { CreateChannelDto } from "../dto/create-channel.dto";
 import { UpdateCategoryDto } from "../dto/update-category.dto";
@@ -96,6 +97,30 @@ export class ServerController {
     @CurrentUser("userId") actorId: string,
   ) {
     return this.serverService.updateServer(id, updateServerDto, actorId);
+  }
+
+  @Patch(":id/tags")
+  @ApiOperation({ summary: "Update server tags" })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiParam({ name: "id", description: "The ID of the server to update tags" })
+  @ApiResponse({
+    status: 200,
+    description: "Server tags updated successfully.",
+  })
+  updateServerTags(
+    @Param("id") id: string,
+    @Body() updateServerTagsDto: UpdateServerTagsDto,
+    @CurrentUser("userId") actorId: string,
+  ) {
+    return this.serverService.updateServerTags(
+      id,
+      updateServerTagsDto.tags,
+      actorId,
+    );
   }
 
   @Delete(":id")
