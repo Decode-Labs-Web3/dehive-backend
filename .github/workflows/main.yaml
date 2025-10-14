@@ -5,14 +5,35 @@ on:
     branches: [main]
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint --if-present
+
+      - name: Build
+        run: npm run build:all
+
   deploy:
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Deploy to server via SSH
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.HOST }}
@@ -21,28 +42,20 @@ jobs:
           port: 22
           timeout: 30s
           debug: true
-          use_insecure_cipher: false
           script: |
             cd /root/dehive-backend
-            echo "📦 Pulling latest code..."
             git fetch origin main
             git reset --hard origin/main
 
-            echo "🧹 Cleaning old files..."
             rm -rf node_modules
             rm -rf dist
             rm package-lock.json
 
-            echo "📦 Installing dependencies..."
             npm ci
 
-            echo "🏗️ Building project..."
             npm run build:all
 
-            echo "🚀 Restarting backend..."
             pm2 delete dehive-backend || true
             pm2 start npm --name "dehive-backend" -- run start:dev:all
             pm2 save
             pm2 status
-
-            echo "✅ Deployment completed!"
