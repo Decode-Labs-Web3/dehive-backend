@@ -78,34 +78,27 @@ export class AuthGuard implements CanActivate {
       );
 
       const response = await firstValueFrom(
-        this.httpService.get<{
-          success: boolean;
-          data: SessionCacheDoc;
-          message?: string;
-        }>(`${this.authServiceUrl}/auth/session/check`, {
-          headers: {
-            "x-session-id": sessionId,
-            "Content-Type": "application/json",
+        this.httpService.get<{ data: SessionCacheDoc }>(
+          `${this.authServiceUrl}/auth/sso/validate`,
+          {
+            headers: { "x-session-id": sessionId },
           },
-          timeout: 5000, // 5 second timeout
-        }),
+        ),
       );
 
-      if (!response.data.success || !response.data.data) {
-        throw new UnauthorizedException({
-          message: response.data.message || "Invalid session",
-          error: "INVALID_SESSION",
-        });
+      const sessionData = response.data.data;
+      if (!sessionData || !sessionData.access_token) {
+        throw new UnauthorizedException(
+          "Invalid session data from auth service",
+        );
       }
 
       // Attach user to request for use in controllers
-      const session_check_response = response.data;
-      if (session_check_response.success && session_check_response.data) {
+      if (sessionData) {
         // Use session data directly - no need to call /auth/profile
         console.log("🔐 [SERVER AUTH GUARD] Using session data directly");
 
         // Decode JWT token to get user_id
-        const sessionData = session_check_response.data;
         const sessionToken = sessionData.session_token;
 
         if (sessionToken) {

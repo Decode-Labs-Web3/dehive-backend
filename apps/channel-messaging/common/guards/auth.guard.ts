@@ -75,34 +75,28 @@ export class AuthGuard implements CanActivate {
     try {
       // Call auth service to validate session and get user data
       const response = await firstValueFrom(
-        this.httpService.get<{
-          success: boolean;
-          data: SessionCacheDoc;
-          message?: string;
-        }>(`${this.authServiceUrl}/auth/session/check`, {
-          headers: {
-            "x-session-id": sessionId,
-            "Content-Type": "application/json",
+        this.httpService.get<{ data: SessionCacheDoc }>(
+          `${this.authServiceUrl}/auth/sso/validate`,
+          {
+            headers: { "x-session-id": sessionId },
           },
-          timeout: 5000, // 5 second timeout
-        }),
+        ),
       );
 
-      if (!response.data.success || !response.data.data) {
-        throw new UnauthorizedException({
-          message: response.data.message || "Invalid session",
-          error: "INVALID_SESSION",
-        });
+      const sessionData = response.data.data;
+      if (!sessionData || !sessionData.access_token) {
+        throw new UnauthorizedException(
+          "Invalid session data from auth service",
+        );
       }
 
       // Attach user to request for use in controllers
-      const session_check_response = response.data;
-      if (session_check_response.success && session_check_response.data) {
+      if (sessionData) {
         // Use _id from Auth service directly as userId for Dehive
         request["user"] = {
-          userId: session_check_response.data.user._id,
-          email: session_check_response.data.user.email || "",
-          username: session_check_response.data.user.username || "",
+          userId: sessionData.user._id,
+          email: sessionData.user.email || "",
+          username: sessionData.user.username || "",
           role: "user" as const,
           session_id: sessionId,
           fingerprint_hash: request.headers["x-fingerprint-hashed"] as
