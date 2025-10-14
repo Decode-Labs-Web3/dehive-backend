@@ -672,11 +672,28 @@ export class UserDehiveServerService {
       username: decodeData.username,
       display_name: decodeData.display_name,
       avatar: decodeData.avatar_ipfs_hash,
+      avatar_ipfs_hash: decodeData.avatar_ipfs_hash,
       status: dehiveData.status,
       server_count: dehiveData.server_count,
       bio: decodeData.bio,
-      banner_color: dehiveData.banner_color,
+      banner_color: decodeData.banner_color || dehiveData.banner_color,
       is_banned: dehiveData.is_banned,
+      last_login: decodeData.last_login,
+      primary_wallet: decodeData.primary_wallet,
+      following_number: decodeData.following_number,
+      followers_number: decodeData.followers_number,
+      is_following: decodeData.is_following,
+      is_follower: decodeData.is_follower,
+      is_blocked: decodeData.is_blocked,
+      is_blocked_by: decodeData.is_blocked_by,
+      mutual_followers_number: decodeData.mutual_followers_number,
+      mutual_followers_list: decodeData.mutual_followers_list,
+      is_active: decodeData.is_active,
+      last_account_deactivation: decodeData.last_account_deactivation,
+      dehive_role: decodeData.dehive_role,
+      role_subscription: decodeData.role_subscription,
+      wallets: decodeData.wallets || [],
+      __v: decodeData.__v || 0,
     };
   }
 
@@ -722,13 +739,15 @@ export class UserDehiveServerService {
   async getEnrichedUserProfile(
     targetUserId: string,
     currentUser: AuthenticatedUser,
-  ): Promise<unknown> {
+  ): Promise<{
+    statusCode: number;
+    success: boolean;
+    message: string;
+    data: unknown;
+  }> {
     const targetUserProfile = await this._getEnrichedUser(
       targetUserId,
       currentUser.session_id,
-    );
-    console.log(
-      `[SERVICE] getEnrichedUserProfile called with targetUserId: ${targetUserId}`,
     );
 
     const [targetServers, viewerServers] = await Promise.all([
@@ -749,10 +768,17 @@ export class UserDehiveServerService {
       .filter((s) => viewerServerIds.has(s.server_id.toString()))
       .map((s) => s.server_id);
 
-    return {
+    const enrichedProfile = {
       ...(targetUserProfile as Record<string, unknown>),
       mutual_servers_count: mutualServers.length,
       mutual_servers: mutualServers,
+    };
+
+    return {
+      statusCode: 200,
+      success: true,
+      message: "Operation successful",
+      data: enrichedProfile,
     };
   }
 
@@ -860,7 +886,12 @@ export class UserDehiveServerService {
     serverId: string,
     requesterId: string,
     sessionId: string,
-  ): Promise<BanListResponse> {
+  ): Promise<{
+    statusCode: number;
+    success: boolean;
+    message: string;
+    data: BanListResponse;
+  }> {
     try {
       const serverObjectId = new Types.ObjectId(serverId);
 
@@ -913,7 +944,11 @@ export class UserDehiveServerService {
           };
 
           bannedUsersWithProfiles.push(bannedUser);
-        } catch {
+        } catch (error) {
+          console.error(
+            `Error fetching user profile for ${banEntry.user_dehive_id}:`,
+            error,
+          );
           const bannedUser: BannedUser = {
             _id: banEntry._id.toString(),
             server_id: banEntry.server_id.toString(),
@@ -931,11 +966,18 @@ export class UserDehiveServerService {
         }
       }
 
-      return {
-        server_id: serverId,
-        total_banned: bannedUsersWithProfiles.length,
-        banned_users: bannedUsersWithProfiles,
+      const result = {
+        statusCode: 200,
+        success: true,
+        message: "Operation successful",
+        data: {
+          server_id: serverId,
+          total_banned: bannedUsersWithProfiles.length,
+          banned_users: bannedUsersWithProfiles,
+        },
       };
+
+      return result;
     } catch (error) {
       if (
         error instanceof NotFoundException ||

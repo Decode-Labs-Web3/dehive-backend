@@ -473,7 +473,7 @@ export class UserDehiveServerController {
     status: 404,
     description: "Server not found.",
   })
-  getBanList(
+  async getBanList(
     @Param("serverId") serverId: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {

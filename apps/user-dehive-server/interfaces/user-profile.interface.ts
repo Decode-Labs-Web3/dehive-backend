@@ -21,4 +21,6 @@ export interface UserProfile {
   last_account_deactivation?: Date;
   dehive_role?: string;
   role_subscription?: string;
+  wallets?: unknown[];
+  __v?: number;
 }

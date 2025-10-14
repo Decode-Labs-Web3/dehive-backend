@@ -32,7 +32,7 @@ export class TransformInterceptor<T>
 
         const message = data?.message || "Operation successful";
 
-        const responseData = data?.message ? null : data;
+        const responseData = data?.data || data;
 
         return {
           statusCode,
