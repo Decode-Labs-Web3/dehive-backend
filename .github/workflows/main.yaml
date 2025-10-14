@@ -51,7 +51,7 @@ jobs:
             rm -rf dist
             rm package-lock.json
 
-            npm ci
+            npm install
 
             npm run build:all
 
