@@ -35,6 +35,10 @@ import { Redis } from "ioredis";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import { UserProfile } from "../interfaces/user-profile.interface";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import {
+  BannedUser,
+  BanListResponse,
+} from "../interfaces/banned-user.interface";
 
 @Injectable()
 export class UserDehiveServerService {
@@ -52,7 +56,6 @@ export class UserDehiveServerService {
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
-  // Helper method to find UserDehive profile (without auto-create)
   private async findUserDehiveProfile(userId: string) {
     return await this.userDehiveModel.findById(userId).lean();
   }
@@ -63,11 +66,8 @@ export class UserDehiveServerService {
   ): Promise<{ message: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // 1. Ensure UserDehive profile exists (auto-create if needed)
+    const userDehiveId = userId;
 
-    const userDehiveId = userId; // user_dehive_id = _id from AuthGuard
-
-    // Check if user is banned from this specific server
     const userDehiveProfile = await this.userDehiveModel
       .findById(userId)
       .lean();
@@ -113,7 +113,6 @@ export class UserDehiveServerService {
       );
       await session.commitTransaction();
 
-      // Invalidate member list cache
       await this.invalidateMemberListCache(dto.server_id);
 
       return { message: "Successfully joined server." };
@@ -847,6 +846,97 @@ export class UserDehiveServerService {
       throw new BadRequestException(
         "Failed to update display name: " + error.message,
       );
+    }
+  }
+
+  async getBanList(
+    serverId: string,
+    requesterId: string,
+    sessionId: string,
+  ): Promise<BanListResponse> {
+    try {
+      const serverObjectId = new Types.ObjectId(serverId);
+
+      // Check if server exists
+      const server = await this.serverModel.findById(serverObjectId);
+      if (!server) {
+        throw new NotFoundException("Server not found.");
+      }
+
+      // Check if requester is the owner of the server
+      const requesterRole = await this.userDehiveServerModel.findOne({
+        server_id: serverObjectId,
+        user_dehive_id: requesterId,
+        role: ServerRole.OWNER,
+      });
+
+      if (!requesterRole) {
+        throw new ForbiddenException(
+          "Only the server owner can view the ban list.",
+        );
+      }
+
+      const bannedUsers = (await this.serverBanModel
+        .find({ server_id: serverObjectId })
+        .sort({ createdAt: -1 })
+        .lean()) as unknown as Array<
+        ServerBan & { createdAt: Date; updatedAt: Date; _id: string }
+      >;
+
+      const bannedUsersWithProfiles: BannedUser[] = [];
+
+      for (const banEntry of bannedUsers) {
+        try {
+          const userProfile = await this.decodeApiClient.getUserById(
+            banEntry.user_dehive_id.toString(),
+            sessionId,
+          );
+
+          const bannedUser: BannedUser = {
+            _id: banEntry._id.toString(),
+            server_id: banEntry.server_id.toString(),
+            user_dehive_id: banEntry.user_dehive_id.toString(),
+            banned_by: banEntry.banned_by.toString(),
+            reason: banEntry.reason,
+            expires_at: banEntry.expires_at,
+            createdAt: banEntry.createdAt,
+            updatedAt: banEntry.updatedAt,
+            is_banned: true,
+            user_profile: userProfile || undefined,
+          };
+
+          bannedUsersWithProfiles.push(bannedUser);
+        } catch {
+          const bannedUser: BannedUser = {
+            _id: banEntry._id.toString(),
+            server_id: banEntry.server_id.toString(),
+            user_dehive_id: banEntry.user_dehive_id.toString(),
+            banned_by: banEntry.banned_by.toString(),
+            reason: banEntry.reason,
+            expires_at: banEntry.expires_at,
+            createdAt: banEntry.createdAt,
+            updatedAt: banEntry.updatedAt,
+            is_banned: true,
+            user_profile: undefined,
+          };
+
+          bannedUsersWithProfiles.push(bannedUser);
+        }
+      }
+
+      return {
+        server_id: serverId,
+        total_banned: bannedUsersWithProfiles.length,
+        banned_users: bannedUsersWithProfiles,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException("Failed to get ban list: " + error.message);
     }
   }
 }

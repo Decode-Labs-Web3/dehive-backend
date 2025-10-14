@@ -419,4 +419,64 @@ export class UserDehiveServerController {
       fingerprintHash,
     );
   }
+
+  @Get("servers/:serverId/ban-list")
+  @ApiOperation({
+    summary: "Get server ban list",
+    description:
+      "Retrieves the list of banned users for a specific server. Only the server owner can access this list.",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiParam({
+    name: "serverId",
+    description: "The ID of the server to get ban list for",
+    example: "68c5adb6ec465897d540c58",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Ban list retrieved successfully.",
+    schema: {
+      type: "object",
+      properties: {
+        server_id: { type: "string" },
+        total_banned: { type: "number" },
+        banned_users: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              _id: { type: "string" },
+              server_id: { type: "string" },
+              user_dehive_id: { type: "string" },
+              banned_by: { type: "string" },
+              reason: { type: "string" },
+              expires_at: { type: "string", format: "date-time" },
+              createdAt: { type: "string", format: "date-time" },
+              updatedAt: { type: "string", format: "date-time" },
+              is_banned: { type: "boolean", enum: [true] },
+              user_profile: { type: "object" },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: "Forbidden - insufficient permissions.",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Server not found.",
+  })
+  getBanList(
+    @Param("serverId") serverId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.getBanList(serverId, user._id, user.session_id);
+  }
 }
