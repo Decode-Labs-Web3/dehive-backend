@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "build:all": "nest build",
+    "build:all": "nest build auth && nest build user-dehive-server && nest build server && nest build channel-messaging && nest build direct-messaging",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
