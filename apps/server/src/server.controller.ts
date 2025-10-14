@@ -41,7 +41,7 @@ export class ServerController {
   @ApiResponse({ status: 201, description: "Server created successfully." })
   createServer(
     @Body() createServerDto: CreateServerDto,
-    @CurrentUser("userId") ownerId: string,
+    @CurrentUser("_id") ownerId: string,
   ) {
     console.log("🎯 [CONTROLLER] createServer called");
     console.log("🎯 [CONTROLLER] ownerId:", ownerId);
@@ -66,7 +66,7 @@ export class ServerController {
     status: 200,
     description: "Returns a list of joined servers.",
   })
-  findAllServers(@CurrentUser("userId") actorId: string) {
+  findAllServers(@CurrentUser("_id") actorId: string) {
     return this.serverService.findAllServers(actorId);
   }
 
@@ -94,7 +94,7 @@ export class ServerController {
   updateServer(
     @Param("id") id: string,
     @Body() updateServerDto: UpdateServerDto,
-    @CurrentUser("userId") actorId: string,
+    @CurrentUser("_id") actorId: string,
   ) {
     return this.serverService.updateServer(id, updateServerDto, actorId);
   }
@@ -114,7 +114,7 @@ export class ServerController {
   updateServerTags(
     @Param("id") id: string,
     @Body() updateServerTagsDto: UpdateServerTagsDto,
-    @CurrentUser("userId") actorId: string,
+    @CurrentUser("_id") actorId: string,
   ) {
     return this.serverService.updateServerTags(
       id,
@@ -131,10 +131,7 @@ export class ServerController {
     required: true,
   })
   @ApiParam({ name: "id", description: "The ID of the server to delete" })
-  removeServer(
-    @Param("id") id: string,
-    @CurrentUser("userId") actorId: string,
-  ) {
+  removeServer(@Param("id") id: string, @CurrentUser("_id") actorId: string) {
     return this.serverService.removeServer(id, actorId);
   }
 
@@ -149,7 +146,7 @@ export class ServerController {
   createCategory(
     @Param("serverId") serverId: string,
     @Body() createCategoryDto: CreateCategoryDto,
-    @CurrentUser("userId") actorId: string,
+    @CurrentUser("_id") actorId: string,
   ) {
     return this.serverService.createCategory(
       serverId,
@@ -184,7 +181,7 @@ export class ServerController {
   updateCategory(
     @Param("categoryId") categoryId: string,
     @Body() updateCategoryDto: UpdateCategoryDto,
-    @CurrentUser("userId") actorId: string,
+    @CurrentUser("_id") actorId: string,
   ) {
     return this.serverService.updateCategory(
       categoryId,
@@ -206,7 +203,7 @@ export class ServerController {
   })
   removeCategory(
     @Param("categoryId") categoryId: string,
-    @CurrentUser("userId") actorId: string,
+    @CurrentUser("_id") actorId: string,
   ) {
     return this.serverService.removeCategory(categoryId, actorId);
   }
@@ -224,7 +221,7 @@ export class ServerController {
     @Param("serverId") serverId: string,
     @Param("categoryId") categoryId: string,
     @Body() createChannelDto: CreateChannelDto,
-    @CurrentUser("userId") actorId: string,
+    @CurrentUser("_id") actorId: string,
   ) {
     return this.serverService.createChannel(
       serverId,
@@ -264,7 +261,7 @@ export class ServerController {
   updateChannel(
     @Param("channelId") channelId: string,
     @Body() updateChannelDto: UpdateChannelDto,
-    @CurrentUser("userId") actorId: string,
+    @CurrentUser("_id") actorId: string,
   ) {
     return this.serverService.updateChannel(
       channelId,
@@ -286,7 +283,7 @@ export class ServerController {
   })
   removeChannel(
     @Param("channelId") channelId: string,
-    @CurrentUser("userId") actorId: string,
+    @CurrentUser("_id") actorId: string,
   ) {
     return this.serverService.removeChannel(channelId, actorId);
   }
