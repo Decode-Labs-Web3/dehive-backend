@@ -20,7 +20,7 @@ export const CurrentUser = createParamDecorator(
   (
     data: keyof AuthenticatedUser | "sessionId" | undefined,
     ctx: ExecutionContext,
-  ): AuthenticatedUser | string | undefined => {
+  ): AuthenticatedUser | string | null | undefined => {
     console.log(
       "🎯 [CHANNEL-MESSAGING CURRENT USER] Decorator called with data:",
       data,

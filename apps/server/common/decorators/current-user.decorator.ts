@@ -20,7 +20,14 @@ export const CurrentUser = createParamDecorator(
   (
     data: keyof AuthenticatedUser | "sessionId" | undefined,
     ctx: ExecutionContext,
-  ): AuthenticatedUser | string | undefined => {
+  ):
+    | AuthenticatedUser
+    | string
+    | number
+    | boolean
+    | Date
+    | string[]
+    | undefined => {
     console.log("🎯 [SERVER CURRENT USER] Decorator called with data:", data);
     try {
       const request = ctx

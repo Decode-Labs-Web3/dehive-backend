@@ -587,6 +587,13 @@ export class UserDehiveServerService {
         { session },
       );
 
+      // Update owner_id in server collection
+      await this.serverModel.updateOne(
+        { _id: serverId },
+        { $set: { owner_id: newOwnerDehiveId.toString() } },
+        { session },
+      );
+
       await session.commitTransaction();
 
       await this.invalidateMemberListCache(dto.server_id);

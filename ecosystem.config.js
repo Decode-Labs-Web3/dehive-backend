@@ -7,7 +7,9 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 4006
+        PORT: 4006,
+        AUTH_PORT: 4006,
+        CLOUD_HOST: '0.0.0.0'
       }
     },
     {
@@ -17,7 +19,9 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 4001
+        PORT: 4001,
+        USER_DEHIVE_SERVER_PORT: 4001,
+        CLOUD_HOST: '0.0.0.0'
       }
     },
     {
@@ -27,7 +31,9 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 4002
+        PORT: 4002,
+        SERVER_PORT: 4002,
+        CLOUD_HOST: '0.0.0.0'
       }
     },
     {
@@ -37,7 +43,9 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 4003
+        PORT: 4003,
+        CHANNEL_MESSAGING_PORT: 4003,
+        CLOUD_HOST: '0.0.0.0'
       }
     },
     {
@@ -47,7 +55,9 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 4004
+        PORT: 4004,
+        DIRECT_MESSAGING_PORT: 4004,
+        CLOUD_HOST: '0.0.0.0'
       }
     }
   ]
