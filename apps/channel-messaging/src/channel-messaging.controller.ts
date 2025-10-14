@@ -53,7 +53,7 @@ export class MessagingController {
   })
   @ApiResponse({ status: 404, description: "Conversation not found." })
   async sendMessage(
-    @CurrentUser("user_id") userId: string,
+    @CurrentUser("_id") userId: string,
     @Body() createMessageDto: CreateMessageDto,
   ) {
     const savedMessage = await this.messagingService.createMessage(
@@ -135,7 +135,7 @@ export class MessagingController {
   async upload(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: UploadInitDto,
-    @CurrentUser("user_id") userId: string,
+    @CurrentUser("_id") userId: string,
   ): Promise<unknown> {
     const result = await this.messagingService.handleUpload(file, body, userId);
     return {
@@ -157,7 +157,7 @@ export class MessagingController {
   @ApiResponse({ status: 400, description: "Invalid query or header." })
   @ApiResponse({ status: 403, description: "Not allowed." })
   async listUploads(
-    @CurrentUser("user_id") userId: string,
+    @CurrentUser("_id") userId: string,
     @Query() query: ListUploadsDto,
   ) {
     const result = await this.messagingService.listUploads({

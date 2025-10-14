@@ -19,6 +19,7 @@ import {
 } from "../../interfaces/session-doc.interface";
 import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
 import { UserProfile } from "../../interfaces/user-profile.interface";
+import { CachedUser } from "../../interfaces/cached-user.interface";
 
 // Decorators for public routes
 export const PUBLIC_KEY = "public";
@@ -76,6 +77,7 @@ export class AuthGuard implements CanActivate {
         if (cachedSession.user) {
           const authenticatedUser: AuthenticatedUser = {
             ...cachedSession.user,
+            _id: (cachedSession.user as CachedUser)._id, // Use _id from cache
             session_id: sessionId,
             fingerprint_hash: fingerprintHash,
           };
@@ -129,6 +131,7 @@ export class AuthGuard implements CanActivate {
 
       const authenticatedUser: AuthenticatedUser = {
         ...userProfile,
+        _id: userProfile.user_id, // Map user_id to _id
         session_id: sessionId,
         fingerprint_hash: fingerprintHash,
       };
