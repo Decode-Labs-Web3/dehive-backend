@@ -11,6 +11,7 @@ import { HttpService } from "@nestjs/axios";
 import { AxiosError } from "axios";
 import { firstValueFrom } from "rxjs";
 import { Request } from "express";
+import { ConfigService } from "@nestjs/config";
 
 // Interfaces
 import { SessionCacheDoc } from "../../interfaces/session-doc.interface";
@@ -22,12 +23,21 @@ export const Public = () => SetMetadata(PUBLIC_KEY, true);
 @Injectable()
 export class AuthGuard implements CanActivate {
   private readonly logger = new Logger(AuthGuard.name);
-  private readonly authServiceUrl = "http://localhost:4006";
+  private readonly authServiceUrl: string;
 
   constructor(
     private readonly httpService: HttpService,
     private readonly reflector: Reflector,
+    private readonly configService: ConfigService,
   ) {
+    const host = this.configService.get<string>("DECODE_API_GATEWAY_HOST");
+    const port = this.configService.get<number>("DECODE_API_GATEWAY_PORT");
+    if (!host || !port) {
+      throw new Error(
+        "DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!",
+      );
+    }
+    this.authServiceUrl = `http://${host}:${port}`;
     console.log(
       "🔥 [SERVER AUTH GUARD] Constructor called - This is the server AuthGuard!",
     );
