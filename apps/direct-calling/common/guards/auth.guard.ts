@@ -18,6 +18,7 @@ import {
   SessionDoc,
 } from "../../interfaces/session-doc.interface";
 import { UserProfile } from "../../interfaces/user-profile.interface";
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
 
 export const PUBLIC_KEY = "public";
 export const Public = () => SetMetadata(PUBLIC_KEY, true);
@@ -72,8 +73,10 @@ export class AuthGuard implements CanActivate {
       if (cachedSessionRaw) {
         const cachedSession: SessionCacheDoc = JSON.parse(cachedSessionRaw);
         if (cachedSession.user) {
-          const authenticatedUser: UserProfile = {
+          const authenticatedUser: AuthenticatedUser = {
             ...cachedSession.user,
+            session_id: sessionId,
+            fingerprint_hash: fingerprintHash,
           };
           request["user"] = authenticatedUser;
           return true;
@@ -123,8 +126,10 @@ export class AuthGuard implements CanActivate {
         await this.redis.set(sessionKey, JSON.stringify(cacheData), "EX", ttl);
       }
 
-      const authenticatedUser: UserProfile = {
+      const authenticatedUser: AuthenticatedUser = {
         ...userProfile,
+        session_id: sessionId,
+        fingerprint_hash: fingerprintHash,
       };
       request["user"] = authenticatedUser;
       return true;

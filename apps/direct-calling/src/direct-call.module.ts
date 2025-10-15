@@ -30,13 +30,13 @@ import {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: [".env", ".env.local"],
+      envFilePath: ".env",
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         uri: configService.get<string>("MONGODB_URI"),
-        dbName: configService.get<string>("MONGODB_DB_NAME"),
+        dbName: "dehive_db",
       }),
       inject: [ConfigService],
     }),
@@ -47,27 +47,15 @@ import {
       { name: DirectMessage.name, schema: DirectMessageSchema },
       { name: UserDehive.name, schema: UserDehiveSchema },
     ]),
-    HttpModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: async (_configService: ConfigService) => ({
-        timeout: 10000,
-        maxRedirects: 5,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }),
-      inject: [ConfigService],
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 5,
     }),
     RedisModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         type: "single",
-        url: configService.get<string>("REDIS_URL") || "redis://localhost:6379",
-        options: {
-          retryDelayOnFailover: 100,
-          enableReadyCheck: false,
-          maxRetriesPerRequest: null,
-        },
+        url: configService.get<string>("REDIS_URI") || "redis://localhost:6379",
       }),
       inject: [ConfigService],
     }),

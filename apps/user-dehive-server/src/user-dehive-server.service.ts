@@ -63,7 +63,7 @@ export class UserDehiveServerService {
   async joinServer(
     dto: JoinServerDto,
     userId: string,
-  ): Promise<{ server_id?: string }> {
+  ): Promise<{ server_id?: string; server_name?: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
     const userDehiveId = userId;
@@ -90,9 +90,10 @@ export class UserDehiveServerService {
 
     if (!server) throw new NotFoundException(`Server not found.`);
     if (isAlreadyMember) {
-      // User is already a member, return server_id for frontend redirect
+      // User is already a member, return server_id and server_name for frontend redirect
       return {
         server_id: dto.server_id,
+        server_name: server.name,
       };
     }
     if (isBannedFromServer)

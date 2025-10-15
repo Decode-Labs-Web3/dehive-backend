@@ -44,7 +44,7 @@ export class UserDehiveServerController {
   @ApiOperation({
     summary: "Join a server",
     description:
-      "Allows a user to become a member of a server. If user is already a member, returns success with server_id.",
+      "Allows a user to become a member of a server. If user is already a member, returns success with server_id and server_name.",
   })
   @ApiHeader({
     name: "x-session-id",
@@ -61,10 +61,11 @@ export class UserDehiveServerController {
   @ApiResponse({
     status: 201,
     description:
-      "User is already a member (returns server_id for frontend redirect).",
+      "User is already a member (returns server_id and server_name for frontend redirect).",
     schema: {
       example: {
         server_id: "507f1f77bcf86cd799439011",
+        server_name: "My Awesome Server",
       },
     },
   })
@@ -135,7 +136,7 @@ export class UserDehiveServerController {
   @ApiOperation({
     summary: "Use an invite link",
     description:
-      "Allows a user to join a server using an invite code. If user is already a member, returns success with server_id.",
+      "Allows a user to join a server using an invite code. If user is already a member, returns success with server_id and server_name.",
   })
   @ApiHeader({
     name: "x-session-id",
@@ -153,10 +154,11 @@ export class UserDehiveServerController {
   @ApiResponse({
     status: 201,
     description:
-      "User is already a member (returns server_id for frontend redirect).",
+      "User is already a member (returns server_id and server_name for frontend redirect).",
     schema: {
       example: {
         server_id: "507f1f77bcf86cd799439011",
+        server_name: "My Awesome Server",
       },
     },
   })
