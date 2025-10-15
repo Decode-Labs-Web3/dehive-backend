@@ -63,7 +63,7 @@ export class UserDehiveServerService {
   async joinServer(
     dto: JoinServerDto,
     userId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<{ server_id?: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
     const userDehiveId = userId;
@@ -89,8 +89,12 @@ export class UserDehiveServerService {
     ]);
 
     if (!server) throw new NotFoundException(`Server not found.`);
-    if (isAlreadyMember)
-      throw new BadRequestException("User is already a member.");
+    if (isAlreadyMember) {
+      // User is already a member, return server_id for frontend redirect
+      return {
+        server_id: dto.server_id,
+      };
+    }
     if (isBannedFromServer)
       throw new ForbiddenException("You are banned from this server.");
     const session = await this.serverModel.db.startSession();
@@ -115,7 +119,7 @@ export class UserDehiveServerService {
 
       await this.invalidateMemberListCache(dto.server_id);
 
-      return { message: "Successfully joined server." };
+      return {};
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       await session.abortTransaction();
@@ -128,7 +132,7 @@ export class UserDehiveServerService {
   async leaveServer(
     dto: LeaveServerDto,
     userId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<Record<string, never>> {
     const serverId = new Types.ObjectId(dto.server_id);
 
     // Find UserDehive by _id
@@ -172,7 +176,7 @@ export class UserDehiveServerService {
       // Invalidate member list cache
       await this.invalidateMemberListCache(dto.server_id);
 
-      return { message: "Successfully left server." };
+      return {};
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       await session.abortTransaction();
@@ -219,7 +223,7 @@ export class UserDehiveServerService {
   async useInvite(
     code: string,
     actorBaseId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<{ server_id?: string }> {
     const invite = await this.inviteLinkModel.findOne({ code });
     if (!invite || invite.expiredAt < new Date())
       throw new NotFoundException("Invite link is invalid or has expired.");

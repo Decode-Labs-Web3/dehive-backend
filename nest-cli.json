@@ -92,6 +92,17 @@
       "compilerOptions": {
         "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
       }
+    },
+
+    "direct-calling": {
+      "type": "application",
+      "root": "apps/direct-calling",
+      "entryFile": "main",
+      "sourceRoot": "apps/direct-calling/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/direct-calling/tsconfig.app.json",
+        "plugins": ["@nestjs/swagger"]
+      }
     }
   }
 }

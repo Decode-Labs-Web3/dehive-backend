@@ -709,10 +709,6 @@ export class DirectMessagingService {
     }
   }
 
-  /**
-   * Get user profile from cache or fallback
-   * This is used by WebSocket when no session info is available
-   */
   async getUserProfile(userDehiveId: string): Promise<Partial<UserProfile>> {
     try {
       // First check cache for any previously fetched profile

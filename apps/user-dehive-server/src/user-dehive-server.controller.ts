@@ -43,7 +43,8 @@ export class UserDehiveServerController {
   @Post("join")
   @ApiOperation({
     summary: "Join a server",
-    description: "Allows a user to become a member of a server.",
+    description:
+      "Allows a user to become a member of a server. If user is already a member, returns success with server_id.",
   })
   @ApiHeader({
     name: "x-session-id",
@@ -52,11 +53,20 @@ export class UserDehiveServerController {
   })
   @ApiResponse({
     status: 201,
-    description: "Successfully joined the server.",
+    description: "Successfully joined the server (returns empty object).",
+    schema: {
+      example: {},
+    },
   })
   @ApiResponse({
-    status: 400,
-    description: "Bad Request (e.g., already a member).",
+    status: 201,
+    description:
+      "User is already a member (returns server_id for frontend redirect).",
+    schema: {
+      example: {
+        server_id: "507f1f77bcf86cd799439011",
+      },
+    },
   })
   @ApiResponse({
     status: 403,
@@ -124,7 +134,8 @@ export class UserDehiveServerController {
   @Post("invite/use/:code")
   @ApiOperation({
     summary: "Use an invite link",
-    description: "Allows a user to join a server using an invite code.",
+    description:
+      "Allows a user to join a server using an invite code. If user is already a member, returns success with server_id.",
   })
   @ApiHeader({
     name: "x-session-id",
@@ -135,6 +146,19 @@ export class UserDehiveServerController {
   @ApiResponse({
     status: 201,
     description: "Successfully joined the server via invite.",
+    schema: {
+      example: {},
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description:
+      "User is already a member (returns server_id for frontend redirect).",
+    schema: {
+      example: {
+        server_id: "507f1f77bcf86cd799439011",
+      },
+    },
   })
   @ApiResponse({
     status: 404,

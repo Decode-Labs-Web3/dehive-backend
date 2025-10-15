@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "outDir": "../../dist/apps/direct-calling",
+    "emitDecoratorMetadata": true
+  },
+  "include": [
+    "src/**/*",
+    "dto/**/*",
+    "schemas/**/*",
+    "gateway/**/*",
+    "enum/**/*",
+    "common/**/*",
+    "interfaces/**/*",
+    "clients/**/*"
+  ],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
+}
