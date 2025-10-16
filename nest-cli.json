@@ -103,6 +103,16 @@
         "tsConfigPath": "apps/direct-calling/tsconfig.app.json",
         "plugins": ["@nestjs/swagger"]
       }
+    },
+    "channel-calling": {
+      "type": "application",
+      "root": "apps/channel-calling",
+      "entryFile": "main",
+      "sourceRoot": "apps/channel-calling/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/channel-calling/tsconfig.app.json",
+        "plugins": ["@nestjs/swagger"]
+      }
     }
   }
 }

@@ -71,6 +71,18 @@ module.exports = {
         DIRECT_CALLING_PORT: 4005,
         CLOUD_HOST: '0.0.0.0'
       }
+    },
+    {
+      name: 'channel-calling',
+      script: 'dist/apps/channel-calling/main.js',
+      instances: 1,
+      exec_mode: 'fork',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 4007,
+        CHANNEL_CALLING_PORT: 4007,
+        CLOUD_HOST: '0.0.0.0'
+      }
     }
   ]
 };

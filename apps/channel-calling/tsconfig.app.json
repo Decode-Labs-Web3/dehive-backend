@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "outDir": "../../dist/apps/channel-calling"
+  },
+  "include": [
+    "src/**/*",
+    "gateway/**/*",
+    "schemas/**/*",
+    "dto/**/*",
+    "enum/**/*",
+    "interfaces/**/*",
+    "common/**/*",
+    "clients/**/*"
+  ],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
+}

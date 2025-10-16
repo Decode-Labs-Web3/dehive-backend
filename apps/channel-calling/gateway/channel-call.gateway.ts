@@ -10,7 +10,7 @@ import {
 import { Server, Socket } from "socket.io";
 import { Model, Types } from "mongoose";
 import { InjectModel } from "@nestjs/mongoose";
-import { DirectCallService } from "../src/direct-call.service";
+import { ChannelCallService } from "../src/channel-call.service";
 import { SignalOfferDto } from "../dto/signal-offer.dto";
 import { SignalAnswerDto } from "../dto/signal-answer.dto";
 import { IceCandidateDto } from "../dto/ice-candidate.dto";
@@ -18,20 +18,31 @@ import {
   UserDehive,
   UserDehiveDocument,
 } from "../../user-dehive-server/schemas/user-dehive.schema";
-import { DmCall, DmCallDocument } from "../schemas/dm-call.schema";
-import { RtcSession, RtcSessionDocument } from "../schemas/rtc-session.schema";
-import { MediaState } from "../enum/enum";
+import {
+  ChannelCall,
+  ChannelCallDocument,
+} from "../schemas/channel-call.schema";
+import {
+  ChannelParticipant,
+  ChannelParticipantDocument,
+} from "../schemas/channel-participant.schema";
+import {
+  ChannelRtcSession,
+  ChannelRtcSessionDocument,
+} from "../schemas/rtc-session.schema";
+import { MediaState, ParticipantStatus } from "../enum/enum";
 
 type SocketMeta = {
   userDehiveId?: string;
+  sessionId?: string;
   callId?: string;
 };
 
 @WebSocketGateway({
-  namespace: "/rtc",
+  namespace: "/channel-rtc",
   cors: { origin: "*" },
 })
-export class DirectCallGateway
+export class ChannelCallGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
@@ -40,13 +51,15 @@ export class DirectCallGateway
   private readonly meta = new WeakMap<Socket, SocketMeta>();
 
   constructor(
-    private readonly service: DirectCallService,
+    private readonly service: ChannelCallService,
     @InjectModel(UserDehive.name)
     private readonly userDehiveModel: Model<UserDehiveDocument>,
-    @InjectModel(DmCall.name)
-    private readonly dmCallModel: Model<DmCallDocument>,
-    @InjectModel(RtcSession.name)
-    private readonly rtcSessionModel: Model<RtcSessionDocument>,
+    @InjectModel(ChannelCall.name)
+    private readonly channelCallModel: Model<ChannelCallDocument>,
+    @InjectModel(ChannelParticipant.name)
+    private readonly participantModel: Model<ChannelParticipantDocument>,
+    @InjectModel(ChannelRtcSession.name)
+    private readonly rtcSessionModel: Model<ChannelRtcSessionDocument>,
   ) {}
 
   private send(client: Socket, event: string, data: unknown) {
@@ -55,19 +68,18 @@ export class DirectCallGateway
   }
 
   handleConnection(client: Socket) {
-    console.log("[RTC-WS] ========================================");
     console.log(
-      "[RTC-WS] Client connected to /rtc namespace. Awaiting identity.",
+      "[CHANNEL-RTC-WS] Client connected to /channel-rtc namespace. Awaiting identity.",
     );
-    console.log(`[RTC-WS] Socket ID: ${client.id}`);
-    console.log("[RTC-WS] ========================================");
     this.meta.set(client, {});
   }
 
   handleDisconnect(client: Socket) {
     const meta = this.meta.get(client);
     if (meta?.userDehiveId) {
-      console.log(`[RTC-WS] User ${meta.userDehiveId} disconnected from /rtc.`);
+      console.log(
+        `[CHANNEL-RTC-WS] User ${meta.userDehiveId} disconnected from /channel-rtc.`,
+      );
       this.handleUserDisconnect(meta.userDehiveId, meta.callId);
     }
     this.meta.delete(client);
@@ -78,7 +90,10 @@ export class DirectCallGateway
       try {
         await this.service.handleUserDisconnect(userId, callId);
       } catch (error) {
-        console.error("[RTC-WS] Error handling user disconnect:", error);
+        console.error(
+          "[CHANNEL-RTC-WS] Error handling user disconnect:",
+          error,
+        );
       }
     }
   }
@@ -88,7 +103,7 @@ export class DirectCallGateway
     @MessageBody() data: string | { userDehiveId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    console.log(`[RTC-WS] Identity request received:`, data);
+    console.log(`[CHANNEL-RTC-WS] Identity request received:`, data);
 
     let userDehiveId: string;
     if (typeof data === "string") {
@@ -128,7 +143,7 @@ export class DirectCallGateway
     if (meta) {
       meta.userDehiveId = userDehiveId;
       void client.join(`user:${userDehiveId}`);
-      console.log(`[RTC-WS] User identified as ${userDehiveId}`);
+      console.log(`[CHANNEL-RTC-WS] User identified as ${userDehiveId}`);
       this.send(client, "identityConfirmed", {
         userDehiveId,
         status: "success",
@@ -137,12 +152,21 @@ export class DirectCallGateway
     }
   }
 
-  @SubscribeMessage("startCall")
-  async handleStartCall(
+  @SubscribeMessage("ping")
+  handlePing(@ConnectedSocket() client: Socket) {
+    console.log(`[CHANNEL-RTC-WS] Ping received from ${client.id}`);
+    this.send(client, "pong", {
+      timestamp: new Date().toISOString(),
+      message: "pong",
+    });
+  }
+
+  @SubscribeMessage("joinCall")
+  async handleJoinCall(
     @MessageBody()
     data:
       | {
-          target_user_id: string;
+          channel_id: string;
           with_video?: boolean;
           with_audio?: boolean;
         }
@@ -150,95 +174,11 @@ export class DirectCallGateway
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
-    const callerId = meta?.userDehiveId;
+    const userId = meta?.userDehiveId;
 
-    // Parse data if it's a string
+    // Parse data if string
     let parsedData: {
-      target_user_id: string;
-      with_video?: boolean;
-      with_audio?: boolean;
-    };
-
-    if (typeof data === "string") {
-      try {
-        parsedData = JSON.parse(data);
-      } catch {
-        return this.send(client, "error", {
-          message: "Invalid JSON format",
-          code: "INVALID_FORMAT",
-          timestamp: new Date().toISOString(),
-        });
-      }
-    } else {
-      parsedData = data;
-    }
-
-    console.log("[RTC-WS] ========================================");
-    console.log("[RTC-WS] startCall event received");
-    console.log("[RTC-WS] Parsed data:", parsedData);
-    console.log("[RTC-WS] target_user_id:", parsedData?.target_user_id);
-    console.log("[RTC-WS] Caller ID:", callerId);
-    console.log("[RTC-WS] ========================================");
-
-    if (!callerId) {
-      return this.send(client, "error", {
-        message: "Please identify first",
-        code: "AUTHENTICATION_REQUIRED",
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    try {
-      const call = await this.service.startCall(
-        callerId,
-        parsedData.target_user_id,
-        parsedData.with_video ?? true,
-        parsedData.with_audio ?? true,
-      );
-
-      meta.callId = String(call._id);
-
-      // Notify caller
-      this.send(client, "callStarted", {
-        call_id: call._id,
-        status: call.status,
-        target_user_id: parsedData.target_user_id,
-        timestamp: new Date().toISOString(),
-      });
-
-      // Notify callee
-      this.server.to(`user:${parsedData.target_user_id}`).emit("incomingCall", {
-        call_id: call._id,
-        caller_id: callerId,
-        caller_info: await this.service.getUserProfile(callerId),
-        with_video: parsedData.with_video ?? true,
-        with_audio: parsedData.with_audio ?? true,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error("[RTC-WS] Error starting call:", error);
-      this.send(client, "error", {
-        message: "Failed to start call",
-        details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-
-  @SubscribeMessage("acceptCall")
-  async handleAcceptCall(
-    @MessageBody()
-    data:
-      | { call_id: string; with_video?: boolean; with_audio?: boolean }
-      | string,
-    @ConnectedSocket() client: Socket,
-  ) {
-    const meta = this.meta.get(client);
-    const calleeId = meta?.userDehiveId;
-
-    // Parse data if it's a string
-    let parsedData: {
-      call_id: string;
+      channel_id: string;
       with_video?: boolean;
       with_audio?: boolean;
     };
@@ -256,7 +196,7 @@ export class DirectCallGateway
       parsedData = data;
     }
 
-    if (!calleeId) {
+    if (!userId) {
       return this.send(client, "error", {
         message: "Please identify first",
         code: "AUTHENTICATION_REQUIRED",
@@ -265,116 +205,60 @@ export class DirectCallGateway
     }
 
     try {
-      const call = await this.service.acceptCall(
-        calleeId,
-        parsedData.call_id,
-        parsedData.with_video ?? true,
+      const result = await this.service.joinCall(
+        userId,
+        parsedData.channel_id,
+        parsedData.with_video ?? false,
         parsedData.with_audio ?? true,
       );
 
-      meta.callId = String(call._id);
+      meta.callId = String(result.call._id);
 
-      // Notify both parties
-      this.server.to(`user:${call.caller_id}`).emit("callAccepted", {
-        call_id: call._id,
-        callee_id: calleeId,
-        callee_info: await this.service.getUserProfile(calleeId),
-        with_video: parsedData.with_video ?? true,
-        with_audio: parsedData.with_audio ?? true,
+      // Notify user who joined
+      this.send(client, "callJoined", {
+        call_id: result.call._id,
+        participant_id: result.participant._id,
+        status: result.call.status,
+        current_participants: result.call.current_participants,
+        other_participants: result.otherParticipants,
         timestamp: new Date().toISOString(),
       });
 
-      this.send(client, "callAccepted", {
-        call_id: call._id,
-        status: call.status,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error("[RTC-WS] Error accepting call:", error);
-      this.send(client, "error", {
-        message: "Failed to accept call",
-        details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
+      // Join channel room
+      void client.join(`channel:${parsedData.channel_id}`);
 
-  @SubscribeMessage("declineCall")
-  async handleDeclineCall(
-    @MessageBody() data: { call_id: string } | string,
-    @ConnectedSocket() client: Socket,
-  ) {
-    const meta = this.meta.get(client);
-    const calleeId = meta?.userDehiveId;
-
-    // Parse data if it's a string
-    let parsedData: { call_id: string };
-    if (typeof data === "string") {
-      try {
-        parsedData = JSON.parse(data);
-      } catch {
-        return this.send(client, "error", {
-          message: "Invalid JSON format",
-          code: "INVALID_FORMAT",
+      // Notify others in the call
+      this.server
+        .to(`channel:${parsedData.channel_id}`)
+        .except(client.id)
+        .emit("userJoined", {
+          call_id: result.call._id,
+          user_id: userId,
+          user_info: await this.service.getUserProfile(userId),
+          with_video: parsedData.with_video ?? false,
+          with_audio: parsedData.with_audio ?? true,
+          current_participants: result.call.current_participants,
           timestamp: new Date().toISOString(),
         });
-      }
-    } else {
-      parsedData = data;
-    }
-
-    if (!calleeId) {
-      return this.send(client, "error", {
-        message: "Please identify first",
-        code: "AUTHENTICATION_REQUIRED",
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    try {
-      const call = await this.service.declineCall(calleeId, parsedData.call_id);
-
-      // Notify caller
-      this.server.to(`user:${call.caller_id}`).emit("callDeclined", {
-        call_id: call._id,
-        callee_id: calleeId,
-        reason: "user_declined",
-        timestamp: new Date().toISOString(),
-      });
-
-      this.send(client, "callDeclined", {
-        call_id: call._id,
-        status: call.status,
-        timestamp: new Date().toISOString(),
-      });
     } catch (error) {
-      console.error("[RTC-WS] Error declining call:", error);
+      console.error("[CHANNEL-RTC-WS] Error joining call:", error);
       this.send(client, "error", {
-        message: "Failed to decline call",
+        message: "Failed to join call",
         details: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       });
     }
   }
 
-  @SubscribeMessage("ping")
-  handlePing(@ConnectedSocket() client: Socket) {
-    console.log(`[RTC-WS] Ping received from ${client.id}`);
-    this.send(client, "pong", {
-      timestamp: new Date().toISOString(),
-      message: "pong",
-    });
-  }
-
-  @SubscribeMessage("endCall")
-  async handleEndCall(
+  @SubscribeMessage("leaveCall")
+  async handleLeaveCall(
     @MessageBody() data: { call_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
-    // Parse data if it's a string
+    // Parse data if string
     let parsedData: { call_id: string };
     if (typeof data === "string") {
       try {
@@ -399,32 +283,37 @@ export class DirectCallGateway
     }
 
     try {
-      const call = await this.service.endCall(userId, parsedData.call_id);
+      const result = await this.service.leaveCall(userId, parsedData.call_id);
 
-      // Notify both parties
-      const otherUserId =
-        String(call.caller_id) === userId
-          ? String(call.callee_id)
-          : String(call.caller_id);
+      const call = result.call;
 
-      this.server.to(`user:${otherUserId}`).emit("callEnded", {
+      // Get channel_id to notify others
+      const channelId = String(call.channel_id);
+
+      // Notify user who left
+      this.send(client, "callLeft", {
         call_id: call._id,
-        ended_by: userId,
-        reason: "user_hangup",
-        duration: call.duration_seconds,
+        status: call.status,
+        duration_seconds: result.participant.duration_seconds,
+        remaining_participants: call.current_participants,
         timestamp: new Date().toISOString(),
       });
 
-      this.send(client, "callEnded", {
+      // Leave channel room
+      void client.leave(`channel:${channelId}`);
+
+      // Notify others in the call
+      this.server.to(`channel:${channelId}`).emit("userLeft", {
         call_id: call._id,
-        status: call.status,
-        duration: call.duration_seconds,
+        user_id: userId,
+        remaining_participants: call.current_participants,
+        call_ended: call.current_participants === 0,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("[RTC-WS] Error ending call:", error);
+      console.error("[CHANNEL-RTC-WS] Error leaving call:", error);
       this.send(client, "error", {
-        message: "Failed to end call",
+        message: "Failed to leave call",
         details: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       });
@@ -439,7 +328,7 @@ export class DirectCallGateway
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
-    // Parse data if it's a string
+    // Parse data if string
     let parsedData: SignalOfferDto;
     if (typeof data === "string") {
       try {
@@ -466,23 +355,16 @@ export class DirectCallGateway
     try {
       await this.service.handleSignalOffer(userId, parsedData);
 
-      // Forward offer to the other participant
-      const call = await this.dmCallModel.findById(parsedData.call_id).lean();
-      if (call) {
-        const otherUserId =
-          String(call.caller_id) === userId
-            ? String(call.callee_id)
-            : String(call.caller_id);
-        this.server.to(`user:${otherUserId}`).emit("signalOffer", {
-          call_id: parsedData.call_id,
-          offer: parsedData.offer,
-          metadata: parsedData.metadata,
-          from_user_id: userId,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      // Forward offer to specific target user
+      this.server.to(`user:${parsedData.target_user_id}`).emit("signalOffer", {
+        call_id: parsedData.call_id,
+        offer: parsedData.offer,
+        metadata: parsedData.metadata,
+        from_user_id: userId,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
-      console.error("[RTC-WS] Error handling signal offer:", error);
+      console.error("[CHANNEL-RTC-WS] Error handling signal offer:", error);
       this.send(client, "error", {
         message: "Failed to handle signal offer",
         details: error instanceof Error ? error.message : String(error),
@@ -499,7 +381,7 @@ export class DirectCallGateway
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
-    // Parse data if it's a string
+    // Parse data if string
     let parsedData: SignalAnswerDto;
     if (typeof data === "string") {
       try {
@@ -526,23 +408,16 @@ export class DirectCallGateway
     try {
       await this.service.handleSignalAnswer(userId, parsedData);
 
-      // Forward answer to the other participant
-      const call = await this.dmCallModel.findById(parsedData.call_id).lean();
-      if (call) {
-        const otherUserId =
-          String(call.caller_id) === userId
-            ? String(call.callee_id)
-            : String(call.caller_id);
-        this.server.to(`user:${otherUserId}`).emit("signalAnswer", {
-          call_id: parsedData.call_id,
-          answer: parsedData.answer,
-          metadata: parsedData.metadata,
-          from_user_id: userId,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      // Forward answer to specific target user
+      this.server.to(`user:${parsedData.target_user_id}`).emit("signalAnswer", {
+        call_id: parsedData.call_id,
+        answer: parsedData.answer,
+        metadata: parsedData.metadata,
+        from_user_id: userId,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
-      console.error("[RTC-WS] Error handling signal answer:", error);
+      console.error("[CHANNEL-RTC-WS] Error handling signal answer:", error);
       this.send(client, "error", {
         message: "Failed to handle signal answer",
         details: error instanceof Error ? error.message : String(error),
@@ -559,7 +434,7 @@ export class DirectCallGateway
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
-    // Parse data if it's a string
+    // Parse data if string
     let parsedData: IceCandidateDto;
     if (typeof data === "string") {
       try {
@@ -586,25 +461,18 @@ export class DirectCallGateway
     try {
       await this.service.handleIceCandidate(userId, parsedData);
 
-      // Forward ICE candidate to the other participant
-      const call = await this.dmCallModel.findById(parsedData.call_id).lean();
-      if (call) {
-        const otherUserId =
-          String(call.caller_id) === userId
-            ? String(call.callee_id)
-            : String(call.caller_id);
-        this.server.to(`user:${otherUserId}`).emit("iceCandidate", {
-          call_id: parsedData.call_id,
-          candidate: parsedData.candidate,
-          sdpMLineIndex: parsedData.sdpMLineIndex,
-          sdpMid: parsedData.sdpMid,
-          metadata: parsedData.metadata,
-          from_user_id: userId,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      // Forward ICE candidate to specific target user
+      this.server.to(`user:${parsedData.target_user_id}`).emit("iceCandidate", {
+        call_id: parsedData.call_id,
+        candidate: parsedData.candidate,
+        sdpMLineIndex: parsedData.sdpMLineIndex,
+        sdpMid: parsedData.sdpMid,
+        metadata: parsedData.metadata,
+        from_user_id: userId,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
-      console.error("[RTC-WS] Error handling ICE candidate:", error);
+      console.error("[CHANNEL-RTC-WS] Error handling ICE candidate:", error);
       this.send(client, "error", {
         message: "Failed to handle ICE candidate",
         details: error instanceof Error ? error.message : String(error),
@@ -624,7 +492,7 @@ export class DirectCallGateway
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
-    // Parse data if it's a string
+    // Parse data if string
     let parsedData: {
       call_id: string;
       media_type: "audio" | "video";
@@ -660,14 +528,15 @@ export class DirectCallGateway
         parsedData.state,
       );
 
-      // Notify other participant
-      const call = await this.dmCallModel.findById(parsedData.call_id).lean();
+      // Get call to find channel
+      const call = await this.channelCallModel
+        .findById(parsedData.call_id)
+        .lean();
       if (call) {
-        const otherUserId =
-          String(call.caller_id) === userId
-            ? String(call.callee_id)
-            : String(call.caller_id);
-        this.server.to(`user:${otherUserId}`).emit("mediaToggled", {
+        const channelId = String(call.channel_id);
+
+        // Notify all users in the channel
+        this.server.to(`channel:${channelId}`).emit("mediaToggled", {
           call_id: parsedData.call_id,
           user_id: userId,
           media_type: parsedData.media_type,
@@ -683,9 +552,83 @@ export class DirectCallGateway
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("[RTC-WS] Error toggling media:", error);
+      console.error("[CHANNEL-RTC-WS] Error toggling media:", error);
       this.send(client, "error", {
         message: "Failed to toggle media",
+        details: error instanceof Error ? error.message : String(error),
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  @SubscribeMessage("updateParticipantStatus")
+  async handleUpdateParticipantStatus(
+    @MessageBody()
+    data: { call_id: string; status: ParticipantStatus } | string,
+    @ConnectedSocket() client: Socket,
+  ) {
+    const meta = this.meta.get(client);
+    const userId = meta?.userDehiveId;
+
+    // Parse data if string
+    let parsedData: { call_id: string; status: ParticipantStatus };
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      parsedData = data;
+    }
+
+    if (!userId) {
+      return this.send(client, "error", {
+        message: "Please identify first",
+        code: "AUTHENTICATION_REQUIRED",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    try {
+      await this.participantModel.findOneAndUpdate(
+        {
+          call_id: new Types.ObjectId(parsedData.call_id),
+          user_id: new Types.ObjectId(userId),
+        },
+        {
+          $set: { status: parsedData.status },
+        },
+      );
+
+      // Get call to find channel
+      const call = await this.channelCallModel
+        .findById(parsedData.call_id)
+        .lean();
+      if (call) {
+        const channelId = String(call.channel_id);
+
+        // Notify all users in the channel
+        this.server
+          .to(`channel:${channelId}`)
+          .emit("participantStatusChanged", {
+            call_id: parsedData.call_id,
+            user_id: userId,
+            status: parsedData.status,
+            timestamp: new Date().toISOString(),
+          });
+      }
+    } catch (error) {
+      console.error(
+        "[CHANNEL-RTC-WS] Error updating participant status:",
+        error,
+      );
+      this.send(client, "error", {
+        message: "Failed to update participant status",
         details: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       });
