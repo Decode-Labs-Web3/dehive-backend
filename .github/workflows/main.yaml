@@ -44,6 +44,7 @@ jobs:
           debug: true
           script: |
             cd /root/dehive-backend
+            pm2 delete all || true
             git fetch origin main
             git reset --hard origin/main
 
@@ -54,7 +55,6 @@ jobs:
 
             npm run build:all
 
-            pm2 delete all || true
             pm2 start ecosystem.config.js
             pm2 save
             pm2 status
