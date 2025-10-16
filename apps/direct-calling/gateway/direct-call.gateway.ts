@@ -56,9 +56,12 @@ export class DirectCallGateway
   }
 
   handleConnection(client: Socket) {
+    console.log("[RTC-WS] ========================================");
     console.log(
       "[RTC-WS] Client connected to /rtc namespace. Awaiting identity.",
     );
+    console.log(`[RTC-WS] Socket ID: ${client.id}`);
+    console.log("[RTC-WS] ========================================");
     this.meta.set(client, {});
   }
 
@@ -138,15 +141,45 @@ export class DirectCallGateway
   @SubscribeMessage("startCall")
   async handleStartCall(
     @MessageBody()
-    data: {
-      target_user_id: string;
-      with_video?: boolean;
-      with_audio?: boolean;
-    },
+    data:
+      | {
+          target_user_id: string;
+          with_video?: boolean;
+          with_audio?: boolean;
+        }
+      | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const callerId = meta?.userDehiveId;
+
+    // Parse data if it's a string
+    let parsedData: {
+      target_user_id: string;
+      with_video?: boolean;
+      with_audio?: boolean;
+    };
+
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      parsedData = data;
+    }
+
+    console.log("[RTC-WS] ========================================");
+    console.log("[RTC-WS] startCall event received");
+    console.log("[RTC-WS] Parsed data:", parsedData);
+    console.log("[RTC-WS] target_user_id:", parsedData?.target_user_id);
+    console.log("[RTC-WS] Caller ID:", callerId);
+    console.log("[RTC-WS] ========================================");
 
     if (!callerId) {
       return this.send(client, "error", {
@@ -159,9 +192,9 @@ export class DirectCallGateway
     try {
       const call = await this.service.startCall(
         callerId,
-        data.target_user_id,
-        data.with_video ?? true,
-        data.with_audio ?? true,
+        parsedData.target_user_id,
+        parsedData.with_video ?? true,
+        parsedData.with_audio ?? true,
       );
 
       meta.callId = String(call._id);
@@ -171,17 +204,17 @@ export class DirectCallGateway
       this.send(client, "callStarted", {
         call_id: call._id,
         status: call.status,
-        target_user_id: data.target_user_id,
+        target_user_id: parsedData.target_user_id,
         timestamp: new Date().toISOString(),
       });
 
       // Notify callee
-      this.server.to(`user:${data.target_user_id}`).emit("incomingCall", {
+      this.server.to(`user:${parsedData.target_user_id}`).emit("incomingCall", {
         call_id: call._id,
         caller_id: callerId,
         caller_info: await this.service.getUserProfile(callerId),
-        with_video: data.with_video ?? true,
-        with_audio: data.with_audio ?? true,
+        with_video: parsedData.with_video ?? true,
+        with_audio: parsedData.with_audio ?? true,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -197,11 +230,33 @@ export class DirectCallGateway
   @SubscribeMessage("acceptCall")
   async handleAcceptCall(
     @MessageBody()
-    data: { call_id: string; with_video?: boolean; with_audio?: boolean },
+    data:
+      | { call_id: string; with_video?: boolean; with_audio?: boolean }
+      | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const calleeId = meta?.userDehiveId;
+
+    // Parse data if it's a string
+    let parsedData: {
+      call_id: string;
+      with_video?: boolean;
+      with_audio?: boolean;
+    };
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      parsedData = data;
+    }
 
     if (!calleeId) {
       return this.send(client, "error", {
@@ -214,9 +269,9 @@ export class DirectCallGateway
     try {
       const call = await this.service.acceptCall(
         calleeId,
-        data.call_id,
-        data.with_video ?? true,
-        data.with_audio ?? true,
+        parsedData.call_id,
+        parsedData.with_video ?? true,
+        parsedData.with_audio ?? true,
       );
 
       meta.callId = String(call._id);
@@ -226,8 +281,8 @@ export class DirectCallGateway
         call_id: call._id,
         callee_id: calleeId,
         callee_info: await this.service.getUserProfile(calleeId),
-        with_video: data.with_video ?? true,
-        with_audio: data.with_audio ?? true,
+        with_video: parsedData.with_video ?? true,
+        with_audio: parsedData.with_audio ?? true,
         timestamp: new Date().toISOString(),
       });
 
@@ -248,11 +303,27 @@ export class DirectCallGateway
 
   @SubscribeMessage("declineCall")
   async handleDeclineCall(
-    @MessageBody() data: { call_id: string },
+    @MessageBody() data: { call_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const calleeId = meta?.userDehiveId;
+
+    // Parse data if it's a string
+    let parsedData: { call_id: string };
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      parsedData = data;
+    }
 
     if (!calleeId) {
       return this.send(client, "error", {
@@ -263,7 +334,7 @@ export class DirectCallGateway
     }
 
     try {
-      const call = await this.service.declineCall(calleeId, data.call_id);
+      const call = await this.service.declineCall(calleeId, parsedData.call_id);
 
       // Notify caller
       this.server.to(`user:${call.caller_id}`).emit("callDeclined", {
@@ -288,13 +359,38 @@ export class DirectCallGateway
     }
   }
 
+  @SubscribeMessage("ping")
+  handlePing(@ConnectedSocket() client: Socket) {
+    console.log(`[RTC-WS] Ping received from ${client.id}`);
+    this.send(client, "pong", {
+      timestamp: new Date().toISOString(),
+      message: "pong",
+    });
+  }
+
   @SubscribeMessage("endCall")
   async handleEndCall(
-    @MessageBody() data: { call_id: string; reason?: string },
+    @MessageBody() data: { call_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
+
+    // Parse data if it's a string
+    let parsedData: { call_id: string };
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      parsedData = data;
+    }
 
     if (!userId) {
       return this.send(client, "error", {
@@ -305,11 +401,7 @@ export class DirectCallGateway
     }
 
     try {
-      const call = await this.service.endCall(
-        userId,
-        data.call_id,
-        data.reason,
-      );
+      const call = await this.service.endCall(userId, parsedData.call_id);
 
       // Notify both parties
       const otherUserId =
@@ -320,7 +412,7 @@ export class DirectCallGateway
       this.server.to(`user:${otherUserId}`).emit("callEnded", {
         call_id: call._id,
         ended_by: userId,
-        reason: data.reason || "user_hangup",
+        reason: "user_hangup",
         duration: call.duration_seconds,
         timestamp: new Date().toISOString(),
       });
@@ -343,11 +435,27 @@ export class DirectCallGateway
 
   @SubscribeMessage("signalOffer")
   async handleSignalOffer(
-    @MessageBody() data: SignalOfferDto,
+    @MessageBody() data: SignalOfferDto | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
+
+    // Parse data if it's a string
+    let parsedData: SignalOfferDto;
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      parsedData = data;
+    }
 
     if (!userId) {
       return this.send(client, "error", {
@@ -358,19 +466,19 @@ export class DirectCallGateway
     }
 
     try {
-      await this.service.handleSignalOffer(userId, data);
+      await this.service.handleSignalOffer(userId, parsedData);
 
       // Forward offer to the other participant
-      const call = await this.dmCallModel.findById(data.call_id).lean();
+      const call = await this.dmCallModel.findById(parsedData.call_id).lean();
       if (call) {
         const otherUserId =
           String(call.caller_id) === userId
             ? String(call.callee_id)
             : String(call.caller_id);
         this.server.to(`user:${otherUserId}`).emit("signalOffer", {
-          call_id: data.call_id,
-          offer: data.offer,
-          metadata: data.metadata,
+          call_id: parsedData.call_id,
+          offer: parsedData.offer,
+          metadata: parsedData.metadata,
           from_user_id: userId,
           timestamp: new Date().toISOString(),
         });
@@ -387,11 +495,27 @@ export class DirectCallGateway
 
   @SubscribeMessage("signalAnswer")
   async handleSignalAnswer(
-    @MessageBody() data: SignalAnswerDto,
+    @MessageBody() data: SignalAnswerDto | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
+
+    // Parse data if it's a string
+    let parsedData: SignalAnswerDto;
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      parsedData = data;
+    }
 
     if (!userId) {
       return this.send(client, "error", {
@@ -402,19 +526,19 @@ export class DirectCallGateway
     }
 
     try {
-      await this.service.handleSignalAnswer(userId, data);
+      await this.service.handleSignalAnswer(userId, parsedData);
 
       // Forward answer to the other participant
-      const call = await this.dmCallModel.findById(data.call_id).lean();
+      const call = await this.dmCallModel.findById(parsedData.call_id).lean();
       if (call) {
         const otherUserId =
           String(call.caller_id) === userId
             ? String(call.callee_id)
             : String(call.caller_id);
         this.server.to(`user:${otherUserId}`).emit("signalAnswer", {
-          call_id: data.call_id,
-          answer: data.answer,
-          metadata: data.metadata,
+          call_id: parsedData.call_id,
+          answer: parsedData.answer,
+          metadata: parsedData.metadata,
           from_user_id: userId,
           timestamp: new Date().toISOString(),
         });
@@ -431,11 +555,27 @@ export class DirectCallGateway
 
   @SubscribeMessage("iceCandidate")
   async handleIceCandidate(
-    @MessageBody() data: IceCandidateDto,
+    @MessageBody() data: IceCandidateDto | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
+
+    // Parse data if it's a string
+    let parsedData: IceCandidateDto;
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      parsedData = data;
+    }
 
     if (!userId) {
       return this.send(client, "error", {
@@ -446,21 +586,21 @@ export class DirectCallGateway
     }
 
     try {
-      await this.service.handleIceCandidate(userId, data);
+      await this.service.handleIceCandidate(userId, parsedData);
 
       // Forward ICE candidate to the other participant
-      const call = await this.dmCallModel.findById(data.call_id).lean();
+      const call = await this.dmCallModel.findById(parsedData.call_id).lean();
       if (call) {
         const otherUserId =
           String(call.caller_id) === userId
             ? String(call.callee_id)
             : String(call.caller_id);
         this.server.to(`user:${otherUserId}`).emit("iceCandidate", {
-          call_id: data.call_id,
-          candidate: data.candidate,
-          sdpMLineIndex: data.sdpMLineIndex,
-          sdpMid: data.sdpMid,
-          metadata: data.metadata,
+          call_id: parsedData.call_id,
+          candidate: parsedData.candidate,
+          sdpMLineIndex: parsedData.sdpMLineIndex,
+          sdpMid: parsedData.sdpMid,
+          metadata: parsedData.metadata,
           from_user_id: userId,
           timestamp: new Date().toISOString(),
         });
@@ -478,11 +618,33 @@ export class DirectCallGateway
   @SubscribeMessage("toggleMedia")
   async handleToggleMedia(
     @MessageBody()
-    data: { call_id: string; media_type: "audio" | "video"; state: MediaState },
+    data:
+      | { call_id: string; media_type: "audio" | "video"; state: MediaState }
+      | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
+
+    // Parse data if it's a string
+    let parsedData: {
+      call_id: string;
+      media_type: "audio" | "video";
+      state: MediaState;
+    };
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } else {
+      parsedData = data;
+    }
 
     if (!userId) {
       return this.send(client, "error", {
@@ -495,31 +657,31 @@ export class DirectCallGateway
     try {
       await this.service.toggleMedia(
         userId,
-        data.call_id,
-        data.media_type,
-        data.state,
+        parsedData.call_id,
+        parsedData.media_type,
+        parsedData.state,
       );
 
       // Notify other participant
-      const call = await this.dmCallModel.findById(data.call_id).lean();
+      const call = await this.dmCallModel.findById(parsedData.call_id).lean();
       if (call) {
         const otherUserId =
           String(call.caller_id) === userId
             ? String(call.callee_id)
             : String(call.caller_id);
         this.server.to(`user:${otherUserId}`).emit("mediaToggled", {
-          call_id: data.call_id,
+          call_id: parsedData.call_id,
           user_id: userId,
-          media_type: data.media_type,
-          state: data.state,
+          media_type: parsedData.media_type,
+          state: parsedData.state,
           timestamp: new Date().toISOString(),
         });
       }
 
       this.send(client, "mediaToggled", {
-        call_id: data.call_id,
-        media_type: data.media_type,
-        state: data.state,
+        call_id: parsedData.call_id,
+        media_type: parsedData.media_type,
+        state: parsedData.state,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

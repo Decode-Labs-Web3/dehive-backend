@@ -180,7 +180,6 @@ export class DirectCallController {
       const call = await this.directCallService.endCall(
         user._id,
         endCallDto.call_id,
-        endCallDto.reason,
       );
 
       return {

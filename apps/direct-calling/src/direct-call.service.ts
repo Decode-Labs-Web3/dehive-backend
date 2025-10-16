@@ -489,11 +489,15 @@ export class DirectCallService {
   > {
     const turnCredentials = await this.getTurnCredentials();
 
+    // Get TURN server config from environment (default to localhost for local dev)
+    const turnHost = this.configService.get<string>("TURN_HOST") || "localhost";
+    const turnPort = this.configService.get<number>("TURN_PORT") || 3478;
+
     return [
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:stun1.l.google.com:19302" },
       {
-        urls: "turn:localhost:3478",
+        urls: `turn:${turnHost}:${turnPort}`,
         username: turnCredentials.username,
         credential: turnCredentials.credential,
       },
@@ -679,21 +683,20 @@ export class DirectCallService {
 
       // Determine message content based on call status and reason
       if (call.status === CallStatus.DECLINED) {
-        messageContent = "📞 Cuộc gọi bị từ chối";
+        messageContent = "Call declined";
       } else if (call.status === CallStatus.ENDED) {
         if (call.end_reason === CallEndReason.TIMEOUT) {
-          messageContent = "📞 Cuộc gọi nhỡ";
+          messageContent = "Missed call";
         } else if (call.end_reason === CallEndReason.USER_HANGUP) {
           if (duration > 0) {
-            messageContent = `📞 Cuộc gọi video • ${durationText}`;
+            messageContent = `Video call • ${durationText}`;
           } else {
-            messageContent = "📞 Cuộc gọi bị hủy";
+            messageContent = "Call cancelled";
           }
         } else if (call.end_reason === CallEndReason.CONNECTION_ERROR) {
-          messageContent = "📞 Cuộc gọi bị ngắt kết nối";
+          messageContent = "Call disconnected";
         } else {
-          messageContent =
-            duration > 0 ? `📞 Cuộc gọi • ${durationText}` : "📞 Cuộc gọi";
+          messageContent = duration > 0 ? `Call • ${durationText}` : "Call";
         }
       }
 
