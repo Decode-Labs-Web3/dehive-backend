@@ -59,6 +59,18 @@ module.exports = {
         DIRECT_MESSAGING_PORT: 4004,
         CLOUD_HOST: '0.0.0.0'
       }
+    },
+    {
+      name: 'direct-calling',
+      script: 'dist/apps/direct-calling/main.js',
+      instances: 1,
+      exec_mode: 'fork',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 4005,
+        DIRECT_CALLING_PORT: 4005,
+        CLOUD_HOST: '0.0.0.0'
+      }
     }
   ]
 };
