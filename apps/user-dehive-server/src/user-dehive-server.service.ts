@@ -769,14 +769,28 @@ export class UserDehiveServerService {
     const viewerServerIds = new Set(
       viewerServers.map((s) => s.server_id.toString()),
     );
-    const mutualServers = targetServers
+    const mutualServerIds = targetServers
       .filter((s) => viewerServerIds.has(s.server_id.toString()))
       .map((s) => s.server_id);
 
+    // Fetch server details to include server names
+    const mutualServersWithNames = await Promise.all(
+      mutualServerIds.map(async (serverId) => {
+        const server = await this.serverModel
+          .findById(serverId)
+          .select("name")
+          .lean();
+        return {
+          server_id: serverId.toString(),
+          server_name: server?.name || "Unknown Server",
+        };
+      }),
+    );
+
     const enrichedProfile = {
       ...(targetUserProfile as Record<string, unknown>),
-      mutual_servers_count: mutualServers.length,
-      mutual_servers: mutualServers,
+      mutual_servers_count: mutualServersWithNames.length,
+      mutual_servers: mutualServersWithNames,
     };
 
     return {
