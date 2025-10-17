@@ -4,10 +4,8 @@ import { HttpModule } from "@nestjs/axios";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { RedisModule } from "@nestjs-modules/ioredis";
 
-import {
-  ChannelCallController,
-  ChannelTurnController,
-} from "./channel-call.controller";
+import { ChannelCallController } from "./channel-call.controller";
+import { ChannelTurnController } from "./channel-turn.controller";
 import { ChannelCallService } from "./channel-call.service";
 import { ChannelCallGateway } from "../gateway/channel-call.gateway";
 import { AuthGuard } from "../common/guards/auth.guard";
@@ -74,7 +72,12 @@ import {
     }),
   ],
   controllers: [ChannelCallController, ChannelTurnController],
-  providers: [ChannelCallService, ChannelCallGateway, AuthGuard, DecodeApiClient],
+  providers: [
+    ChannelCallService,
+    ChannelCallGateway,
+    AuthGuard,
+    DecodeApiClient,
+  ],
   exports: [ChannelCallService],
 })
 export class ChannelCallModule {}

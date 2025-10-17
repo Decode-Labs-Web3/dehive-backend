@@ -29,12 +29,4 @@ export class UpdateChannelDto {
   @Length(0, 1024)
   topic?: string;
 
-  @ApiProperty({
-    description: "The ID of the new category to move this channel to.",
-    example: "68c40af9dfffdf7ae4af2e8c",
-    required: false,
-  })
-  @IsOptional()
-  @IsMongoId()
-  category_id?: string;
 }

@@ -30,7 +30,7 @@ import {
   ChannelRtcSession,
   ChannelRtcSessionDocument,
 } from "../schemas/rtc-session.schema";
-import { MediaState, ParticipantStatus } from "../enum/enum";
+import { MediaState } from "../enum/enum";
 
 type SocketMeta = {
   userDehiveId?: string;
@@ -294,7 +294,6 @@ export class ChannelCallGateway
       this.send(client, "callLeft", {
         call_id: call._id,
         status: call.status,
-        duration_seconds: result.participant.duration_seconds,
         remaining_participants: call.current_participants,
         timestamp: new Date().toISOString(),
       });
@@ -521,11 +520,13 @@ export class ChannelCallGateway
     }
 
     try {
+      const enabled =
+        parsedData.state === "enabled" || parsedData.state === "unmuted";
       await this.service.toggleMedia(
         userId,
         parsedData.call_id,
         parsedData.media_type,
-        parsedData.state,
+        enabled,
       );
 
       // Get call to find channel
@@ -564,14 +565,14 @@ export class ChannelCallGateway
   @SubscribeMessage("updateParticipantStatus")
   async handleUpdateParticipantStatus(
     @MessageBody()
-    data: { call_id: string; status: ParticipantStatus } | string,
+    data: { call_id: string; status: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
     // Parse data if string
-    let parsedData: { call_id: string; status: ParticipantStatus };
+    let parsedData: { call_id: string; status: string };
     if (typeof data === "string") {
       try {
         parsedData = JSON.parse(data);

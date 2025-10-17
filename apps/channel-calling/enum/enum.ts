@@ -1,14 +1,21 @@
-export enum ChannelCallStatus {
-  WAITING = "waiting", // Chưa ai join
-  ACTIVE = "active", // Có người đang call
-  ENDED = "ended", // Đã kết thúc
+export enum CallStatus {
+  RINGING = "ringing",
+  CONNECTING = "connecting",
+  CONNECTED = "connected",
+  ENDED = "ended",
+  DECLINED = "declined",
+  MISSED = "missed",
+  TIMEOUT = "timeout",
 }
 
-export enum ParticipantStatus {
-  JOINING = "joining",
-  CONNECTED = "connected",
-  LEFT = "left",
-  DISCONNECTED = "disconnected",
+export enum CallEndReason {
+  USER_HANGUP = "user_hangup",
+  USER_DECLINED = "user_declined",
+  USER_BUSY = "user_busy",
+  TIMEOUT = "timeout",
+  CONNECTION_ERROR = "connection_error",
+  NETWORK_ERROR = "network_error",
+  SERVER_ERROR = "server_error",
 }
 
 export enum MediaType {

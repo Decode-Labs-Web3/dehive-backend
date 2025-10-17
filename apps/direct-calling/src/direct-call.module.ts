@@ -4,15 +4,18 @@ import { HttpModule } from "@nestjs/axios";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { RedisModule } from "@nestjs-modules/ioredis";
 
-import { DirectCallController, TurnController } from "./direct-call.controller";
-import { DirectCallService } from "./direct-call.service";
+import {
+  DirectCallController,
+  StreamController,
+} from "./direct-call.controller";
+import { DirectCallService } from "./service/direct-call.service";
+import { StreamCallService } from "./service/stream-call.service";
 import { DirectCallGateway } from "../gateway/direct-call.gateway";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { DecodeApiClient } from "../clients/decode-api.client";
 
 // Schemas
 import { DmCall, DmCallSchema } from "../schemas/dm-call.schema";
-import { RtcSession, RtcSessionSchema } from "../schemas/rtc-session.schema";
 import {
   DirectConversation,
   DirectConversationSchema,
@@ -42,7 +45,6 @@ import {
     }),
     MongooseModule.forFeature([
       { name: DmCall.name, schema: DmCallSchema },
-      { name: RtcSession.name, schema: RtcSessionSchema },
       { name: DirectConversation.name, schema: DirectConversationSchema },
       { name: DirectMessage.name, schema: DirectMessageSchema },
       { name: UserDehive.name, schema: UserDehiveSchema },
@@ -60,8 +62,14 @@ import {
       inject: [ConfigService],
     }),
   ],
-  controllers: [DirectCallController, TurnController],
-  providers: [DirectCallService, DirectCallGateway, AuthGuard, DecodeApiClient],
-  exports: [DirectCallService],
+  controllers: [DirectCallController, StreamController],
+  providers: [
+    AuthGuard,
+    DecodeApiClient,
+    StreamCallService,
+    DirectCallService,
+    DirectCallGateway,
+  ],
+  exports: [DirectCallService, StreamCallService],
 })
 export class DirectCallModule {}

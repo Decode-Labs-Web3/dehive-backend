@@ -1,5 +1,5 @@
 import { createParamDecorator, ExecutionContext } from "@nestjs/common";
-import { UserProfile } from "../../interfaces/user-profile.interface";
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
 
 /**
  * CurrentUser decorator to extract authenticated user data from the request
@@ -11,16 +11,23 @@ import { UserProfile } from "../../interfaces/user-profile.interface";
  * ```typescript
  * @Get('profile')
  * @UseGuards(AuthGuard)
- * async getProfile(@CurrentUser() user: UserProfile) {
- *   return { userId: user._id, username: user.username };
+ * async getProfile(@CurrentUser() user: AuthenticatedUser) {
+ *   return { userId: user.userId, username: user.username };
  * }
  * ```
  */
 export const CurrentUser = createParamDecorator(
   (
-    data: keyof UserProfile | "sessionId" | undefined,
+    data: keyof AuthenticatedUser | "sessionId" | undefined,
     ctx: ExecutionContext,
-  ): UserProfile | string | number | boolean | Date | string[] | undefined => {
+  ):
+    | AuthenticatedUser
+    | string
+    | number
+    | boolean
+    | Date
+    | string[]
+    | undefined => {
     console.log(
       "🎯 [DIRECT-CALLING CURRENT USER] Decorator called with data:",
       data,
@@ -28,7 +35,7 @@ export const CurrentUser = createParamDecorator(
     try {
       const request = ctx
         .switchToHttp()
-        .getRequest<{ user: UserProfile; sessionId?: string }>();
+        .getRequest<{ user: AuthenticatedUser; sessionId?: string }>();
 
       console.log(
         "🎯 [DIRECT-CALLING CURRENT USER] Request user:",
@@ -49,10 +56,10 @@ export const CurrentUser = createParamDecorator(
       // If a specific property is requested, return only that property
       if (data && user) {
         console.log(
-          `🎯 [DIRECT-CALLING CURRENT USER] Returning user.${String(data)}:`,
+          `🎯 [DIRECT-CALLING CURRENT USER] Returning user.${data}:`,
           user[data],
         );
-        return user[data as keyof UserProfile];
+        return user[data];
       }
 
       // Return the entire user object

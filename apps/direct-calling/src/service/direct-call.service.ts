@@ -4,36 +4,38 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  Inject,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import { ConfigService } from "@nestjs/config";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
-import { v4 as uuidv4 } from "uuid";
-import * as crypto from "crypto";
 
-import { DmCall, DmCallDocument } from "../schemas/dm-call.schema";
-import { RtcSession, RtcSessionDocument } from "../schemas/rtc-session.schema";
+import { DmCall, DmCallDocument } from "../../schemas/dm-call.schema";
 import {
   DirectConversation,
   DirectConversationDocument,
-} from "../schemas/direct-conversation.schema";
+} from "../../schemas/direct-conversation.schema";
 import {
   DirectMessage,
   DirectMessageDocument,
-} from "../schemas/direct-message.schema";
+} from "../../schemas/direct-message.schema";
 import {
   UserDehive,
   UserDehiveDocument,
-} from "../../user-dehive-server/schemas/user-dehive.schema";
-import { CallStatus, CallEndReason, MediaState } from "../enum/enum";
-import { SignalOfferDto } from "../dto/signal-offer.dto";
-import { SignalAnswerDto } from "../dto/signal-answer.dto";
-import { IceCandidateDto } from "../dto/ice-candidate.dto";
-import { UserProfile } from "../interfaces/user-profile.interface";
-import { UserDehiveLean } from "../interfaces/user-dehive-lean.interface";
-import { DecodeApiClient } from "../../direct-calling/clients/decode-api.client";
+} from "../../../user-dehive-server/schemas/user-dehive.schema";
+import { CallStatus, CallEndReason, MediaState } from "../../enum/enum";
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
+import { UserDehiveLean } from "../../interfaces/user-dehive-lean.interface";
+import {
+  StreamInfo,
+  StreamConfig,
+} from "../../interfaces/stream-info.interface";
+import { DecodeApiClient } from "../../clients/decode-api.client";
+import { StreamCallService } from "./stream-call.service";
+import { REQUEST } from "@nestjs/core";
+import { Request } from "express";
 
 @Injectable()
 export class DirectCallService {
@@ -45,8 +47,6 @@ export class DirectCallService {
   constructor(
     @InjectModel(DmCall.name)
     private readonly dmCallModel: Model<DmCallDocument>,
-    @InjectModel(RtcSession.name)
-    private readonly rtcSessionModel: Model<RtcSessionDocument>,
     @InjectModel(DirectConversation.name)
     private readonly conversationModel: Model<DirectConversationDocument>,
     @InjectModel(DirectMessage.name)
@@ -55,16 +55,41 @@ export class DirectCallService {
     private readonly userDehiveModel: Model<UserDehiveDocument>,
     private readonly configService: ConfigService,
     private readonly decodeApiClient: DecodeApiClient,
+    private readonly streamCallService: StreamCallService,
     @InjectRedis() private readonly redis: Redis,
+    @Inject(REQUEST) private readonly request: Request,
   ) {
-    const host = this.configService.get<string>("DECODE_API_GATEWAY_HOST");
-    const port = this.configService.get<number>("DECODE_API_GATEWAY_PORT");
-    if (!host || !port) {
-      throw new Error(
-        "DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!",
+    // Make environment variables optional for now
+    const host =
+      this.configService.get<string>("DECODE_API_GATEWAY_HOST") || "localhost";
+    const port =
+      this.configService.get<number>("DECODE_API_GATEWAY_PORT") || 4006;
+    this.authServiceUrl = `http://${host}:${port}`;
+  }
+
+  /**
+   * Get current user ID from request context
+   */
+  private getCurrentUserId(): string {
+    const user = (this.request as { user?: { _id: string } }).user;
+    if (!user || !user._id) {
+      throw new BadRequestException(
+        "User not authenticated or user ID not found",
       );
     }
-    this.authServiceUrl = `http://${host}:${port}`;
+    return user._id;
+  }
+
+  /**
+   * Start call without needing to pass callerId - gets it from context
+   */
+  async startCallForCurrentUser(
+    targetUserId: string,
+    withVideo: boolean = true,
+    withAudio: boolean = true,
+  ): Promise<{ call: DmCallDocument; streamInfo: StreamInfo }> {
+    const callerId = this.getCurrentUserId();
+    return this.startCall(callerId, targetUserId, withVideo, withAudio);
   }
 
   async startCall(
@@ -72,7 +97,7 @@ export class DirectCallService {
     targetUserId: string,
     withVideo: boolean = true,
     withAudio: boolean = true,
-  ): Promise<DmCallDocument> {
+  ): Promise<{ call: DmCallDocument; streamInfo: StreamInfo }> {
     this.logger.log(`Starting call from ${callerId} to ${targetUserId}`);
 
     // Validate users exist
@@ -97,7 +122,15 @@ export class DirectCallService {
       targetUserId,
     );
 
-    // Create call record
+    // Create Stream.io call info
+    const streamInfo = await this.streamCallService.createCallInfo(
+      callerId,
+      targetUserId,
+      withVideo,
+      withAudio,
+    );
+
+    // Create call record with Stream.io call ID
     const call = new this.dmCallModel({
       conversation_id: conversation._id,
       caller_id: new Types.ObjectId(callerId),
@@ -111,6 +144,10 @@ export class DirectCallService {
       caller_video_muted: false,
       callee_audio_muted: false,
       callee_video_muted: false,
+      metadata: {
+        stream_call_id: streamInfo.callId,
+        stream_config: streamInfo.streamConfig,
+      },
     });
 
     await call.save();
@@ -135,11 +172,26 @@ export class DirectCallService {
         caller_id: callerId,
         callee_id: targetUserId,
         status: CallStatus.RINGING,
+        stream_call_id: streamInfo.callId,
       }),
     );
 
-    this.logger.log(`Call ${call._id} created successfully`);
-    return call;
+    this.logger.log(
+      `Call ${call._id} created successfully with Stream.io call ID: ${streamInfo.callId}`,
+    );
+    return { call, streamInfo };
+  }
+
+  /**
+   * Accept call without needing to pass calleeId - gets it from context
+   */
+  async acceptCallForCurrentUser(
+    callId: string,
+    withVideo: boolean = true,
+    withAudio: boolean = true,
+  ): Promise<{ call: DmCallDocument; streamInfo: StreamInfo }> {
+    const calleeId = this.getCurrentUserId();
+    return this.acceptCall(calleeId, callId, withVideo, withAudio);
   }
 
   async acceptCall(
@@ -147,7 +199,7 @@ export class DirectCallService {
     callId: string,
     withVideo: boolean = true,
     withAudio: boolean = true,
-  ): Promise<DmCallDocument> {
+  ): Promise<{ call: DmCallDocument; streamInfo: StreamInfo }> {
     this.logger.log(`Accepting call ${callId} by ${calleeId}`);
 
     const call = await this.dmCallModel.findById(callId);
@@ -163,11 +215,32 @@ export class DirectCallService {
       throw new BadRequestException("Call is not in ringing state");
     }
 
+    // Get Stream.io call info
+    const streamCallId = call.metadata?.stream_call_id;
+    if (!streamCallId) {
+      throw new BadRequestException("Stream.io call ID not found");
+    }
+
+    // Get Stream.io call info - create fresh tokens for both users
+    const callerId = String(call.caller_id);
+    const streamInfo = await this.streamCallService.createCallInfo(
+      callerId,
+      calleeId,
+      withVideo,
+      withAudio,
+    );
+
     // Update call status and media settings
     call.status = CallStatus.CONNECTED;
     call.started_at = new Date();
     call.callee_audio_enabled = withAudio;
     call.callee_video_enabled = withVideo;
+
+    // Update metadata with fresh stream info
+    call.metadata = {
+      stream_call_id: streamInfo.callId,
+      stream_config: streamInfo.streamConfig,
+    };
 
     await call.save();
 
@@ -179,11 +252,22 @@ export class DirectCallService {
         caller_id: String(call.caller_id),
         callee_id: String(call.callee_id),
         status: CallStatus.CONNECTED,
+        stream_call_id: streamInfo.callId,
       }),
     );
 
-    this.logger.log(`Call ${callId} accepted successfully`);
-    return call;
+    this.logger.log(
+      `Call ${callId} accepted successfully with Stream.io call ID: ${streamInfo.callId}`,
+    );
+    return { call, streamInfo };
+  }
+
+  /**
+   * Decline call without needing to pass calleeId - gets it from context
+   */
+  async declineCallForCurrentUser(callId: string): Promise<DmCallDocument> {
+    const calleeId = this.getCurrentUserId();
+    return this.declineCall(calleeId, callId);
   }
 
   async declineCall(calleeId: string, callId: string): Promise<DmCallDocument> {
@@ -216,6 +300,48 @@ export class DirectCallService {
 
     this.logger.log(`Call ${callId} declined successfully`);
     return call;
+  }
+
+  /**
+   * End call without needing to pass userId - gets it from context
+   */
+  async endCallForCurrentUser(
+    callId: string,
+    reason: string = CallEndReason.USER_HANGUP,
+  ): Promise<DmCallDocument> {
+    const userId = this.getCurrentUserId();
+    return this.endCall(userId, callId, reason);
+  }
+
+  /**
+   * Toggle media without needing to pass userId - gets it from context
+   */
+  async toggleMediaForCurrentUser(
+    callId: string,
+    mediaType: "audio" | "video",
+    state: MediaState,
+  ): Promise<void> {
+    const userId = this.getCurrentUserId();
+    return this.toggleMedia(userId, callId, mediaType, state);
+  }
+
+  /**
+   * Get call history without needing to pass userId - gets it from context
+   */
+  async getCallHistoryForCurrentUser(
+    limit: number = 20,
+    offset: number = 0,
+  ): Promise<unknown[]> {
+    const userId = this.getCurrentUserId();
+    return this.getCallHistory(userId, limit, offset);
+  }
+
+  /**
+   * Get active call without needing to pass userId - gets it from context
+   */
+  async getActiveCallForCurrentUser(): Promise<unknown | null> {
+    const userId = this.getCurrentUserId();
+    return this.getActiveCall(userId);
   }
 
   async endCall(
@@ -256,11 +382,18 @@ export class DirectCallService {
     // Create system message in conversation
     await this.createCallSystemMessage(call, callerId, calleeId);
 
-    // Clean up RTC sessions
-    await this.rtcSessionModel.updateMany(
-      { call_id: call._id, is_active: true },
-      { is_active: false, ended_at: new Date() },
-    );
+    // End Stream.io call
+    const streamCallId = call.metadata?.stream_call_id;
+    if (streamCallId) {
+      try {
+        await this.streamCallService.endCall(streamCallId);
+      } catch (error) {
+        this.logger.error(
+          `Error ending Stream.io call ${streamCallId}:`,
+          error,
+        );
+      }
+    }
 
     // Clean up cache
     await this.redis.del(`call:${callId}`);
@@ -269,117 +402,7 @@ export class DirectCallService {
     return call;
   }
 
-  async handleSignalOffer(userId: string, data: SignalOfferDto): Promise<void> {
-    const call = await this.dmCallModel.findById(data.call_id);
-    if (!call) {
-      throw new NotFoundException("Call not found");
-    }
-
-    if (
-      String(call.caller_id) !== userId &&
-      String(call.callee_id) !== userId
-    ) {
-      throw new ForbiddenException(
-        "You can only send signals for calls you are part of",
-      );
-    }
-
-    // Update or create RTC session
-    await this.rtcSessionModel.findOneAndUpdate(
-      { call_id: call._id, user_id: new Types.ObjectId(userId) },
-      {
-        $set: {
-          offer: data.offer,
-          last_activity: new Date(),
-        },
-        $setOnInsert: {
-          session_id: uuidv4(),
-          socket_id: "", // Will be set by gateway
-          is_active: true,
-        },
-      },
-      { upsert: true, new: true },
-    );
-
-    this.logger.log(
-      `Signal offer handled for call ${data.call_id} by user ${userId}`,
-    );
-  }
-
-  async handleSignalAnswer(
-    userId: string,
-    data: SignalAnswerDto,
-  ): Promise<void> {
-    const call = await this.dmCallModel.findById(data.call_id);
-    if (!call) {
-      throw new NotFoundException("Call not found");
-    }
-
-    if (
-      String(call.caller_id) !== userId &&
-      String(call.callee_id) !== userId
-    ) {
-      throw new ForbiddenException(
-        "You can only send signals for calls you are part of",
-      );
-    }
-
-    // Update RTC session
-    await this.rtcSessionModel.findOneAndUpdate(
-      { call_id: call._id, user_id: new Types.ObjectId(userId) },
-      {
-        $set: {
-          answer: data.answer,
-          last_activity: new Date(),
-        },
-      },
-    );
-
-    this.logger.log(
-      `Signal answer handled for call ${data.call_id} by user ${userId}`,
-    );
-  }
-
-  async handleIceCandidate(
-    userId: string,
-    data: IceCandidateDto,
-  ): Promise<void> {
-    const call = await this.dmCallModel.findById(data.call_id);
-    if (!call) {
-      throw new NotFoundException("Call not found");
-    }
-
-    if (
-      String(call.caller_id) !== userId &&
-      String(call.callee_id) !== userId
-    ) {
-      throw new ForbiddenException(
-        "You can only send signals for calls you are part of",
-      );
-    }
-
-    // Add ICE candidate to RTC session
-    await this.rtcSessionModel.findOneAndUpdate(
-      { call_id: call._id, user_id: new Types.ObjectId(userId) },
-      {
-        $push: {
-          ice_candidates: {
-            candidate: data.candidate,
-            sdpMLineIndex: data.sdpMLineIndex,
-            sdpMid: data.sdpMid,
-            timestamp: new Date(),
-          },
-        },
-        $set: {
-          last_activity: new Date(),
-        },
-      },
-    );
-
-    this.logger.log(
-      `ICE candidate handled for call ${data.call_id} by user ${userId}`,
-    );
-  }
+  // WebRTC signaling methods removed - Stream.io handles this automatically
 
   async toggleMedia(
     userId: string,
@@ -452,63 +475,33 @@ export class DirectCallService {
       }
     }
 
-    // Clean up RTC sessions
-    await this.rtcSessionModel.updateMany(
-      { user_id: new Types.ObjectId(userId), is_active: true },
-      { is_active: false, ended_at: new Date() },
+    // Stream.io will handle cleanup automatically
+    this.logger.log(
+      `User ${userId} disconnected, Stream.io will handle cleanup`,
     );
   }
 
-  async getTurnCredentials(): Promise<{
-    username: string;
-    credential: string;
-    ttl: number;
-  }> {
-    const turnSecret = this.configService.get<string>("TURN_SECRET");
+  // TURN server methods removed - Stream.io handles NAT traversal automatically
 
-    if (!turnSecret) {
-      throw new Error("TURN_SECRET must be set in environment variables");
-    }
-
-    const username = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const ttl = 24 * 60 * 60; // 24 hours
-    const credential = crypto
-      .createHmac("sha1", turnSecret)
-      .update(username)
-      .digest("base64");
-
-    return {
-      username,
-      credential,
-      ttl,
-    };
+  /**
+   * Get Stream.io configuration for frontend
+   */
+  async getStreamConfig(): Promise<StreamConfig> {
+    return this.streamCallService.getStreamConfig();
   }
 
-  async getIceServers(): Promise<
-    Array<{ urls: string; username?: string; credential?: string }>
-  > {
-    const turnCredentials = await this.getTurnCredentials();
-
-    // Get TURN server config from environment (default to localhost for local dev)
-    const turnHost = this.configService.get<string>("TURN_HOST") || "localhost";
-    const turnPort = this.configService.get<number>("TURN_PORT") || 3478;
-
-    return [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      {
-        urls: `turn:${turnHost}:${turnPort}`,
-        username: turnCredentials.username,
-        credential: turnCredentials.credential,
-      },
-    ];
+  /**
+   * Create user token for Stream.io authentication
+   */
+  async createUserToken(userId: string): Promise<string> {
+    return this.streamCallService.createUserToken(userId);
   }
 
   async getUserProfile(
     userId: string,
     sessionId?: string,
     fingerprintHash?: string,
-  ): Promise<UserProfile> {
+  ): Promise<AuthenticatedUser> {
     try {
       // Try to get from cache first
       const cacheKey = `user_profile:${userId}`;
@@ -517,22 +510,26 @@ export class DirectCallService {
         return JSON.parse(cached);
       }
 
-      let profile: UserProfile | null = null;
+      let profile: AuthenticatedUser | null = null;
 
-      // If we have session info, try to get from decode API first
       if (sessionId && fingerprintHash) {
         try {
           this.logger.log(
             `Fetching profile for ${userId} from decode API using session ${sessionId}`,
           );
-          profile = await this.decodeApiClient.getUserProfile(
+          const userProfile = await this.decodeApiClient.getUserProfile(
             sessionId,
             fingerprintHash,
             userId,
           );
 
-          if (profile) {
-            // Cache the profile for future use
+          if (userProfile) {
+            // Convert UserProfile to AuthenticatedUser
+            profile = {
+              ...userProfile,
+              session_id: sessionId,
+              fingerprint_hash: fingerprintHash,
+            };
             await this.redis.setex(cacheKey, 300, JSON.stringify(profile));
             this.logger.log(
               `Successfully fetched and cached profile for ${userId} from decode API`,
@@ -579,6 +576,8 @@ export class DirectCallService {
         last_account_deactivation: user.last_account_deactivation,
         dehive_role: user.dehive_role,
         role_subscription: user.role_subscription,
+        session_id: sessionId || "",
+        fingerprint_hash: fingerprintHash || "",
       };
 
       // Cache for 5 minutes
@@ -783,5 +782,46 @@ export class DirectCallService {
       .populate("caller_id", "username display_name avatar_ipfs_hash")
       .populate("callee_id", "username display_name avatar_ipfs_hash")
       .lean();
+  }
+
+  /**
+   * Get all active calls (ringing or connected)
+   */
+  async getActiveCalls(): Promise<
+    {
+      call_id: string;
+      status: string;
+      caller_id: unknown;
+      callee_id: unknown;
+      created_at: Date;
+      started_at?: Date;
+    }[]
+  > {
+    this.logger.log("Getting all active calls");
+
+    try {
+      const calls = await this.dmCallModel
+        .find({
+          status: { $in: ["ringing", "connected"] },
+        })
+        .select("_id status caller_id callee_id createdAt started_at")
+        .populate("caller_id", "username display_name avatar_ipfs_hash")
+        .populate("callee_id", "username display_name avatar_ipfs_hash")
+        .lean();
+
+      // Transform data to match expected format
+      return calls.map((call) => ({
+        call_id: String(call._id),
+        status: call.status,
+        caller_id: call.caller_id,
+        callee_id: call.callee_id,
+        created_at:
+          ((call as Record<string, unknown>).createdAt as Date) || new Date(),
+        started_at: (call as Record<string, unknown>).started_at as Date,
+      }));
+    } catch (error) {
+      this.logger.error("Error getting active calls:", error);
+      throw error;
+    }
   }
 }

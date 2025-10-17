@@ -16,6 +16,7 @@ import { CreateCategoryDto } from "../dto/create-category.dto";
 import { CreateChannelDto } from "../dto/create-channel.dto";
 import { UpdateCategoryDto } from "../dto/update-category.dto";
 import { UpdateChannelDto } from "../dto/update-channel.dto";
+import { MoveChannelDto } from "../dto/move-channel.dto";
 import {
   ApiTags,
   ApiOperation,
@@ -246,8 +247,7 @@ export class ServerController {
   @Patch("channels/:channelId")
   @ApiOperation({
     summary: "Update a channel",
-    description:
-      "Update channel properties including name, topic, or move it to a different category within the same server.",
+    description: "Update channel properties including name and topic.",
   })
   @ApiHeader({
     name: "x-session-id",
@@ -268,6 +268,33 @@ export class ServerController {
       actorId,
       updateChannelDto,
     );
+  }
+
+  @Patch("channels/:channelId/move")
+  @ApiOperation({
+    summary: "Move a channel to a different category",
+    description:
+      "Move a channel from its current category to a different category within the same server.",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiParam({
+    name: "channelId",
+    description: "The ID of the channel to move",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Channel moved successfully.",
+  })
+  moveChannel(
+    @Param("channelId") channelId: string,
+    @Body() moveChannelDto: MoveChannelDto,
+    @CurrentUser("_id") actorId: string,
+  ) {
+    return this.serverService.moveChannel(channelId, actorId, moveChannelDto);
   }
 
   @Delete("channels/:channelId")

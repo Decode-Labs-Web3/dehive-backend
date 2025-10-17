@@ -3,6 +3,7 @@ import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 import { firstValueFrom } from "rxjs";
 import { UserProfile } from "../interfaces/user-profile.interface";
+import { UserDehiveLean } from "../interfaces/user-dehive-lean.interface";
 
 @Injectable()
 export class DecodeApiClient {
@@ -90,6 +91,41 @@ export class DecodeApiClient {
         error,
       );
       return null;
+    }
+  }
+
+  async getUsersByIds(userIds: string[]): Promise<UserDehiveLean[]> {
+    try {
+      this.logger.log(`Getting users by IDs: ${userIds.join(", ")}`);
+
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.baseUrl}/api/user/batch`, {
+          user_ids: userIds,
+        }),
+      );
+
+      if (response.data && response.data.success) {
+        const users = response.data.data || [];
+
+        this.logger.log(
+          `Successfully retrieved ${users.length} users from decode API`,
+        );
+
+        return users.map((user: any) => ({
+          _id: user._id,
+          username: user.username || "",
+          display_name: user.display_name || "",
+          avatar_url: user.avatar_url || "",
+        }));
+      }
+
+      this.logger.warn(
+        `Failed to get users from decode API: ${response.data?.message || "Unknown error"}`,
+      );
+      return [];
+    } catch (error) {
+      this.logger.error(`Error getting users from decode API:`, error);
+      return [];
     }
   }
 }

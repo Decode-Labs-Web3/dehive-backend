@@ -16,7 +16,7 @@ import {
   ApiBearerAuth,
 } from "@nestjs/swagger";
 import { ChannelCallService } from "./channel-call.service";
-import { AuthGuard, Public } from "../common/guards/auth.guard";
+import { AuthGuard } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { UserProfile } from "../interfaces/user-profile.interface";
 import { Response } from "../interfaces/response.interface";
@@ -33,8 +33,11 @@ export class ChannelCallController {
 
   @Post("join")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Join a voice channel call" })
-  @ApiResponse({ status: 200, description: "Joined call successfully" })
+  @ApiOperation({ summary: "Join a Discord-style voice channel" })
+  @ApiResponse({
+    status: 200,
+    description: "Joined voice channel successfully",
+  })
   @ApiResponse({ status: 400, description: "Bad request" })
   @ApiResponse({ status: 404, description: "Channel not found" })
   @ApiBearerAuth()
@@ -43,7 +46,7 @@ export class ChannelCallController {
     @CurrentUser() user: UserProfile,
   ): Promise<Response> {
     this.logger.log(
-      `User ${user._id} joining call in channel ${joinCallDto.channel_id}`,
+      `User ${user._id} joining voice channel ${joinCallDto.channel_id}`,
     );
 
     try {
@@ -57,7 +60,7 @@ export class ChannelCallController {
       return {
         success: true,
         statusCode: 200,
-        message: "Joined call successfully",
+        message: "Joined voice channel successfully",
         data: {
           call_id: result.call._id,
           participant_id: result.participant._id,
@@ -71,7 +74,7 @@ export class ChannelCallController {
       return {
         success: false,
         statusCode: 400,
-        message: "Failed to join call",
+        message: "Failed to join voice channel",
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -79,16 +82,18 @@ export class ChannelCallController {
 
   @Post("leave")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Leave a voice channel call" })
-  @ApiResponse({ status: 200, description: "Left call successfully" })
+  @ApiOperation({ summary: "Leave a Discord-style voice channel" })
+  @ApiResponse({ status: 200, description: "Left voice channel successfully" })
   @ApiResponse({ status: 400, description: "Bad request" })
-  @ApiResponse({ status: 404, description: "Call not found" })
+  @ApiResponse({ status: 404, description: "Call or participant not found" })
   @ApiBearerAuth()
   async leaveCall(
     @Body() leaveCallDto: LeaveCallDto,
     @CurrentUser() user: UserProfile,
   ): Promise<Response> {
-    this.logger.log(`User ${user._id} leaving call ${leaveCallDto.call_id}`);
+    this.logger.log(
+      `User ${user._id} leaving voice channel call ${leaveCallDto.call_id}`,
+    );
 
     try {
       const result = await this.channelCallService.leaveCall(
@@ -99,12 +104,11 @@ export class ChannelCallController {
       return {
         success: true,
         statusCode: 200,
-        message: "Left call successfully",
+        message: "Left voice channel successfully",
         data: {
           call_id: result.call._id,
           status: result.call.status,
-          duration_seconds: result.participant.duration_seconds,
-          remaining_participants: result.call.current_participants,
+          current_participants: result.call.current_participants,
         },
       };
     } catch (error) {
@@ -112,156 +116,90 @@ export class ChannelCallController {
       return {
         success: false,
         statusCode: 400,
-        message: "Failed to leave call",
+        message: "Failed to leave voice channel",
         error: error instanceof Error ? error.message : String(error),
       };
     }
   }
 
-  @Get("channel/:channel_id")
-  @ApiOperation({ summary: "Get active call for a channel" })
+  @Get(":callId/participants")
+  @ApiOperation({ summary: "Get call participants" })
   @ApiResponse({
     status: 200,
-    description: "Active call retrieved successfully",
+    description: "Participants retrieved successfully",
   })
+  @ApiResponse({ status: 404, description: "Call not found" })
   @ApiBearerAuth()
-  async getActiveCallByChannel(
-    @Param("channel_id") channelId: string,
-    @CurrentUser() _user: UserProfile,
+  async getCallParticipants(
+    @Param("callId") callId: string,
+    @CurrentUser() user: UserProfile,
   ): Promise<Response> {
-    this.logger.log(`Getting active call for channel ${channelId}`);
+    this.logger.log(`Getting participants for call ${callId}`);
 
     try {
-      const call = await this.channelCallService.getActiveCallByChannel(channelId);
-
-      if (!call) {
-        return {
-          success: true,
-          statusCode: 200,
-          message: "No active call in this channel",
-          data: null,
-        };
-      }
-
-      const participants = await this.channelCallService.getParticipants(
-        String((call as Record<string, unknown>)._id),
+      const participants = await this.channelCallService.getCallParticipants(
+        callId,
+        user._id,
       );
 
       return {
         success: true,
         statusCode: 200,
-        message: "Active call retrieved successfully",
+        message: "Participants retrieved successfully",
         data: {
-          ...call,
+          call_id: callId,
           participants,
         },
       };
     } catch (error) {
-      this.logger.error("Error getting active call:", error);
+      this.logger.error("Error getting participants:", error);
       return {
         success: false,
-        statusCode: 500,
-        message: "Failed to get active call",
+        statusCode: 400,
+        message: "Failed to get participants",
         error: error instanceof Error ? error.message : String(error),
       };
     }
   }
 
-  @Get("my-calls")
-  @ApiOperation({ summary: "Get my active calls" })
-  @ApiResponse({ status: 200, description: "Active calls retrieved" })
+  @Get(":callId/status")
+  @ApiOperation({ summary: "Get call status" })
+  @ApiResponse({
+    status: 200,
+    description: "Call status retrieved successfully",
+  })
+  @ApiResponse({ status: 404, description: "Call not found" })
   @ApiBearerAuth()
-  async getMyCalls(@CurrentUser() user: UserProfile): Promise<Response> {
-    this.logger.log(`Getting active calls for user ${user._id}`);
+  async getCallStatus(
+    @Param("callId") callId: string,
+    @CurrentUser() user: UserProfile,
+  ): Promise<Response> {
+    this.logger.log(`Getting status for call ${callId}`);
 
     try {
-      const calls = await this.channelCallService.getUserActiveCalls(user._id);
+      const call = await this.channelCallService.getCallStatus(
+        callId,
+        user._id,
+      );
 
       return {
         success: true,
         statusCode: 200,
-        message: "Active calls retrieved successfully",
+        message: "Call status retrieved successfully",
         data: {
-          calls,
-          total: calls.length,
+          call_id: callId,
+          status: call.status,
+          current_participants: call.current_participants,
+          created_at: (call as any).createdAt,
+          updated_at: (call as any).updatedAt,
         },
       };
     } catch (error) {
-      this.logger.error("Error getting user calls:", error);
+      this.logger.error("Error getting call status:", error);
       return {
         success: false,
-        statusCode: 500,
-        message: "Failed to get user calls",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-}
-
-@ApiTags("TURN/ICE Configuration")
-@Controller("channel-turn")
-export class ChannelTurnController {
-  private readonly logger = new Logger(ChannelTurnController.name);
-
-  constructor(private readonly channelCallService: ChannelCallService) {}
-
-  @Get("credentials")
-  @Public()
-  @ApiOperation({ summary: "Get TURN server credentials" })
-  @ApiResponse({
-    status: 200,
-    description: "TURN credentials retrieved successfully",
-  })
-  async getTurnCredentials(): Promise<Response> {
-    this.logger.log("Getting TURN credentials");
-
-    try {
-      const credentials = await this.channelCallService.getTurnCredentials();
-
-      return {
-        success: true,
-        statusCode: 200,
-        message: "TURN credentials retrieved successfully",
-        data: credentials,
-      };
-    } catch (error) {
-      this.logger.error("Error getting TURN credentials:", error);
-      return {
-        success: false,
-        statusCode: 500,
-        message: "Failed to get TURN credentials",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  @Get("ice-servers")
-  @Public()
-  @ApiOperation({ summary: "Get ICE servers configuration" })
-  @ApiResponse({
-    status: 200,
-    description: "ICE servers retrieved successfully",
-  })
-  async getIceServers(): Promise<Response> {
-    this.logger.log("Getting ICE servers");
-
-    try {
-      const iceServers = await this.channelCallService.getIceServers();
-
-      return {
-        success: true,
-        statusCode: 200,
-        message: "ICE servers retrieved successfully",
-        data: {
-          iceServers,
-        },
-      };
-    } catch (error) {
-      this.logger.error("Error getting ICE servers:", error);
-      return {
-        success: false,
-        statusCode: 500,
-        message: "Failed to get ICE servers",
+        statusCode: 400,
+        message: "Failed to get call status",
         error: error instanceof Error ? error.message : String(error),
       };
     }

@@ -432,14 +432,9 @@ export class ServerService {
         "Category containing this channel not found.",
       );
 
-    // Get server info to check owner
     const server = await this.findServerById(category.server_id.toString());
-    console.log("🎯 [UPDATE CHANNEL] server:", server);
-    console.log("🎯 [UPDATE CHANNEL] server.owner_id:", server.owner_id);
 
-    // Check if actor is server owner
     const isOwner = server.owner_id.toString() === actorId;
-    console.log("🎯 [UPDATE CHANNEL] isOwner:", isOwner);
 
     const actorMembership = await this.userDehiveServerModel
       .findOne({
@@ -448,75 +443,19 @@ export class ServerService {
       })
       .lean();
 
-    console.log("🎯 [UPDATE CHANNEL] actorMembership:", actorMembership);
-
     const hasPermission =
       isOwner ||
       (actorMembership &&
         (actorMembership.role === ServerRole.OWNER ||
           actorMembership.role === ServerRole.MODERATOR));
 
-    console.log("🎯 [UPDATE CHANNEL] hasPermission:", hasPermission);
-
     if (!hasPermission) {
-      console.log("❌ [UPDATE CHANNEL] Permission denied!");
-      console.log("❌ [UPDATE CHANNEL] isOwner:", isOwner);
-      console.log(
-        "❌ [UPDATE CHANNEL] actorMembership exists:",
-        !!actorMembership,
-      );
-      console.log(
-        "❌ [UPDATE CHANNEL] actorMembership role:",
-        actorMembership?.role,
-      );
       throw new ForbiddenException(
         "You do not have permission to edit channels in this server.",
       );
     }
 
-    if (updateChannelDto.category_id) {
-      console.log("🎯 [UPDATE CHANNEL] Moving channel to new category...");
-      console.log("🎯 [UPDATE CHANNEL] Current category:", category._id);
-      console.log(
-        "🎯 [UPDATE CHANNEL] New category:",
-        updateChannelDto.category_id,
-      );
-
-      const newCategory = await this.categoryModel.findById(
-        updateChannelDto.category_id,
-      );
-
-      if (!newCategory) {
-        throw new NotFoundException(
-          `Category with ID "${updateChannelDto.category_id}" not found.`,
-        );
-      }
-
-      if (newCategory.server_id.toString() !== category.server_id.toString()) {
-        throw new BadRequestException(
-          "The new category does not belong to the same server.",
-        );
-      }
-
-      // Check if channel is already in the target category
-      if (channel.category_id.toString() === updateChannelDto.category_id) {
-        throw new BadRequestException(
-          "Channel is already in the specified category.",
-        );
-      }
-
-      console.log("✅ [UPDATE CHANNEL] Category validation passed");
-    }
-
-    // Prepare update data with proper ObjectId conversion
     const updateData: Record<string, unknown> = { ...updateChannelDto };
-    if (updateChannelDto.category_id) {
-      updateData.category_id = new Types.ObjectId(updateChannelDto.category_id);
-      console.log(
-        "🎯 [UPDATE CHANNEL] Converted category_id to ObjectId:",
-        updateData.category_id,
-      );
-    }
 
     const updatedChannel = await this.channelModel
       .findByIdAndUpdate(channelId, { $set: updateData }, { new: true })
@@ -525,6 +464,93 @@ export class ServerService {
     if (!updatedChannel) {
       throw new NotFoundException(
         `Failed to update channel with ID "${channelId}".`,
+      );
+    }
+
+    return updatedChannel;
+  }
+
+  async moveChannel(
+    channelId: string,
+    actorId: string,
+    moveChannelDto: { category_id: string },
+  ): Promise<Channel> {
+    console.log("🎯 [MOVE CHANNEL] Starting channel move...");
+    console.log("🎯 [MOVE CHANNEL] channelId:", channelId);
+    console.log("🎯 [MOVE CHANNEL] actorId:", actorId);
+    console.log("🎯 [MOVE CHANNEL] newCategoryId:", moveChannelDto.category_id);
+
+    const channel = await this.findChannelById(channelId);
+    const currentCategory = await this.categoryModel
+      .findById(channel.category_id)
+      .lean();
+    if (!currentCategory)
+      throw new NotFoundException(
+        "Category containing this channel not found.",
+      );
+
+    const server = await this.findServerById(
+      currentCategory.server_id.toString(),
+    );
+
+    const isOwner = server.owner_id.toString() === actorId;
+
+    const actorMembership = await this.userDehiveServerModel
+      .findOne({
+        server_id: currentCategory.server_id,
+        user_dehive_id: new Types.ObjectId(actorId),
+      })
+      .lean();
+
+    const hasPermission =
+      isOwner ||
+      (actorMembership &&
+        (actorMembership.role === ServerRole.OWNER ||
+          actorMembership.role === ServerRole.MODERATOR));
+
+    if (!hasPermission) {
+      throw new ForbiddenException(
+        "You do not have permission to move channels in this server.",
+      );
+    }
+
+    const newCategory = await this.categoryModel.findById(
+      moveChannelDto.category_id,
+    );
+
+    if (!newCategory) {
+      throw new NotFoundException(
+        `Category with ID "${moveChannelDto.category_id}" not found.`,
+      );
+    }
+
+    if (
+      newCategory.server_id.toString() !== currentCategory.server_id.toString()
+    ) {
+      throw new BadRequestException(
+        "The new category does not belong to the same server.",
+      );
+    }
+
+    if (channel.category_id.toString() === moveChannelDto.category_id) {
+      throw new BadRequestException(
+        "Channel is already in the specified category.",
+      );
+    }
+
+    const updatedChannel = await this.channelModel
+      .findByIdAndUpdate(
+        channelId,
+        {
+          $set: { category_id: new Types.ObjectId(moveChannelDto.category_id) },
+        },
+        { new: true },
+      )
+      .exec();
+
+    if (!updatedChannel) {
+      throw new NotFoundException(
+        `Failed to move channel with ID "${channelId}".`,
       );
     }
 
