@@ -497,6 +497,13 @@ export class DirectCallService {
     return this.streamCallService.createUserToken(userId);
   }
 
+  /**
+   * Generate Stream.io Call ID for stream token
+   */
+  generateStreamCallId(): string {
+    return this.streamCallService.generateStreamCallId();
+  }
+
   async getUserProfile(
     userId: string,
     sessionId?: string,

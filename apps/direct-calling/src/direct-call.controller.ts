@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  Query,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -19,6 +20,7 @@ import { AuthGuard, Public } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { Response } from "../interfaces/response.interface";
+import { StreamTokenResponse } from "../interfaces/stream-info.interface";
 import { StartCallDto } from "../dto/start-call.dto";
 import { AcceptCallDto } from "../dto/accept-call.dto";
 import { EndCallDto } from "../dto/end-call.dto";
@@ -282,23 +284,54 @@ export class DirectCallController {
   @ApiResponse({
     status: 200,
     description: "Stream.io token retrieved successfully",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        statusCode: { type: "number" },
+        message: { type: "string" },
+        data: {
+          type: "object",
+          properties: {
+            token: { type: "string" },
+            user_id: { type: "string" },
+            stream_call_id: { type: "string" },
+            stream_config: {
+              type: "object",
+              properties: {
+                apiKey: { type: "string" },
+                environment: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    },
   })
   @ApiBearerAuth()
   async getStreamToken(
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<Response> {
+    @Query("stream_call_id") streamCallId?: string,
+  ): Promise<Response<StreamTokenResponse>> {
     this.logger.log(`Getting Stream.io token for user ${user._id}`);
 
     try {
+      // Tạo Stream.io JWT token như cũ
       const token = await this.directCallService.createUserToken(user._id);
       const streamConfig = await this.directCallService.getStreamConfig();
+
+      // Sử dụng streamCallId từ query parameter hoặc tạo mới
+      const finalStreamCallId =
+        streamCallId || this.directCallService.generateStreamCallId();
 
       return {
         success: true,
         statusCode: 200,
         message: "Stream.io token retrieved successfully",
         data: {
-          token,
+          token, // Stream.io JWT token
+          user_id: user._id,
+          stream_call_id: finalStreamCallId, // Stream.io Call ID để join call
           stream_config: streamConfig,
         },
       };

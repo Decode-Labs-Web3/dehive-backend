@@ -27,3 +27,10 @@ export interface StreamConfig {
   apiKey: string;
   environment: string;
 }
+
+export interface StreamTokenResponse {
+  token: string;
+  user_id: string;
+  stream_call_id: string; // Stream.io Call ID để join call
+  stream_config: StreamConfig;
+}

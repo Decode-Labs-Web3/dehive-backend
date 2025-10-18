@@ -1,26 +1,19 @@
 import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
 import { MongooseModule } from "@nestjs/mongoose";
 import { HttpModule } from "@nestjs/axios";
-import { ConfigModule, ConfigService } from "@nestjs/config";
 import { RedisModule } from "@nestjs-modules/ioredis";
-
-import { ChannelCallController } from "./channel-call.controller";
-import { ChannelTurnController } from "./channel-turn.controller";
 import { ChannelCallService } from "./channel-call.service";
+import { StreamCallService } from "./stream-call.service";
+import { ChannelCallController } from "./channel-call.controller";
 import { ChannelCallGateway } from "../gateway/channel-call.gateway";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { DecodeApiClient } from "../clients/decode-api.client";
-
-// Schemas
 import { ChannelCall, ChannelCallSchema } from "../schemas/channel-call.schema";
 import {
   ChannelParticipant,
   ChannelParticipantSchema,
 } from "../schemas/channel-participant.schema";
-import {
-  ChannelRtcSession,
-  ChannelRtcSessionSchema,
-} from "../schemas/rtc-session.schema";
 import {
   UserDehive,
   UserDehiveSchema,
@@ -43,7 +36,6 @@ import {
     MongooseModule.forFeature([
       { name: ChannelCall.name, schema: ChannelCallSchema },
       { name: ChannelParticipant.name, schema: ChannelParticipantSchema },
-      { name: ChannelRtcSession.name, schema: ChannelRtcSessionSchema },
       { name: UserDehive.name, schema: UserDehiveSchema },
     ]),
     HttpModule.registerAsync({
@@ -71,13 +63,14 @@ import {
       inject: [ConfigService],
     }),
   ],
-  controllers: [ChannelCallController, ChannelTurnController],
+  controllers: [ChannelCallController],
   providers: [
     ChannelCallService,
+    StreamCallService,
     ChannelCallGateway,
     AuthGuard,
     DecodeApiClient,
   ],
-  exports: [ChannelCallService],
+  exports: [ChannelCallService, StreamCallService],
 })
 export class ChannelCallModule {}

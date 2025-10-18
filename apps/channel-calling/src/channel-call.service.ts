@@ -10,14 +10,10 @@ import {
   ChannelParticipant,
   ChannelParticipantDocument,
 } from "../schemas/channel-participant.schema";
-import {
-  ChannelRtcSession,
-  ChannelRtcSessionDocument,
-} from "../schemas/rtc-session.schema";
 import { CallStatus, CallEndReason } from "../enum/enum";
-import { UserProfile } from "../interfaces/user-profile.interface";
 import { UserDehiveLean } from "../interfaces/user-dehive-lean.interface";
 import { DecodeApiClient } from "../clients/decode-api.client";
+import { StreamCallService } from "./stream-call.service";
 
 @Injectable()
 export class ChannelCallService {
@@ -28,13 +24,12 @@ export class ChannelCallService {
     private channelCallModel: Model<ChannelCallDocument>,
     @InjectModel(ChannelParticipant.name)
     private channelParticipantModel: Model<ChannelParticipantDocument>,
-    @InjectModel(ChannelRtcSession.name)
-    private rtcSessionModel: Model<ChannelRtcSessionDocument>,
     private configService: ConfigService,
     private decodeApiClient: DecodeApiClient,
+    private streamCallService: StreamCallService,
   ) {}
 
-  async joinCall(
+  async joinChannel(
     userId: string,
     channelId: string,
     withVideo: boolean = false,
@@ -43,6 +38,12 @@ export class ChannelCallService {
     call: ChannelCallDocument;
     participant: ChannelParticipantDocument;
     otherParticipants: UserDehiveLean[];
+    streamInfo: {
+      callId: string;
+      callerToken: string;
+      calleeToken: string;
+      streamConfig: unknown;
+    };
   }> {
     this.logger.log(`User ${userId} joining voice channel ${channelId}`);
 
@@ -76,10 +77,17 @@ export class ChannelCallService {
         String(call._id),
         userId,
       );
+      // Generate Stream.io info for existing participant
+      const streamInfo = await this.streamCallService.createChannelCall(
+        channelId,
+        [userId, ...otherParticipants.map((p) => p._id)],
+      );
+
       return {
         call,
         participant: existingParticipant,
         otherParticipants,
+        streamInfo,
       };
     }
 
@@ -103,8 +111,14 @@ export class ChannelCallService {
 
     // Get other participants
     const otherParticipants = await this.getOtherParticipants(
-      String(call._id as any),
+      String(call._id),
       userId,
+    );
+
+    // Generate Stream.io info for channel call
+    const streamInfo = await this.streamCallService.createChannelCall(
+      channelId,
+      [userId, ...otherParticipants.map((p) => p._id)],
     );
 
     this.logger.log(
@@ -115,6 +129,7 @@ export class ChannelCallService {
       call,
       participant,
       otherParticipants,
+      streamInfo,
     };
   }
 
@@ -146,29 +161,24 @@ export class ChannelCallService {
     const call = await this.channelCallModel
       .findByIdAndUpdate(
         callId,
-        {
-          $inc: { current_participants: -1 },
-        },
+        { $inc: { current_participants: -1 } },
         { new: true },
       )
       .exec();
 
     if (!call) {
-      throw new NotFoundException("Voice channel call not found");
+      throw new NotFoundException("Call not found");
     }
 
-    // Discord style: Only end call if no participants left
+    // If no participants left, end the call
     if (call.current_participants <= 0) {
       await this.channelCallModel
         .findByIdAndUpdate(callId, {
           status: CallStatus.ENDED,
-          end_reason: CallEndReason.USER_HANGUP,
           ended_at: new Date(),
+          end_reason: CallEndReason.ALL_PARTICIPANTS_LEFT,
         })
         .exec();
-      this.logger.log(
-        `Voice channel call ${callId} ended - no participants left`,
-      );
     }
 
     this.logger.log(
@@ -178,134 +188,27 @@ export class ChannelCallService {
     return { call };
   }
 
-  async getCallParticipants(
-    callId: string,
-    userId: string,
-  ): Promise<UserDehiveLean[]> {
-    this.logger.log(`Getting participants for call ${callId}`);
-
-    const call = await this.channelCallModel.findById(callId).exec();
-    if (!call) {
-      throw new NotFoundException("Call not found");
-    }
-
-    // Check if user is in this call
-    const userParticipant = await this.channelParticipantModel
-      .findOne({ call_id: callId, user_id: userId })
-      .exec();
-
-    if (!userParticipant) {
-      throw new NotFoundException("User not in this call");
-    }
-
-    return await this.getOtherParticipants(callId, userId);
-  }
-
-  async getCallStatus(
-    callId: string,
-    userId: string,
-  ): Promise<ChannelCallDocument> {
-    this.logger.log(`Getting status for call ${callId}`);
-
-    const call = await this.channelCallModel.findById(callId).exec();
-    if (!call) {
-      throw new NotFoundException("Call not found");
-    }
-
-    // Check if user is in this call
-    const userParticipant = await this.channelParticipantModel
-      .findOne({ call_id: callId, user_id: userId })
-      .exec();
-
-    if (!userParticipant) {
-      throw new NotFoundException("User not in this call");
-    }
-
-    return call;
-  }
-
-  async toggleMedia(
-    userId: string,
-    callId: string,
-    mediaType: "audio" | "video",
-    enabled: boolean,
-  ): Promise<ChannelParticipantDocument> {
-    this.logger.log(
-      `User ${userId} toggling ${mediaType} to ${enabled} in call ${callId}`,
-    );
-
-    const participant = await this.channelParticipantModel
-      .findOne({ call_id: callId, user_id: userId })
-      .exec();
-
-    if (!participant) {
-      throw new NotFoundException("Participant not found in this call");
-    }
-
-    const updateField =
-      mediaType === "audio" ? "is_audio_enabled" : "is_video_enabled";
-
-    await this.channelParticipantModel
-      .findByIdAndUpdate(participant._id, {
-        [updateField]: enabled,
-      })
-      .exec();
-
-    const updatedParticipant = await this.channelParticipantModel
-      .findById(participant._id)
-      .exec();
-
-    if (!updatedParticipant) {
-      throw new NotFoundException("Participant not found after update");
-    }
-
-    this.logger.log(
-      `User ${userId} ${mediaType} toggled to ${enabled} in call ${callId}`,
-    );
-
-    return updatedParticipant;
-  }
-
-  async getTurnCredentials(): Promise<{
-    username: string;
-    credential: string;
+  async getStreamConfig(): Promise<{
+    apiKey: string;
+    environment: string;
   }> {
-    const secret = this.configService.get<string>("TURN_SECRET");
-    if (!secret) {
-      throw new Error("TURN_SECRET not configured");
-    }
-
-    const unixTimeStamp = Math.floor(Date.now() / 1000) + 24 * 3600; // 24 hours
-    const username = unixTimeStamp.toString();
-    const credential = require("crypto")
-      .createHmac("sha1", secret)
-      .update(username)
-      .digest("base64");
-
-    return { username, credential };
+    this.logger.log("Getting Stream.io configuration for channel calling");
+    return await this.streamCallService.getStreamConfig();
   }
 
-  async getIceServers(): Promise<
-    Array<{ urls: string; username?: string; credential?: string }>
-  > {
-    const turnCredentials = await this.getTurnCredentials();
-
-    // Get TURN server config from environment (default to localhost for local dev)
-    const turnHost = this.configService.get<string>("TURN_HOST") || "localhost";
-    const turnPort = this.configService.get<number>("TURN_PORT") || 3478;
-
-    return [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      {
-        urls: `turn:${turnHost}:${turnPort}`,
-        username: turnCredentials.username,
-        credential: turnCredentials.credential,
-      },
-    ];
+  async getStreamToken(userId: string): Promise<string> {
+    this.logger.log(`Getting Stream.io token for user ${userId}`);
+    return await this.streamCallService.generateStreamToken(userId);
   }
 
-  private async getOtherParticipants(
+  /**
+   * Generate Stream.io Call ID for channel call
+   */
+  generateStreamCallId(): string {
+    return this.streamCallService.generateStreamCallId();
+  }
+
+  async getOtherParticipants(
     callId: string,
     userId: string,
   ): Promise<UserDehiveLean[]> {
@@ -326,183 +229,13 @@ export class ChannelCallService {
         username: user.username,
         display_name: user.display_name,
         avatar_ipfs_hash: user.avatar_ipfs_hash,
+        bio: user.bio,
+        status: user.status,
+        is_active: user.is_active,
       }));
     } catch (error) {
-      this.logger.error("Error fetching user profiles:", error);
+      this.logger.error("Error fetching other participants:", error);
       return [];
-    }
-  }
-
-  async handleUserDisconnect(userId: string, callId: string): Promise<void> {
-    this.logger.log(`Handling user disconnect: ${userId} from call ${callId}`);
-
-    try {
-      // Find and remove participant
-      const participant = await this.channelParticipantModel
-        .findOne({ call_id: callId, user_id: userId })
-        .exec();
-
-      if (participant) {
-        await this.channelParticipantModel
-          .findByIdAndDelete(participant._id)
-          .exec();
-
-        // Update call participant count
-        await this.channelCallModel
-          .findByIdAndUpdate(callId, {
-            $inc: { current_participants: -1 },
-          })
-          .exec();
-
-        // Check if call should be ended
-        const call = await this.channelCallModel.findById(callId).exec();
-        if (call && call.current_participants <= 1) {
-          await this.channelCallModel
-            .findByIdAndUpdate(callId, {
-              status: CallStatus.ENDED,
-              end_reason: CallEndReason.USER_HANGUP,
-              ended_at: new Date(),
-            })
-            .exec();
-        }
-      }
-    } catch (error) {
-      this.logger.error(`Error handling user disconnect: ${error}`);
-    }
-  }
-
-  async handleSignalOffer(userId: string, data: any): Promise<void> {
-    this.logger.log(
-      `Handling signal offer for user ${userId} in call ${data.call_id}`,
-    );
-
-    try {
-      const call = await this.channelCallModel.findById(data.call_id);
-      if (!call) {
-        throw new NotFoundException("Call not found");
-      }
-
-      // Check if user is participant in this call
-      const participant = await this.channelParticipantModel
-        .findOne({ call_id: data.call_id, user_id: userId })
-        .exec();
-
-      if (!participant) {
-        throw new NotFoundException("User not in this call");
-      }
-
-      // Update or create RTC session
-      await this.rtcSessionModel.findOneAndUpdate(
-        { call_id: call._id, user_id: userId },
-        {
-          $set: {
-            offers: [data.offer],
-            last_activity: new Date(),
-          },
-          $setOnInsert: {
-            session_id: require("crypto").randomUUID(),
-            socket_id: "",
-            is_active: true,
-          },
-        },
-        { upsert: true, new: true },
-      );
-
-      this.logger.log(
-        `Signal offer handled for call ${data.call_id} by user ${userId}`,
-      );
-    } catch (error) {
-      this.logger.error(`Error handling signal offer: ${error}`);
-      throw error;
-    }
-  }
-
-  async handleSignalAnswer(userId: string, data: any): Promise<void> {
-    this.logger.log(
-      `Handling signal answer for user ${userId} in call ${data.call_id}`,
-    );
-
-    try {
-      const call = await this.channelCallModel.findById(data.call_id);
-      if (!call) {
-        throw new NotFoundException("Call not found");
-      }
-
-      // Check if user is participant in this call
-      const participant = await this.channelParticipantModel
-        .findOne({ call_id: data.call_id, user_id: userId })
-        .exec();
-
-      if (!participant) {
-        throw new NotFoundException("User not in this call");
-      }
-
-      // Update RTC session
-      await this.rtcSessionModel.findOneAndUpdate(
-        { call_id: call._id, user_id: userId },
-        {
-          $set: {
-            answers: [data.answer],
-            last_activity: new Date(),
-          },
-        },
-        { new: true },
-      );
-
-      this.logger.log(
-        `Signal answer handled for call ${data.call_id} by user ${userId}`,
-      );
-    } catch (error) {
-      this.logger.error(`Error handling signal answer: ${error}`);
-      throw error;
-    }
-  }
-
-  async handleIceCandidate(userId: string, data: any): Promise<void> {
-    this.logger.log(
-      `Handling ICE candidate for user ${userId} in call ${data.call_id}`,
-    );
-
-    try {
-      const call = await this.channelCallModel.findById(data.call_id);
-      if (!call) {
-        throw new NotFoundException("Call not found");
-      }
-
-      // Check if user is participant in this call
-      const participant = await this.channelParticipantModel
-        .findOne({ call_id: data.call_id, user_id: userId })
-        .exec();
-
-      if (!participant) {
-        throw new NotFoundException("User not in this call");
-      }
-
-      // Update RTC session with ICE candidate
-      await this.rtcSessionModel.findOneAndUpdate(
-        { call_id: call._id, user_id: userId },
-        {
-          $push: {
-            ice_candidates: {
-              candidate: data.candidate,
-              sdpMLineIndex: data.sdpMLineIndex,
-              sdpMid: data.sdpMid,
-              timestamp: new Date(),
-            },
-          },
-          $set: {
-            last_activity: new Date(),
-          },
-        },
-        { new: true },
-      );
-
-      this.logger.log(
-        `ICE candidate handled for call ${data.call_id} by user ${userId}`,
-      );
-    } catch (error) {
-      this.logger.error(`Error handling ICE candidate: ${error}`);
-      throw error;
     }
   }
 
@@ -511,10 +244,67 @@ export class ChannelCallService {
 
     try {
       const users = await this.decodeApiClient.getUsersByIds([userId]);
-      return users.length > 0 ? users[0] : null;
+      if (users.length === 0) {
+        return null;
+      }
+
+      const user = users[0];
+      return {
+        _id: user._id,
+        username: user.username,
+        display_name: user.display_name,
+        avatar_ipfs_hash: user.avatar_ipfs_hash,
+        bio: user.bio,
+        status: user.status,
+        is_active: user.is_active,
+      };
     } catch (error) {
-      this.logger.error(`Error getting user profile: ${error}`);
+      this.logger.error("Error getting user profile:", error);
       return null;
+    }
+  }
+
+  async handleUserDisconnect(userId: string): Promise<void> {
+    this.logger.log(`Handling user disconnect for ${userId}`);
+
+    try {
+      // Find all active calls where user is participating
+      const participants = await this.channelParticipantModel
+        .find({ user_id: userId })
+        .populate("call_id")
+        .exec();
+
+      for (const participant of participants) {
+        const call = participant.call_id as any;
+        if (call && call.status === CallStatus.CONNECTED) {
+          // Remove participant
+          await this.channelParticipantModel
+            .findByIdAndDelete(participant._id)
+            .exec();
+
+          // Update call participant count
+          await this.channelCallModel
+            .findByIdAndUpdate(
+              call._id,
+              { $inc: { current_participants: -1 } },
+              { new: true },
+            )
+            .exec();
+
+          // If no participants left, end the call
+          if (call.current_participants <= 1) {
+            await this.channelCallModel
+              .findByIdAndUpdate(call._id, {
+                status: CallStatus.ENDED,
+                ended_at: new Date(),
+                end_reason: CallEndReason.ALL_PARTICIPANTS_LEFT,
+              })
+              .exec();
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Error handling user disconnect: ${error}`);
     }
   }
 }

@@ -21,6 +21,7 @@ import { MediaState } from "../enum/enum";
 type SocketMeta = {
   userDehiveId?: string;
   callId?: string;
+  callTimeout?: NodeJS.Timeout;
 };
 
 @WebSocketGateway({
@@ -33,7 +34,7 @@ export class DirectCallGateway
   @WebSocketServer()
   server: Server;
 
-  private meta: WeakMap<Socket, SocketMeta>;
+  private meta: Map<Socket, SocketMeta>;
 
   constructor(
     @InjectModel(UserDehive.name)
@@ -41,8 +42,8 @@ export class DirectCallGateway
     @InjectModel(DmCall.name)
     private readonly dmCallModel: Model<DmCallDocument>,
   ) {
-    // Initialize meta WeakMap
-    this.meta = new WeakMap<Socket, SocketMeta>();
+    // Initialize meta Map
+    this.meta = new Map<Socket, SocketMeta>();
 
     // Debug logging
     console.log("[RTC-WS] Gateway constructor called");
@@ -55,6 +56,15 @@ export class DirectCallGateway
     client.emit(event, serializedData);
   }
 
+  private findSocketByUserId(userId: string): Socket | null {
+    for (const [socket, meta] of this.meta.entries()) {
+      if (meta.userDehiveId === userId) {
+        return socket;
+      }
+    }
+    return null;
+  }
+
   handleConnection(client: Socket) {
     console.log("[RTC-WS] ========================================");
     console.log(
@@ -63,18 +73,18 @@ export class DirectCallGateway
     console.log(`[RTC-WS] Socket ID: ${client.id}`);
     console.log("[RTC-WS] ========================================");
 
-    // Ensure meta WeakMap is initialized
+    // Ensure meta Map is initialized
     if (!this.meta) {
-      this.meta = new WeakMap<Socket, SocketMeta>();
+      this.meta = new Map<Socket, SocketMeta>();
     }
 
     this.meta.set(client, {});
   }
 
   handleDisconnect(client: Socket) {
-    // Ensure meta WeakMap is initialized
+    // Ensure meta Map is initialized
     if (!this.meta) {
-      this.meta = new WeakMap<Socket, SocketMeta>();
+      this.meta = new Map<Socket, SocketMeta>();
     }
 
     const meta = this.meta.get(client);
@@ -108,9 +118,9 @@ export class DirectCallGateway
   ) {
     console.log(`[RTC-WS] Identity request received:`, data);
 
-    // Ensure meta WeakMap is initialized
+    // Ensure meta Map is initialized
     if (!this.meta) {
-      this.meta = new WeakMap<Socket, SocketMeta>();
+      this.meta = new Map<Socket, SocketMeta>();
     }
 
     let userDehiveId: string;
@@ -164,9 +174,9 @@ export class DirectCallGateway
       | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta WeakMap is initialized
+    // Ensure meta Map is initialized
     if (!this.meta) {
-      this.meta = new WeakMap<Socket, SocketMeta>();
+      this.meta = new Map<Socket, SocketMeta>();
     }
 
     const meta = this.meta.get(client);
@@ -253,6 +263,50 @@ export class DirectCallGateway
       await call.save();
       meta.callId = String(call._id);
 
+      // Set timeout for call (30 seconds)
+      const callTimeoutMs = 30000; // 30 seconds
+      const timeoutId = setTimeout(async () => {
+        try {
+          const currentCall = await this.dmCallModel.findById(call._id);
+          if (currentCall && currentCall.status === "ringing") {
+            // Update call status to timeout
+            await this.dmCallModel.findByIdAndUpdate(
+              call._id,
+              {
+                status: "timeout",
+                ended_at: new Date(),
+              },
+              { new: true },
+            );
+
+            // Notify caller about timeout
+            this.send(client, "callTimeout", {
+              call_id: call._id,
+              status: "timeout",
+              reason: "call_timeout",
+              timestamp: new Date().toISOString(),
+            });
+
+            // Notify callee about timeout
+            this.server
+              .to(`user:${parsedData.target_user_id}`)
+              .emit("callTimeout", {
+                call_id: call._id,
+                caller_id: callerId,
+                reason: "call_timeout",
+                timestamp: new Date().toISOString(),
+              });
+
+            console.log(`[RTC-WS] Call ${call._id} timed out after 30 seconds`);
+          }
+        } catch (error) {
+          console.error("[RTC-WS] Error handling call timeout:", error);
+        }
+      }, callTimeoutMs);
+
+      // Store timeout ID in meta for later cleanup
+      meta.callTimeout = timeoutId;
+
       const result = {
         call: {
           _id: call._id,
@@ -338,9 +392,9 @@ export class DirectCallGateway
       | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta WeakMap is initialized
+    // Ensure meta Map is initialized
     if (!this.meta) {
-      this.meta = new WeakMap<Socket, SocketMeta>();
+      this.meta = new Map<Socket, SocketMeta>();
     }
 
     const meta = this.meta.get(client);
@@ -375,6 +429,31 @@ export class DirectCallGateway
     }
 
     try {
+      // Get call info first to find caller
+      const existingCall = await this.dmCallModel.findById(parsedData.call_id);
+      if (!existingCall) {
+        return this.send(client, "error", {
+          message: "Call not found",
+          code: "CALL_NOT_FOUND",
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Clear timeout if it exists
+      const callerSocket = this.findSocketByUserId(
+        String(existingCall.caller_id),
+      );
+      if (callerSocket) {
+        const callerMeta = this.meta.get(callerSocket);
+        if (callerMeta?.callTimeout) {
+          clearTimeout(callerMeta.callTimeout);
+          callerMeta.callTimeout = undefined;
+          console.log(
+            `[RTC-WS] Cleared timeout for call ${parsedData.call_id}`,
+          );
+        }
+      }
+
       // Update call status to connected
       const call = await this.dmCallModel.findByIdAndUpdate(
         parsedData.call_id,
@@ -475,9 +554,9 @@ export class DirectCallGateway
     @MessageBody() data: { call_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta WeakMap is initialized
+    // Ensure meta Map is initialized
     if (!this.meta) {
-      this.meta = new WeakMap<Socket, SocketMeta>();
+      this.meta = new Map<Socket, SocketMeta>();
     }
 
     const meta = this.meta.get(client);
@@ -508,6 +587,24 @@ export class DirectCallGateway
     }
 
     try {
+      // Clear timeout if it exists
+      const existingCall = await this.dmCallModel.findById(parsedData.call_id);
+      if (existingCall) {
+        const callerSocket = this.findSocketByUserId(
+          String(existingCall.caller_id),
+        );
+        if (callerSocket) {
+          const callerMeta = this.meta.get(callerSocket);
+          if (callerMeta?.callTimeout) {
+            clearTimeout(callerMeta.callTimeout);
+            callerMeta.callTimeout = undefined;
+            console.log(
+              `[RTC-WS] Cleared timeout for declined call ${parsedData.call_id}`,
+            );
+          }
+        }
+      }
+
       const call = await this.dmCallModel.findByIdAndUpdate(
         parsedData.call_id,
         {
@@ -556,9 +653,9 @@ export class DirectCallGateway
     @MessageBody() data: { call_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta WeakMap is initialized
+    // Ensure meta Map is initialized
     if (!this.meta) {
-      this.meta = new WeakMap<Socket, SocketMeta>();
+      this.meta = new Map<Socket, SocketMeta>();
     }
 
     const meta = this.meta.get(client);
@@ -640,9 +737,9 @@ export class DirectCallGateway
       | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta WeakMap is initialized
+    // Ensure meta Map is initialized
     if (!this.meta) {
-      this.meta = new WeakMap<Socket, SocketMeta>();
+      this.meta = new Map<Socket, SocketMeta>();
     }
 
     const meta = this.meta.get(client);

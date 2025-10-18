@@ -16,6 +16,7 @@ export enum CallEndReason {
   CONNECTION_ERROR = "connection_error",
   NETWORK_ERROR = "network_error",
   SERVER_ERROR = "server_error",
+  ALL_PARTICIPANTS_LEFT = "all_participants_left",
 }
 
 export enum MediaType {

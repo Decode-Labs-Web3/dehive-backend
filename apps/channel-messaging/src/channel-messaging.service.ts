@@ -140,7 +140,7 @@ export class MessagingService {
       throw new BadRequestException("Invalid or missing user_dehive_id");
     }
     const isMember = await this.userDehiveServerModel.exists({
-      user_dehive_id: userId, // userId is now _id from controller
+      user_dehive_id: userId,
       server_id: new Types.ObjectId(body.serverId),
     });
     if (!isMember) {

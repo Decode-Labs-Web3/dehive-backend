@@ -1,9 +1,9 @@
 // Server Tags Enum
 export enum ServerTag {
-  GAMING = "gaming",
-  FRIENDS = "friends",
-  STUDY_GROUP = "study group",
-  SCHOOL_CLUB = "school Club",
+  GAMING = "Gaming",
+  FRIENDS = "Friends",
+  STUDY_GROUP = "Study Group",
+  SCHOOL_CLUB = "School Club",
   LOCAL_COMMUNITY = "Local Community",
   ARTIST_CREATORS = "Artist & Creators",
 }

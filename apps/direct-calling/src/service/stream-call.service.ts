@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-// import { StreamCall } from "@stream-io/node-sdk"; // Will be used when implementing real Stream.io integration
+import { StreamClient } from "@stream-io/node-sdk";
 import { v4 as uuidv4 } from "uuid";
 import {
   StreamInfo,
@@ -10,7 +10,7 @@ import {
 @Injectable()
 export class StreamCallService {
   private readonly logger = new Logger(StreamCallService.name);
-  private readonly streamClient: unknown; // Stream.io client
+  private readonly streamClient: StreamClient;
   private readonly apiKey: string;
   private readonly apiSecret: string;
 
@@ -25,7 +25,7 @@ export class StreamCallService {
     }
 
     // Initialize Stream.io client
-    this.streamClient = null; // Will be initialized when needed
+    this.streamClient = new StreamClient(this.apiKey, this.apiSecret);
   }
 
   /**
@@ -35,9 +35,8 @@ export class StreamCallService {
     try {
       this.logger.log(`Creating Stream.io token for user ${userId}`);
 
-      // For now, return a mock token - in real implementation,
-      // you would use Stream.io SDK to create actual tokens
-      const token = `stream_token_${userId}_${Date.now()}`;
+      // Create real Stream.io JWT token
+      const token = this.streamClient.createToken(userId);
 
       this.logger.log(`Successfully created token for user ${userId}`);
       return token;
@@ -58,6 +57,15 @@ export class StreamCallService {
     const timestamp = Date.now();
     const randomId = uuidv4().substring(0, 8);
     return `call_${callerId}_${calleeId}_${timestamp}_${randomId}`;
+  }
+
+  /**
+   * Tạo Stream.io Call ID cho stream token
+   */
+  generateStreamCallId(): string {
+    // Tạo Stream.io Call ID theo format của Stream.io
+    const randomId = uuidv4().replace(/-/g, "").substring(0, 20);
+    return randomId;
   }
 
   /**
