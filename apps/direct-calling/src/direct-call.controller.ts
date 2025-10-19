@@ -7,7 +7,6 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
-  Query,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -15,12 +14,11 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from "@nestjs/swagger";
-import { DirectCallService } from "./service/direct-call.service";
-import { AuthGuard, Public } from "../common/guards/auth.guard";
+import { DirectCallService } from "./direct-call.service";
+import { AuthGuard } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { Response } from "../interfaces/response.interface";
-import { StreamTokenResponse } from "../interfaces/stream-info.interface";
 import { StartCallDto } from "../dto/start-call.dto";
 import { AcceptCallDto } from "../dto/accept-call.dto";
 import { EndCallDto } from "../dto/end-call.dto";
@@ -49,10 +47,8 @@ export class DirectCallController {
     );
 
     try {
-      const result = await this.directCallService.startCallForCurrentUser(
+      const call = await this.directCallService.startCallForCurrentUser(
         startCallDto.target_user_id,
-        startCallDto.with_video ?? true,
-        startCallDto.with_audio ?? true,
       );
 
       return {
@@ -60,14 +56,10 @@ export class DirectCallController {
         statusCode: 200,
         message: "Call started successfully",
         data: {
-          call_id: result.call._id,
-          status: result.call.status,
+          call_id: call._id,
+          status: call.status,
           target_user_id: startCallDto.target_user_id,
-          with_video: startCallDto.with_video ?? true,
-          with_audio: startCallDto.with_audio ?? true,
-          created_at: (result.call as unknown as Record<string, unknown>)
-            .createdAt,
-          stream_info: result.streamInfo,
+          created_at: (call as unknown as Record<string, unknown>).createdAt,
         },
       };
     } catch (error) {
@@ -95,10 +87,8 @@ export class DirectCallController {
     this.logger.log(`Accepting call ${acceptCallDto.call_id} by ${user._id}`);
 
     try {
-      const result = await this.directCallService.acceptCallForCurrentUser(
+      const call = await this.directCallService.acceptCallForCurrentUser(
         acceptCallDto.call_id,
-        acceptCallDto.with_video ?? true,
-        acceptCallDto.with_audio ?? true,
       );
 
       return {
@@ -106,12 +96,9 @@ export class DirectCallController {
         statusCode: 200,
         message: "Call accepted successfully",
         data: {
-          call_id: result.call._id,
-          status: result.call.status,
-          with_video: acceptCallDto.with_video ?? true,
-          with_audio: acceptCallDto.with_audio ?? true,
-          started_at: result.call.started_at,
-          stream_info: result.streamInfo,
+          call_id: call._id,
+          status: call.status,
+          started_at: call.started_at,
         },
       };
     } catch (error) {
@@ -207,18 +194,18 @@ export class DirectCallController {
   }
 
   @Get("active")
-  @Public()
-  @ApiOperation({ summary: "Get active call for current user" })
+  @ApiOperation({ summary: "Get all active calls" })
   @ApiResponse({
     status: 200,
-    description: "Active call retrieved successfully",
+    description: "Active calls retrieved successfully",
   })
-  @ApiResponse({ status: 404, description: "No active call found" })
-  async getActiveCall(): Promise<Response> {
+  @ApiBearerAuth()
+  async getActiveCalls(
+    @CurrentUser() _user: AuthenticatedUser,
+  ): Promise<Response> {
     this.logger.log(`Getting active calls`);
 
     try {
-      // Get real active calls from database
       const activeCalls = await this.directCallService.getActiveCalls();
 
       return {
@@ -228,11 +215,11 @@ export class DirectCallController {
         data: activeCalls,
       };
     } catch (error) {
-      this.logger.error("Error getting active call:", error);
+      this.logger.error("Error getting active calls:", error);
       return {
         success: false,
         statusCode: 500,
-        message: "Failed to get active call",
+        message: "Failed to get active calls",
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -274,111 +261,6 @@ export class DirectCallController {
         success: false,
         statusCode: 500,
         message: "Failed to get call history",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  @Get("stream-token")
-  @ApiOperation({ summary: "Get Stream.io token for current user" })
-  @ApiResponse({
-    status: 200,
-    description: "Stream.io token retrieved successfully",
-    schema: {
-      type: "object",
-      properties: {
-        success: { type: "boolean" },
-        statusCode: { type: "number" },
-        message: { type: "string" },
-        data: {
-          type: "object",
-          properties: {
-            token: { type: "string" },
-            user_id: { type: "string" },
-            stream_call_id: { type: "string" },
-            stream_config: {
-              type: "object",
-              properties: {
-                apiKey: { type: "string" },
-                environment: { type: "string" },
-              },
-            },
-          },
-        },
-      },
-    },
-  })
-  @ApiBearerAuth()
-  async getStreamToken(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query("stream_call_id") streamCallId?: string,
-  ): Promise<Response<StreamTokenResponse>> {
-    this.logger.log(`Getting Stream.io token for user ${user._id}`);
-
-    try {
-      // Tạo Stream.io JWT token như cũ
-      const token = await this.directCallService.createUserToken(user._id);
-      const streamConfig = await this.directCallService.getStreamConfig();
-
-      // Sử dụng streamCallId từ query parameter hoặc tạo mới
-      const finalStreamCallId =
-        streamCallId || this.directCallService.generateStreamCallId();
-
-      return {
-        success: true,
-        statusCode: 200,
-        message: "Stream.io token retrieved successfully",
-        data: {
-          token, // Stream.io JWT token
-          user_id: user._id,
-          stream_call_id: finalStreamCallId, // Stream.io Call ID để join call
-          stream_config: streamConfig,
-        },
-      };
-    } catch (error) {
-      this.logger.error("Error getting Stream.io token:", error);
-      return {
-        success: false,
-        statusCode: 500,
-        message: "Failed to get Stream.io token",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-}
-
-@ApiTags("Stream.io Configuration")
-@Controller("stream")
-export class StreamController {
-  private readonly logger = new Logger(StreamController.name);
-
-  constructor(private readonly directCallService: DirectCallService) {}
-
-  @Get("config")
-  @Public()
-  @ApiOperation({ summary: "Get Stream.io configuration" })
-  @ApiResponse({
-    status: 200,
-    description: "Stream.io configuration retrieved successfully",
-  })
-  async getStreamConfig(): Promise<Response> {
-    this.logger.log("Getting Stream.io configuration");
-
-    try {
-      const config = await this.directCallService.getStreamConfig();
-
-      return {
-        success: true,
-        statusCode: 200,
-        message: "Stream.io configuration retrieved successfully",
-        data: config,
-      };
-    } catch (error) {
-      this.logger.error("Error getting Stream.io configuration:", error);
-      return {
-        success: false,
-        statusCode: 500,
-        message: "Failed to get Stream.io configuration",
         error: error instanceof Error ? error.message : String(error),
       };
     }

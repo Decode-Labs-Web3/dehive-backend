@@ -1,7 +1,15 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  Inject,
+} from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { ConfigService } from "@nestjs/config";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
 import {
   ChannelCall,
   ChannelCallDocument,
@@ -11,9 +19,11 @@ import {
   ChannelParticipantDocument,
 } from "../schemas/channel-participant.schema";
 import { CallStatus, CallEndReason } from "../enum/enum";
-import { UserDehiveLean } from "../interfaces/user-dehive-lean.interface";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import { Participant } from "../interfaces/participant.interface";
 import { DecodeApiClient } from "../clients/decode-api.client";
-import { StreamCallService } from "./stream-call.service";
+import { REQUEST } from "@nestjs/core";
+import { Request } from "express";
 
 @Injectable()
 export class ChannelCallService {
@@ -26,26 +36,22 @@ export class ChannelCallService {
     private channelParticipantModel: Model<ChannelParticipantDocument>,
     private configService: ConfigService,
     private decodeApiClient: DecodeApiClient,
-    private streamCallService: StreamCallService,
+    @InjectRedis() private readonly redis: Redis,
+    @Inject(REQUEST) private readonly request: Request,
   ) {}
 
   async joinChannel(
     userId: string,
     channelId: string,
-    withVideo: boolean = false,
-    withAudio: boolean = true,
   ): Promise<{
     call: ChannelCallDocument;
     participant: ChannelParticipantDocument;
-    otherParticipants: UserDehiveLean[];
-    streamInfo: {
-      callId: string;
-      callerToken: string;
-      calleeToken: string;
-      streamConfig: unknown;
-    };
+    otherParticipants: AuthenticatedUser[];
   }> {
     this.logger.log(`User ${userId} joining voice channel ${channelId}`);
+
+    // Validate channel exists and is a VOICE channel
+    await this.validateVoiceChannel(channelId);
 
     // Find or create call for this channel (Discord style - always active)
     let call = await this.channelCallModel
@@ -77,17 +83,11 @@ export class ChannelCallService {
         String(call._id),
         userId,
       );
-      // Generate Stream.io info for existing participant
-      const streamInfo = await this.streamCallService.createChannelCall(
-        channelId,
-        [userId, ...otherParticipants.map((p) => p._id)],
-      );
 
       return {
         call,
         participant: existingParticipant,
         otherParticipants,
-        streamInfo,
       };
     }
 
@@ -96,18 +96,24 @@ export class ChannelCallService {
       call_id: call._id,
       user_id: userId,
       is_muted: false,
-      is_video_enabled: withVideo,
-      is_audio_enabled: withAudio,
+      is_video_enabled: true,
+      is_audio_enabled: true,
       joined_at: new Date(),
     });
     await participant.save();
 
-    // Update call participant count
-    await this.channelCallModel
-      .findByIdAndUpdate(call._id, {
-        $inc: { current_participants: 1 },
-      })
+    // Update call participant count and get updated call
+    const updatedCall = await this.channelCallModel
+      .findByIdAndUpdate(
+        call._id,
+        { $inc: { current_participants: 1 } },
+        { new: true },
+      )
       .exec();
+
+    if (!updatedCall) {
+      throw new NotFoundException("Call not found after update");
+    }
 
     // Get other participants
     const otherParticipants = await this.getOtherParticipants(
@@ -115,22 +121,70 @@ export class ChannelCallService {
       userId,
     );
 
-    // Generate Stream.io info for channel call
-    const streamInfo = await this.streamCallService.createChannelCall(
-      channelId,
-      [userId, ...otherParticipants.map((p) => p._id)],
-    );
-
     this.logger.log(
-      `User ${userId} joined voice channel ${channelId}. Total participants: ${call.current_participants + 1}`,
+      `User ${userId} joined voice channel ${channelId}. Total participants: ${updatedCall.current_participants}`,
     );
 
     return {
-      call,
+      call: updatedCall,
       participant,
       otherParticipants,
-      streamInfo,
     };
+  }
+
+  async leaveChannel(
+    userId: string,
+    channelId: string,
+  ): Promise<{
+    call: ChannelCallDocument;
+  }> {
+    this.logger.log(`User ${userId} leaving voice channel ${channelId}`);
+
+    // Find the call for this channel
+    const call = await this.channelCallModel
+      .findOne({ channel_id: channelId, status: CallStatus.CONNECTED })
+      .exec();
+
+    if (!call) {
+      throw new NotFoundException(
+        "No active voice call found for this channel",
+      );
+    }
+
+    // Find participant
+    const participant = await this.channelParticipantModel
+      .findOne({ call_id: call._id, user_id: userId })
+      .exec();
+
+    if (!participant) {
+      throw new NotFoundException(
+        "Participant not found in this voice channel",
+      );
+    }
+
+    // Remove participant
+    await this.channelParticipantModel
+      .findByIdAndDelete(participant._id)
+      .exec();
+
+    // Update call participant count
+    const updatedCall = await this.channelCallModel
+      .findByIdAndUpdate(
+        call._id,
+        { $inc: { current_participants: -1 } },
+        { new: true },
+      )
+      .exec();
+
+    this.logger.log(
+      `User ${userId} left voice channel ${channelId}. Participants: ${updatedCall?.current_participants}`,
+    );
+
+    if (!updatedCall) {
+      throw new NotFoundException("Call not found after update");
+    }
+
+    return { call: updatedCall };
   }
 
   async leaveCall(
@@ -188,30 +242,10 @@ export class ChannelCallService {
     return { call };
   }
 
-  async getStreamConfig(): Promise<{
-    apiKey: string;
-    environment: string;
-  }> {
-    this.logger.log("Getting Stream.io configuration for channel calling");
-    return await this.streamCallService.getStreamConfig();
-  }
-
-  async getStreamToken(userId: string): Promise<string> {
-    this.logger.log(`Getting Stream.io token for user ${userId}`);
-    return await this.streamCallService.generateStreamToken(userId);
-  }
-
-  /**
-   * Generate Stream.io Call ID for channel call
-   */
-  generateStreamCallId(): string {
-    return this.streamCallService.generateStreamCallId();
-  }
-
   async getOtherParticipants(
     callId: string,
     userId: string,
-  ): Promise<UserDehiveLean[]> {
+  ): Promise<AuthenticatedUser[]> {
     const participants = await this.channelParticipantModel
       .find({ call_id: callId, user_id: { $ne: userId } })
       .exec();
@@ -232,6 +266,8 @@ export class ChannelCallService {
         bio: user.bio,
         status: user.status,
         is_active: user.is_active,
+        session_id: "",
+        fingerprint_hash: "",
       }));
     } catch (error) {
       this.logger.error("Error fetching other participants:", error);
@@ -239,7 +275,7 @@ export class ChannelCallService {
     }
   }
 
-  async getUserProfile(userId: string): Promise<UserDehiveLean | null> {
+  async getUserProfile(userId: string): Promise<AuthenticatedUser | null> {
     this.logger.log(`Getting user profile for ${userId}`);
 
     try {
@@ -257,6 +293,8 @@ export class ChannelCallService {
         bio: user.bio,
         status: user.status,
         is_active: user.is_active,
+        session_id: "",
+        fingerprint_hash: "",
       };
     } catch (error) {
       this.logger.error("Error getting user profile:", error);
@@ -264,47 +302,303 @@ export class ChannelCallService {
     }
   }
 
-  async handleUserDisconnect(userId: string): Promise<void> {
-    this.logger.log(`Handling user disconnect for ${userId}`);
+  async handleUserDisconnect(
+    userId: string,
+    channelId?: string,
+  ): Promise<void> {
+    this.logger.log(
+      `Handling user disconnect for ${userId} from channel ${channelId}`,
+    );
 
     try {
-      // Find all active calls where user is participating
-      const participants = await this.channelParticipantModel
-        .find({ user_id: userId })
-        .populate("call_id")
-        .exec();
+      if (channelId) {
+        // Handle specific channel disconnect
+        const call = await this.channelCallModel
+          .findOne({ channel_id: channelId, status: CallStatus.CONNECTED })
+          .exec();
 
-      for (const participant of participants) {
-        const call = participant.call_id as any;
-        if (call && call.status === CallStatus.CONNECTED) {
-          // Remove participant
-          await this.channelParticipantModel
-            .findByIdAndDelete(participant._id)
+        if (call) {
+          const participant = await this.channelParticipantModel
+            .findOne({ call_id: call._id, user_id: userId })
             .exec();
 
-          // Update call participant count
-          await this.channelCallModel
-            .findByIdAndUpdate(
-              call._id,
-              { $inc: { current_participants: -1 } },
-              { new: true },
-            )
-            .exec();
-
-          // If no participants left, end the call
-          if (call.current_participants <= 1) {
-            await this.channelCallModel
-              .findByIdAndUpdate(call._id, {
-                status: CallStatus.ENDED,
-                ended_at: new Date(),
-                end_reason: CallEndReason.ALL_PARTICIPANTS_LEFT,
-              })
+          if (participant) {
+            await this.channelParticipantModel
+              .findByIdAndDelete(participant._id)
               .exec();
+
+            // Update call participant count
+            await this.channelCallModel
+              .findByIdAndUpdate(
+                call._id,
+                { $inc: { current_participants: -1 } },
+                { new: true },
+              )
+              .exec();
+
+            // If no participants left, end the call
+            if (call.current_participants <= 1) {
+              await this.channelCallModel
+                .findByIdAndUpdate(call._id, {
+                  status: CallStatus.ENDED,
+                  ended_at: new Date(),
+                  end_reason: CallEndReason.ALL_PARTICIPANTS_LEFT,
+                })
+                .exec();
+            }
+          }
+        }
+      } else {
+        // Handle all channel disconnects
+        const participants = await this.channelParticipantModel
+          .find({ user_id: userId })
+          .populate("call_id")
+          .exec();
+
+        for (const participant of participants) {
+          const call = participant.call_id as unknown as ChannelCallDocument;
+          if (call && call.status === CallStatus.CONNECTED) {
+            // Remove participant
+            await this.channelParticipantModel
+              .findByIdAndDelete(participant._id)
+              .exec();
+
+            // Update call participant count
+            await this.channelCallModel
+              .findByIdAndUpdate(
+                call._id,
+                { $inc: { current_participants: -1 } },
+                { new: true },
+              )
+              .exec();
+
+            // If no participants left, end the call
+            if (call.current_participants <= 1) {
+              await this.channelCallModel
+                .findByIdAndUpdate(call._id, {
+                  status: CallStatus.ENDED,
+                  ended_at: new Date(),
+                  end_reason: CallEndReason.ALL_PARTICIPANTS_LEFT,
+                })
+                .exec();
+            }
           }
         }
       }
     } catch (error) {
       this.logger.error(`Error handling user disconnect: ${error}`);
+    }
+  }
+
+  /**
+   * Toggle media (audio/video) for a participant in a channel call
+   */
+
+  /**
+   * Get active participants in a channel call
+   */
+  async getChannelParticipants(
+    channelId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<Participant[]> {
+    this.logger.log(`Getting participants for channel ${channelId}`);
+
+    try {
+      const call = await this.channelCallModel
+        .findOne({ channel_id: channelId, status: CallStatus.CONNECTED })
+        .exec();
+
+      if (!call) {
+        return [];
+      }
+
+      const participants = await this.channelParticipantModel
+        .find({ call_id: call._id })
+        .exec();
+
+      const userIds = participants.map((p) => p.user_id.toString());
+
+      if (userIds.length === 0) {
+        return [];
+      }
+
+      try {
+        const users = await this.decodeApiClient.getUsersByIds(
+          userIds,
+          sessionId,
+          fingerprintHash,
+        );
+        return users.map(
+          (user): Participant => ({
+            _id: user._id,
+            username: user.username,
+            display_name: user.display_name,
+            avatar_ipfs_hash: user.avatar_ipfs_hash,
+            bio: user.bio,
+            status: user.status,
+            is_active: user.is_active,
+          }),
+        );
+      } catch (error) {
+        this.logger.error("Error fetching participants:", error);
+        return [];
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error getting participants for channel ${channelId}:`,
+        error,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Get call history for a channel
+   */
+  async getChannelCallHistory(
+    channelId: string,
+    limit: number = 20,
+    offset: number = 0,
+  ): Promise<unknown[]> {
+    this.logger.log(`Getting call history for channel ${channelId}`);
+
+    try {
+      return this.channelCallModel
+        .find({ channel_id: channelId })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .skip(offset)
+        .lean();
+    } catch (error) {
+      this.logger.error(
+        `Error getting call history for channel ${channelId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get active calls across all channels
+   */
+  async getActiveChannelCalls(): Promise<
+    {
+      call_id: string;
+      channel_id: string;
+      status: string;
+      participant_count: number;
+      created_at: Date;
+      started_at?: Date;
+    }[]
+  > {
+    this.logger.log("Getting all active channel calls");
+
+    try {
+      const calls = await this.channelCallModel
+        .find({ status: CallStatus.CONNECTED })
+        .select(
+          "_id channel_id status current_participants createdAt started_at",
+        )
+        .lean();
+
+      return calls.map((call) => ({
+        call_id: String(call._id),
+        channel_id: String(call.channel_id),
+        status: call.status,
+        participant_count: call.current_participants,
+        created_at: (call as Record<string, unknown>).createdAt as Date,
+        started_at: (call as Record<string, unknown>).started_at as
+          | Date
+          | undefined,
+      }));
+    } catch (error) {
+      this.logger.error("Error getting active channel calls:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get session and fingerprint from current request
+   */
+  private getAuthHeaders(): {
+    sessionId?: string;
+    fingerprintHash?: string;
+  } {
+    const user = (this.request as { user?: AuthenticatedUser }).user;
+    return {
+      sessionId: user?.session_id,
+      fingerprintHash: user?.fingerprint_hash,
+    };
+  }
+
+  /**
+   * Validate that a channel exists and is a VOICE channel
+   */
+  private async validateVoiceChannel(channelId: string): Promise<void> {
+    try {
+      this.logger.log(`Validating channel ${channelId} is a VOICE channel`);
+
+      // Check cache first
+      const cacheKey = `channel:${channelId}:type`;
+      const cachedType = await this.redis.get(cacheKey);
+
+      if (cachedType) {
+        if (cachedType !== "VOICE") {
+          throw new BadRequestException(
+            `Cannot join voice call in TEXT channel. Channel type: ${cachedType}`,
+          );
+        }
+        this.logger.log(
+          `Channel ${channelId} validated from cache as VOICE channel`,
+        );
+        return;
+      }
+
+      // Get auth headers from current request
+      const { sessionId, fingerprintHash } = this.getAuthHeaders();
+
+      // Fetch channel info from server service via DecodeApiClient
+      const channel = await this.decodeApiClient.getChannelById(
+        channelId,
+        sessionId,
+        fingerprintHash,
+      );
+
+      if (!channel) {
+        throw new NotFoundException(
+          `Channel ${channelId} not found or failed to fetch channel information`,
+        );
+      }
+
+      // Check if channel type is VOICE
+      if (channel.type !== "VOICE") {
+        throw new BadRequestException(
+          `Cannot join voice call in TEXT channel. This channel is for text messages only.`,
+        );
+      }
+
+      // Cache the result for 1 hour
+      await this.redis.setex(cacheKey, 3600, channel.type);
+
+      this.logger.log(
+        `Channel ${channelId} validated as VOICE channel and cached`,
+      );
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Error validating channel ${channelId}:`,
+        error instanceof Error ? error.message : String(error),
+      );
+      throw new BadRequestException(
+        `Failed to validate channel: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }

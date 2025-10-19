@@ -1,22 +1,22 @@
+import { Types } from "mongoose";
 import { UserProfile } from "./user-profile.interface";
 
-export interface SessionDoc {
+export type SessionDoc = {
   _id: string;
-  user_id: string;
-  session_id: string;
+  user_id: Types.ObjectId;
+  device_fingerprint_id: Types.ObjectId;
   session_token: string;
   access_token: string;
-  fingerprint_hash: string;
-  ip_address?: string;
-  user_agent?: string;
-  created_at: Date;
   expires_at: Date;
+  created_at: Date;
+  updated_at: Date;
   is_active: boolean;
-}
+  revoked_at: Date;
+};
 
-export interface SessionCacheDoc {
+export type SessionCacheDoc = {
   session_token: string;
   access_token: string;
   user: UserProfile;
   expires_at: Date;
-}
+};

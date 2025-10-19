@@ -1,10 +1,9 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { MongooseModule } from "@nestjs/mongoose";
 import { HttpModule } from "@nestjs/axios";
 import { RedisModule } from "@nestjs-modules/ioredis";
 import { ChannelCallService } from "./channel-call.service";
-import { StreamCallService } from "./stream-call.service";
 import { ChannelCallController } from "./channel-call.controller";
 import { ChannelCallGateway } from "../gateway/channel-call.gateway";
 import { AuthGuard } from "../common/guards/auth.guard";
@@ -29,7 +28,7 @@ import {
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         uri: configService.get<string>("MONGODB_URI"),
-        dbName: configService.get<string>("MONGODB_DB_NAME"),
+        dbName: configService.get<string>("MONGODB_DB_NAME") || "dehive_db",
       }),
       inject: [ConfigService],
     }),
@@ -53,7 +52,7 @@ import {
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         type: "single",
-        url: configService.get<string>("REDIS_URL") || "redis://localhost:6379",
+        url: configService.get<string>("REDIS_URI") || "redis://localhost:6379",
         options: {
           retryDelayOnFailover: 100,
           enableReadyCheck: false,
@@ -65,12 +64,15 @@ import {
   ],
   controllers: [ChannelCallController],
   providers: [
-    ChannelCallService,
-    StreamCallService,
+    {
+      provide: ChannelCallService,
+      useClass: ChannelCallService,
+      scope: 2, // REQUEST scope
+    },
     ChannelCallGateway,
     AuthGuard,
     DecodeApiClient,
   ],
-  exports: [ChannelCallService, StreamCallService],
+  exports: [ChannelCallService],
 })
 export class ChannelCallModule {}

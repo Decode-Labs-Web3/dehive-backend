@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Logger,
   UseGuards,
+  Query,
 } from "@nestjs/common";
 import {
   ApiTags,
@@ -18,9 +19,8 @@ import { ChannelCallService } from "./channel-call.service";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { Public } from "../common/guards/auth.guard";
-import { UserProfile } from "../interfaces/user-profile.interface";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { Response } from "../interfaces/response.interface";
-import { StreamTokenResponse } from "../interfaces/stream-info.interface";
 import { JoinCallDto } from "../dto/join-call.dto";
 import { LeaveCallDto } from "../dto/leave-call.dto";
 
@@ -42,7 +42,7 @@ export class ChannelCallController {
   @ApiBearerAuth()
   async joinCall(
     @Body() joinCallDto: JoinCallDto,
-    @CurrentUser() user: UserProfile,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<Response> {
     this.logger.log(
       `User ${user._id} joining voice channel ${joinCallDto.channel_id}`,
@@ -52,8 +52,6 @@ export class ChannelCallController {
       const result = await this.channelCallService.joinChannel(
         user._id,
         joinCallDto.channel_id,
-        joinCallDto.with_video ?? false,
-        joinCallDto.with_audio ?? true,
       );
 
       return {
@@ -61,10 +59,12 @@ export class ChannelCallController {
         statusCode: 200,
         message: "Successfully joined voice channel call",
         data: {
-          call: result.call,
-          participant: result.participant,
-          otherParticipants: result.otherParticipants,
-          streamInfo: result.streamInfo,
+          call_id: result.call._id,
+          channel_id: result.call.channel_id,
+          status: result.call.status,
+          participant_count: result.call.current_participants,
+          created_at: (result.call as unknown as Record<string, unknown>)
+            .createdAt,
         },
       };
     } catch (error) {
@@ -88,16 +88,16 @@ export class ChannelCallController {
   @ApiBearerAuth()
   async leaveCall(
     @Body() leaveCallDto: LeaveCallDto,
-    @CurrentUser() user: UserProfile,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<Response> {
     this.logger.log(
-      `User ${user._id} leaving voice channel call ${leaveCallDto.call_id}`,
+      `User ${user._id} leaving voice channel ${leaveCallDto.channel_id}`,
     );
 
     try {
-      const result = await this.channelCallService.leaveCall(
+      const result = await this.channelCallService.leaveChannel(
         user._id,
-        leaveCallDto.call_id,
+        leaveCallDto.channel_id,
       );
 
       return {
@@ -105,7 +105,10 @@ export class ChannelCallController {
         statusCode: 200,
         message: "Successfully left voice channel call",
         data: {
-          call: result.call,
+          call_id: result.call._id,
+          channel_id: leaveCallDto.channel_id,
+          status: "left",
+          participant_count: result.call.current_participants,
         },
       };
     } catch (error) {
@@ -135,102 +138,127 @@ export class ChannelCallController {
       data: {
         service: "channel-calling",
         status: "active",
-        stream_io: "enabled",
-        webrtc: "disabled",
         timestamp: new Date().toISOString(),
       },
     };
   }
 
-  @Get("stream-config")
+  @Get("participants")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Get Stream.io configuration for channel calling" })
+  @ApiOperation({ summary: "Get participants in a channel call" })
   @ApiResponse({
     status: 200,
-    description: "Stream.io configuration retrieved successfully",
+    description: "Participants retrieved successfully",
   })
-  @Public()
-  async getStreamConfig(): Promise<Response> {
-    this.logger.log("Getting Stream.io configuration for channel calling");
+  @ApiBearerAuth()
+  async getParticipants(
+    @Query("channel_id") channelId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<Response> {
+    this.logger.log(`Getting participants for channel ${channelId}`);
 
     try {
-      const config = await this.channelCallService.getStreamConfig();
+      const participants = await this.channelCallService.getChannelParticipants(
+        channelId,
+        user.session_id,
+        user.fingerprint_hash,
+      );
 
       return {
         success: true,
         statusCode: 200,
-        message: "Stream.io configuration retrieved successfully",
-        data: config,
+        message: "Participants retrieved successfully",
+        data: {
+          channel_id: channelId,
+          participants,
+          count: participants.length,
+        },
       };
     } catch (error) {
-      this.logger.error("Error getting Stream.io configuration:", error);
+      this.logger.error("Error getting participants:", error);
       return {
         success: false,
         statusCode: 500,
-        message: "Failed to get Stream.io configuration",
+        message: "Failed to get participants",
         error: error instanceof Error ? error.message : String(error),
       };
     }
   }
 
-  @Get("stream-token")
+  @Get("history")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Get Stream.io token for channel calling" })
+  @ApiOperation({ summary: "Get call history for a channel" })
   @ApiResponse({
     status: 200,
-    description: "Stream.io token retrieved successfully",
-    schema: {
-      type: "object",
-      properties: {
-        success: { type: "boolean" },
-        statusCode: { type: "number" },
-        message: { type: "string" },
-        data: {
-          type: "object",
-          properties: {
-            token: { type: "string" },
-            user_id: { type: "string" },
-            stream_call_id: { type: "string" },
-            stream_config: {
-              type: "object",
-              properties: {
-                apiKey: { type: "string" },
-                environment: { type: "string" },
-              },
-            },
-          },
-        },
-      },
-    },
+    description: "Call history retrieved successfully",
   })
   @ApiBearerAuth()
-  async getStreamToken(
-    @CurrentUser() user: UserProfile,
-  ): Promise<Response<StreamTokenResponse>> {
-    this.logger.log(`Getting Stream.io token for user ${user._id}`);
+  async getCallHistory(
+    @Query("channel_id") channelId: string,
+    @Query("limit") limit: number = 20,
+    @Query("offset") offset: number = 0,
+    @CurrentUser() _user: AuthenticatedUser,
+  ): Promise<Response> {
+    this.logger.log(`Getting call history for channel ${channelId}`);
 
     try {
-      const token = await this.channelCallService.getStreamToken(user._id);
-      const streamConfig = await this.channelCallService.getStreamConfig();
-      const streamCallId = this.channelCallService.generateStreamCallId();
+      const history = await this.channelCallService.getChannelCallHistory(
+        channelId,
+        limit,
+        offset,
+      );
 
       return {
         success: true,
         statusCode: 200,
-        message: "Stream.io token retrieved successfully",
+        message: "Call history retrieved successfully",
         data: {
-          token,
-          user_id: user._id,
-          stream_call_id: streamCallId, // Stream.io Call ID để join call
-          stream_config: streamConfig,
+          channel_id: channelId,
+          calls: history,
+          total: history.length,
+          limit,
+          offset,
         },
       };
     } catch (error) {
-      this.logger.error("Error getting Stream.io token:", error);
+      this.logger.error("Error getting call history:", error);
       return {
         success: false,
         statusCode: 500,
-        message: "Failed to get Stream.io token",
+        message: "Failed to get call history",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  @Get("active")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Get all active channel calls" })
+  @ApiResponse({
+    status: 200,
+    description: "Active calls retrieved successfully",
+  })
+  @ApiBearerAuth()
+  async getActiveCalls(
+    @CurrentUser() _user: AuthenticatedUser,
+  ): Promise<Response> {
+    this.logger.log("Getting all active channel calls");
+
+    try {
+      const activeCalls = await this.channelCallService.getActiveChannelCalls();
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: "Active calls retrieved successfully",
+        data: activeCalls,
+      };
+    } catch (error) {
+      this.logger.error("Error getting active calls:", error);
+      return {
+        success: false,
+        statusCode: 500,
+        message: "Failed to get active calls",
         error: error instanceof Error ? error.message : String(error),
       };
     }

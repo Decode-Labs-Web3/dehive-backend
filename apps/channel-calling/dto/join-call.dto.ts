@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from "class-validator";
+import { IsString, IsNotEmpty } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 
 export class JoinCallDto {
@@ -9,22 +9,4 @@ export class JoinCallDto {
   @IsString()
   @IsNotEmpty()
   channel_id: string;
-
-  @ApiProperty({
-    description: "Whether to join with video enabled",
-    example: false,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  with_video?: boolean = false;
-
-  @ApiProperty({
-    description: "Whether to join with audio enabled",
-    example: true,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  with_audio?: boolean = true;
 }

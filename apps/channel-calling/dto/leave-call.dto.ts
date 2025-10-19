@@ -3,10 +3,10 @@ import { ApiProperty } from "@nestjs/swagger";
 
 export class LeaveCallDto {
   @ApiProperty({
-    description: "ID of the call to leave",
-    example: "507f1f77bcf86cd799439011",
+    description: "ID of the channel to leave",
+    example: "68e79a7a52197caed37269dc",
   })
   @IsString()
   @IsNotEmpty()
-  call_id: string;
+  channel_id: string;
 }

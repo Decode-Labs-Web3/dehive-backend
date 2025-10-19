@@ -12,28 +12,22 @@ import { ConfigService } from "@nestjs/config";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
 
-import { DmCall, DmCallDocument } from "../../schemas/dm-call.schema";
+import { DmCall, DmCallDocument } from "../schemas/dm-call.schema";
 import {
   DirectConversation,
   DirectConversationDocument,
-} from "../../schemas/direct-conversation.schema";
+} from "../schemas/direct-conversation.schema";
 import {
   DirectMessage,
   DirectMessageDocument,
-} from "../../schemas/direct-message.schema";
+} from "../schemas/direct-message.schema";
 import {
   UserDehive,
   UserDehiveDocument,
-} from "../../../user-dehive-server/schemas/user-dehive.schema";
-import { CallStatus, CallEndReason, MediaState } from "../../enum/enum";
-import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
-import { UserDehiveLean } from "../../interfaces/user-dehive-lean.interface";
-import {
-  StreamInfo,
-  StreamConfig,
-} from "../../interfaces/stream-info.interface";
-import { DecodeApiClient } from "../../clients/decode-api.client";
-import { StreamCallService } from "./stream-call.service";
+} from "../../user-dehive-server/schemas/user-dehive.schema";
+import { CallStatus, CallEndReason, MediaState } from "../enum/enum";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import { DecodeApiClient } from "../clients/decode-api.client";
 import { REQUEST } from "@nestjs/core";
 import { Request } from "express";
 
@@ -55,11 +49,9 @@ export class DirectCallService {
     private readonly userDehiveModel: Model<UserDehiveDocument>,
     private readonly configService: ConfigService,
     private readonly decodeApiClient: DecodeApiClient,
-    private readonly streamCallService: StreamCallService,
     @InjectRedis() private readonly redis: Redis,
     @Inject(REQUEST) private readonly request: Request,
   ) {
-    // Make environment variables optional for now
     const host =
       this.configService.get<string>("DECODE_API_GATEWAY_HOST") || "localhost";
     const port =
@@ -83,21 +75,15 @@ export class DirectCallService {
   /**
    * Start call without needing to pass callerId - gets it from context
    */
-  async startCallForCurrentUser(
-    targetUserId: string,
-    withVideo: boolean = true,
-    withAudio: boolean = true,
-  ): Promise<{ call: DmCallDocument; streamInfo: StreamInfo }> {
+  async startCallForCurrentUser(targetUserId: string): Promise<DmCallDocument> {
     const callerId = this.getCurrentUserId();
-    return this.startCall(callerId, targetUserId, withVideo, withAudio);
+    return this.startCall(callerId, targetUserId);
   }
 
   async startCall(
     callerId: string,
     targetUserId: string,
-    withVideo: boolean = true,
-    withAudio: boolean = true,
-  ): Promise<{ call: DmCallDocument; streamInfo: StreamInfo }> {
+  ): Promise<DmCallDocument> {
     this.logger.log(`Starting call from ${callerId} to ${targetUserId}`);
 
     // Validate users exist
@@ -122,32 +108,20 @@ export class DirectCallService {
       targetUserId,
     );
 
-    // Create Stream.io call info
-    const streamInfo = await this.streamCallService.createCallInfo(
-      callerId,
-      targetUserId,
-      withVideo,
-      withAudio,
-    );
-
-    // Create call record with Stream.io call ID
+    // Create call record
     const call = new this.dmCallModel({
       conversation_id: conversation._id,
       caller_id: new Types.ObjectId(callerId),
       callee_id: new Types.ObjectId(targetUserId),
       status: CallStatus.RINGING,
-      caller_audio_enabled: withAudio,
-      caller_video_enabled: withVideo,
-      callee_audio_enabled: true, // Default for callee
-      callee_video_enabled: true, // Default for callee
+      caller_audio_enabled: true,
+      caller_video_enabled: true,
+      callee_audio_enabled: true,
+      callee_video_enabled: true,
       caller_audio_muted: false,
       caller_video_muted: false,
       callee_audio_muted: false,
       callee_video_muted: false,
-      metadata: {
-        stream_call_id: streamInfo.callId,
-        stream_config: streamInfo.streamConfig,
-      },
     });
 
     await call.save();
@@ -172,34 +146,22 @@ export class DirectCallService {
         caller_id: callerId,
         callee_id: targetUserId,
         status: CallStatus.RINGING,
-        stream_call_id: streamInfo.callId,
       }),
     );
 
-    this.logger.log(
-      `Call ${call._id} created successfully with Stream.io call ID: ${streamInfo.callId}`,
-    );
-    return { call, streamInfo };
+    this.logger.log(`Call ${call._id} created successfully`);
+    return call;
   }
 
   /**
    * Accept call without needing to pass calleeId - gets it from context
    */
-  async acceptCallForCurrentUser(
-    callId: string,
-    withVideo: boolean = true,
-    withAudio: boolean = true,
-  ): Promise<{ call: DmCallDocument; streamInfo: StreamInfo }> {
+  async acceptCallForCurrentUser(callId: string): Promise<DmCallDocument> {
     const calleeId = this.getCurrentUserId();
-    return this.acceptCall(calleeId, callId, withVideo, withAudio);
+    return this.acceptCall(calleeId, callId);
   }
 
-  async acceptCall(
-    calleeId: string,
-    callId: string,
-    withVideo: boolean = true,
-    withAudio: boolean = true,
-  ): Promise<{ call: DmCallDocument; streamInfo: StreamInfo }> {
+  async acceptCall(calleeId: string, callId: string): Promise<DmCallDocument> {
     this.logger.log(`Accepting call ${callId} by ${calleeId}`);
 
     const call = await this.dmCallModel.findById(callId);
@@ -215,32 +177,11 @@ export class DirectCallService {
       throw new BadRequestException("Call is not in ringing state");
     }
 
-    // Get Stream.io call info
-    const streamCallId = call.metadata?.stream_call_id;
-    if (!streamCallId) {
-      throw new BadRequestException("Stream.io call ID not found");
-    }
-
-    // Get Stream.io call info - create fresh tokens for both users
-    const callerId = String(call.caller_id);
-    const streamInfo = await this.streamCallService.createCallInfo(
-      callerId,
-      calleeId,
-      withVideo,
-      withAudio,
-    );
-
     // Update call status and media settings
     call.status = CallStatus.CONNECTED;
     call.started_at = new Date();
-    call.callee_audio_enabled = withAudio;
-    call.callee_video_enabled = withVideo;
-
-    // Update metadata with fresh stream info
-    call.metadata = {
-      stream_call_id: streamInfo.callId,
-      stream_config: streamInfo.streamConfig,
-    };
+    call.callee_audio_enabled = true;
+    call.callee_video_enabled = true;
 
     await call.save();
 
@@ -252,14 +193,11 @@ export class DirectCallService {
         caller_id: String(call.caller_id),
         callee_id: String(call.callee_id),
         status: CallStatus.CONNECTED,
-        stream_call_id: streamInfo.callId,
       }),
     );
 
-    this.logger.log(
-      `Call ${callId} accepted successfully with Stream.io call ID: ${streamInfo.callId}`,
-    );
-    return { call, streamInfo };
+    this.logger.log(`Call ${callId} accepted successfully`);
+    return call;
   }
 
   /**
@@ -382,19 +320,6 @@ export class DirectCallService {
     // Create system message in conversation
     await this.createCallSystemMessage(call, callerId, calleeId);
 
-    // End Stream.io call
-    const streamCallId = call.metadata?.stream_call_id;
-    if (streamCallId) {
-      try {
-        await this.streamCallService.endCall(streamCallId);
-      } catch (error) {
-        this.logger.error(
-          `Error ending Stream.io call ${streamCallId}:`,
-          error,
-        );
-      }
-    }
-
     // Clean up cache
     await this.redis.del(`call:${callId}`);
 
@@ -475,33 +400,7 @@ export class DirectCallService {
       }
     }
 
-    // Stream.io will handle cleanup automatically
-    this.logger.log(
-      `User ${userId} disconnected, Stream.io will handle cleanup`,
-    );
-  }
-
-  // TURN server methods removed - Stream.io handles NAT traversal automatically
-
-  /**
-   * Get Stream.io configuration for frontend
-   */
-  async getStreamConfig(): Promise<StreamConfig> {
-    return this.streamCallService.getStreamConfig();
-  }
-
-  /**
-   * Create user token for Stream.io authentication
-   */
-  async createUserToken(userId: string): Promise<string> {
-    return this.streamCallService.createUserToken(userId);
-  }
-
-  /**
-   * Generate Stream.io Call ID for stream token
-   */
-  generateStreamCallId(): string {
-    return this.streamCallService.generateStreamCallId();
+    this.logger.log(`User ${userId} disconnected, cleanup completed`);
   }
 
   async getUserProfile(
@@ -555,7 +454,30 @@ export class DirectCallService {
       this.logger.log(`Fetching profile for ${userId} from database`);
       const user = (await this.userDehiveModel
         .findById(userId)
-        .lean()) as unknown as UserDehiveLean;
+        .lean()) as unknown as {
+        _id: unknown;
+        username?: string;
+        display_name?: string;
+        avatar_ipfs_hash?: string;
+        bio?: string;
+        status?: string;
+        banner_color?: string;
+        server_count?: number;
+        last_login?: Date;
+        primary_wallet?: string;
+        following_number?: number;
+        followers_number?: number;
+        is_following?: boolean;
+        is_follower?: boolean;
+        is_blocked?: boolean;
+        is_blocked_by?: boolean;
+        mutual_followers_number?: number;
+        mutual_followers_list?: string[];
+        is_active?: boolean;
+        last_account_deactivation?: Date;
+        dehive_role?: string;
+        role_subscription?: string;
+      };
       if (!user) {
         throw new NotFoundException("User not found");
       }
@@ -792,14 +714,88 @@ export class DirectCallService {
   }
 
   /**
+   * Get auth headers from current request
+   */
+  private getAuthHeaders(): {
+    sessionId?: string;
+    fingerprintHash?: string;
+  } {
+    const user = (this.request as { user?: AuthenticatedUser }).user;
+    return {
+      sessionId: user?.session_id,
+      fingerprintHash: user?.fingerprint_hash,
+    };
+  }
+
+  /**
+   * Fetch user details from decode API using authenticated user context
+   */
+  private async fetchUserDetails(userId: string): Promise<{
+    dehive_id: string;
+    username: string;
+    display_name: string;
+    avatar_ipfs_hash: string;
+  } | null> {
+    try {
+      const { sessionId, fingerprintHash } = this.getAuthHeaders();
+
+      if (!sessionId || !fingerprintHash) {
+        this.logger.error(`No auth headers available for ${userId}`);
+        return null;
+      }
+
+      // Only use authenticated API call - no fallback
+      this.logger.log(
+        `Fetching user details for ${userId} from decode API with auth`,
+      );
+
+      const profile = await this.decodeApiClient.getUserProfile(
+        sessionId,
+        fingerprintHash,
+        userId,
+      );
+
+      if (!profile) {
+        this.logger.error(
+          `Failed to get user profile for ${userId} from decode API`,
+        );
+        return null;
+      }
+
+      this.logger.log(
+        `Successfully fetched user details for ${userId} from decode API`,
+      );
+      return {
+        dehive_id: profile._id,
+        username: profile.username,
+        display_name: profile.display_name,
+        avatar_ipfs_hash: profile.avatar_ipfs_hash,
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching user details for ${userId}:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Get all active calls (ringing or connected)
    */
   async getActiveCalls(): Promise<
     {
       call_id: string;
       status: string;
-      caller_id: unknown;
-      callee_id: unknown;
+      caller_id: {
+        dehive_id: string;
+        username: string;
+        display_name: string;
+        avatar_ipfs_hash: string;
+      };
+      callee_id: {
+        dehive_id: string;
+        username: string;
+        display_name: string;
+        avatar_ipfs_hash: string;
+      };
       created_at: Date;
       started_at?: Date;
     }[]
@@ -812,20 +808,48 @@ export class DirectCallService {
           status: { $in: ["ringing", "connected"] },
         })
         .select("_id status caller_id callee_id createdAt started_at")
-        .populate("caller_id", "username display_name avatar_ipfs_hash")
-        .populate("callee_id", "username display_name avatar_ipfs_hash")
         .lean();
 
-      // Transform data to match expected format
-      return calls.map((call) => ({
-        call_id: String(call._id),
-        status: call.status,
-        caller_id: call.caller_id,
-        callee_id: call.callee_id,
-        created_at:
-          ((call as Record<string, unknown>).createdAt as Date) || new Date(),
-        started_at: (call as Record<string, unknown>).started_at as Date,
-      }));
+      // Fetch user details for all callers and callees
+      const results = await Promise.all(
+        calls.map(async (call) => {
+          const callerId = String(call.caller_id);
+          const calleeId = String(call.callee_id);
+
+          const [callerDetails, calleeDetails] = await Promise.all([
+            this.fetchUserDetails(callerId),
+            this.fetchUserDetails(calleeId),
+          ]);
+
+          // Only return calls where we can fetch user details for both users
+          if (!callerDetails || !calleeDetails) {
+            this.logger.warn(
+              `Skipping call ${call._id} - missing user details for caller ${callerId} or callee ${calleeId}`,
+            );
+            return null;
+          }
+
+          return {
+            call_id: String(call._id),
+            status: call.status,
+            caller_id: callerDetails,
+            callee_id: calleeDetails,
+            created_at:
+              ((call as Record<string, unknown>).createdAt as Date) ||
+              new Date(),
+            started_at: (call as Record<string, unknown>).started_at as
+              | Date
+              | undefined,
+          };
+        }),
+      );
+
+      // Filter out null results (calls with missing user details)
+      const validResults = results.filter(
+        (result): result is NonNullable<typeof result> => result !== null,
+      );
+
+      return validResults;
     } catch (error) {
       this.logger.error("Error getting active calls:", error);
       throw error;

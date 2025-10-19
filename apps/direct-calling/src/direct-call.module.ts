@@ -4,12 +4,8 @@ import { HttpModule } from "@nestjs/axios";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { RedisModule } from "@nestjs-modules/ioredis";
 
-import {
-  DirectCallController,
-  StreamController,
-} from "./direct-call.controller";
-import { DirectCallService } from "./service/direct-call.service";
-import { StreamCallService } from "./service/stream-call.service";
+import { DirectCallController } from "./direct-call.controller";
+import { DirectCallService } from "./direct-call.service";
 import { DirectCallGateway } from "../gateway/direct-call.gateway";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { DecodeApiClient } from "../clients/decode-api.client";
@@ -62,14 +58,8 @@ import {
       inject: [ConfigService],
     }),
   ],
-  controllers: [DirectCallController, StreamController],
-  providers: [
-    AuthGuard,
-    DecodeApiClient,
-    StreamCallService,
-    DirectCallService,
-    DirectCallGateway,
-  ],
-  exports: [DirectCallService, StreamCallService],
+  controllers: [DirectCallController],
+  providers: [AuthGuard, DecodeApiClient, DirectCallService, DirectCallGateway],
+  exports: [DirectCallService],
 })
 export class DirectCallModule {}

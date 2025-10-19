@@ -28,6 +28,7 @@ type SocketMeta = {
   userDehiveId?: string;
   sessionId?: string;
   callId?: string;
+  channelId?: string;
 };
 
 @WebSocketGateway({
@@ -40,7 +41,7 @@ export class ChannelCallGateway
   @WebSocketServer()
   server: Server;
 
-  private readonly meta = new WeakMap<Socket, SocketMeta>();
+  private meta: Map<Socket, SocketMeta>;
 
   constructor(
     private readonly service: ChannelCallService,
@@ -50,7 +51,25 @@ export class ChannelCallGateway
     private readonly channelCallModel: Model<ChannelCallDocument>,
     @InjectModel(ChannelParticipant.name)
     private readonly participantModel: Model<ChannelParticipantDocument>,
-  ) {}
+  ) {
+    // Initialize meta Map
+    this.meta = new Map<Socket, SocketMeta>();
+
+    // Debug logging
+    console.log("[CHANNEL-RTC-WS] Gateway constructor called");
+    console.log(
+      "[CHANNEL-RTC-WS] userDehiveModel available:",
+      !!this.userDehiveModel,
+    );
+    console.log(
+      "[CHANNEL-RTC-WS] channelCallModel available:",
+      !!this.channelCallModel,
+    );
+    console.log(
+      "[CHANNEL-RTC-WS] participantModel available:",
+      !!this.participantModel,
+    );
+  }
 
   private send(client: Socket, event: string, data: unknown) {
     const serializedData = JSON.parse(JSON.stringify(data));
@@ -58,56 +77,87 @@ export class ChannelCallGateway
   }
 
   handleConnection(client: Socket) {
+    console.log("[CHANNEL-RTC-WS] ========================================");
     console.log(
       "[CHANNEL-RTC-WS] Client connected to /channel-rtc namespace. Awaiting identity.",
     );
+    console.log(`[CHANNEL-RTC-WS] Socket ID: ${client.id}`);
+    console.log("[CHANNEL-RTC-WS] ========================================");
+
+    // Ensure meta Map is initialized
+    if (!this.meta) {
+      this.meta = new Map<Socket, SocketMeta>();
+    }
+
     this.meta.set(client, {});
   }
 
   handleDisconnect(client: Socket) {
+    if (!this.meta) {
+      this.meta = new Map<Socket, SocketMeta>();
+    }
+
     const meta = this.meta.get(client);
     if (meta?.userDehiveId) {
       console.log(
         `[CHANNEL-RTC-WS] User ${meta.userDehiveId} disconnected from /channel-rtc`,
       );
-      this.service.handleUserDisconnect(meta.userDehiveId);
+      this.service.handleUserDisconnect(meta.userDehiveId, meta.channelId);
     }
     this.meta.delete(client);
   }
 
   @SubscribeMessage("identity")
   async handleIdentity(
-    @MessageBody() userDehiveId: string,
+    @MessageBody() data: string | { userDehiveId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    console.log("[CHANNEL-RTC-WS] Identity request:", userDehiveId);
+    console.log(`[CHANNEL-RTC-WS] Identity request received:`, data);
 
-    // Validate ObjectId format
-    if (!Types.ObjectId.isValid(userDehiveId)) {
+    // Ensure meta Map is initialized
+    if (!this.meta) {
+      this.meta = new Map<Socket, SocketMeta>();
+    }
+
+    let userDehiveId: string;
+    if (typeof data === "string") {
+      userDehiveId = data;
+    } else if (typeof data === "object" && data?.userDehiveId) {
+      userDehiveId = data.userDehiveId;
+    } else {
       return this.send(client, "error", {
-        message: "Invalid user ID format",
+        message:
+          "Invalid identity format. Send userDehiveId as string or {userDehiveId: string}",
+        code: "INVALID_FORMAT",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (!userDehiveId || !Types.ObjectId.isValid(userDehiveId)) {
+      return this.send(client, "error", {
+        message: "Invalid userDehiveId",
         code: "INVALID_USER_ID",
         timestamp: new Date().toISOString(),
       });
     }
 
-    // Store user info in socket meta
-    const meta = this.meta.get(client) || {};
-    meta.userDehiveId = userDehiveId;
-    this.meta.set(client, meta);
-
-    // Join user to their personal room
-    await client.join(`user:${userDehiveId}`);
-
-    this.send(client, "identityConfirmed", {
-      userDehiveId,
-      status: "success",
-      timestamp: new Date().toISOString(),
-    });
-
+    // For now, skip database check and just validate ObjectId format
+    // TODO: Implement proper user validation when database connection is stable
     console.log(
-      `[CHANNEL-RTC-WS] User ${userDehiveId} identified and joined personal room`,
+      `[CHANNEL-RTC-WS] Accepting identity for user: ${userDehiveId}`,
     );
+
+    const meta = this.meta.get(client);
+    if (meta) {
+      meta.userDehiveId = userDehiveId;
+      void client.join(`user:${userDehiveId}`);
+      console.log(`[CHANNEL-RTC-WS] User identified as ${userDehiveId}`);
+      this.send(client, "identityConfirmed", {
+        userDehiveId,
+        status: "success",
+        timestamp: new Date().toISOString(),
+      });
+    }
   }
 
   @SubscribeMessage("joinChannel")
@@ -116,20 +166,21 @@ export class ChannelCallGateway
     data:
       | {
           channel_id: string;
-          with_video?: boolean;
-          with_audio?: boolean;
         }
       | string,
     @ConnectedSocket() client: Socket,
   ) {
+    // Ensure meta Map is initialized
+    if (!this.meta) {
+      this.meta = new Map<Socket, SocketMeta>();
+    }
+
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
     // Parse data if it's a string
     let parsedData: {
       channel_id: string;
-      with_video?: boolean;
-      with_audio?: boolean;
     };
 
     if (typeof data === "string") {
@@ -166,9 +217,12 @@ export class ChannelCallGateway
       const result = await this.service.joinChannel(
         userId,
         parsedData.channel_id,
-        parsedData.with_video ?? false,
-        parsedData.with_audio ?? true,
       );
+
+      // Store channel info in meta
+      meta.channelId = parsedData.channel_id;
+      meta.callId = String(result.call._id);
+      this.meta.set(client, meta);
 
       // Join socket to channel room
       await client.join(`channel:${parsedData.channel_id}`);
@@ -178,7 +232,6 @@ export class ChannelCallGateway
         call_id: result.call._id,
         channel_id: parsedData.channel_id,
         status: result.call.status,
-        stream_info: result.streamInfo,
         participants: result.otherParticipants,
         timestamp: new Date().toISOString(),
       });
@@ -199,8 +252,6 @@ export class ChannelCallGateway
             status: "ACTIVE",
             is_active: true,
           },
-          with_video: parsedData.with_video ?? false,
-          with_audio: parsedData.with_audio ?? true,
           timestamp: new Date().toISOString(),
         });
     } catch (error) {
@@ -219,6 +270,11 @@ export class ChannelCallGateway
     data: { channel_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
+    // Ensure meta Map is initialized
+    if (!this.meta) {
+      this.meta = new Map<Socket, SocketMeta>();
+    }
+
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
@@ -254,6 +310,11 @@ export class ChannelCallGateway
         parsedData.channel_id,
       );
 
+      // Clear meta info
+      meta.channelId = undefined;
+      meta.callId = undefined;
+      this.meta.set(client, meta);
+
       // Leave socket from channel room
       await client.leave(`channel:${parsedData.channel_id}`);
 
@@ -286,6 +347,10 @@ export class ChannelCallGateway
 
   @SubscribeMessage("ping")
   handlePing(@ConnectedSocket() client: Socket) {
-    this.send(client, "pong", { timestamp: new Date().toISOString() });
+    console.log(`[CHANNEL-RTC-WS] Ping received from ${client.id}`);
+    this.send(client, "pong", {
+      timestamp: new Date().toISOString(),
+      message: "pong",
+    });
   }
 }

@@ -3,6 +3,8 @@ import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 import { firstValueFrom } from "rxjs";
 import { UserProfile } from "../interfaces/user-profile.interface";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
 
 @Injectable()
 export class DecodeApiClient {
@@ -12,6 +14,7 @@ export class DecodeApiClient {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    @InjectRedis() private readonly redis: Redis,
   ) {
     const host = this.configService.get<string>("DECODE_API_GATEWAY_HOST");
     const port = this.configService.get<number>("DECODE_API_GATEWAY_PORT");
@@ -29,64 +32,57 @@ export class DecodeApiClient {
     userDehiveId: string,
   ): Promise<UserProfile | null> {
     try {
+      // Get access token from session
+      const accessToken = await this.getAccessTokenFromSession(sessionId);
+      if (!accessToken) {
+        this.logger.warn(`Access token not found for session: ${sessionId}`);
+        return null;
+      }
+
       this.logger.log(
-        `Getting user profile for ${userDehiveId} from decode API`,
+        `Calling Decode API: GET ${this.baseUrl}/users/profile/${userDehiveId}`,
       );
 
       const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.baseUrl}/api/user/profile/${userDehiveId}`,
+        this.httpService.get<{ data: UserProfile }>(
+          `${this.baseUrl}/users/profile/${userDehiveId}`,
           {
             headers: {
-              "x-session-id": sessionId,
+              Authorization: `Bearer ${accessToken}`,
               "x-fingerprint-hashed": fingerprintHash,
             },
           },
         ),
       );
 
-      if (response.data && response.data.success) {
-        const profileData = response.data.data;
+      this.logger.log(
+        `Decode API response: ${JSON.stringify(response.data, null, 2)}`,
+      );
+      this.logger.log(`Successfully retrieved user profile from Decode API.`);
 
-        // Map the response to UserProfile interface
-        const profile: UserProfile = {
-          _id: profileData._id || userDehiveId,
-          username: profileData.username || "",
-          display_name: profileData.display_name || "",
-          avatar_ipfs_hash: profileData.avatar_ipfs_hash || "",
-          bio: profileData.bio,
-          status: profileData.status,
-          banner_color: profileData.banner_color,
-          server_count: profileData.server_count,
-          last_login: profileData.last_login,
-          primary_wallet: profileData.primary_wallet,
-          following_number: profileData.following_number,
-          followers_number: profileData.followers_number,
-          is_following: profileData.is_following,
-          is_follower: profileData.is_follower,
-          is_blocked: profileData.is_blocked,
-          is_blocked_by: profileData.is_blocked_by,
-          mutual_followers_number: profileData.mutual_followers_number,
-          mutual_followers_list: profileData.mutual_followers_list,
-          is_active: profileData.is_active,
-          last_account_deactivation: profileData.last_account_deactivation,
-          dehive_role: profileData.dehive_role,
-          role_subscription: profileData.role_subscription,
-        };
-
-        this.logger.log(
-          `Successfully retrieved user profile for ${userDehiveId} from decode API`,
-        );
-        return profile;
-      }
-
-      this.logger.warn(
-        `Failed to get user profile for ${userDehiveId} from decode API: ${response.data?.message || "Unknown error"}`,
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Error Response Status: ${error.response?.status}`);
+      this.logger.error(
+        `Error Response Data: ${JSON.stringify(error.response?.data)}`,
       );
       return null;
+    }
+  }
+
+  private async getAccessTokenFromSession(
+    sessionId: string,
+  ): Promise<string | null> {
+    try {
+      const sessionKey = `session:${sessionId}`;
+      const sessionRaw = await this.redis.get(sessionKey);
+      if (!sessionRaw) return null;
+
+      const sessionData = JSON.parse(sessionRaw);
+      return sessionData?.access_token || null;
     } catch (error) {
       this.logger.error(
-        `Error getting user profile for ${userDehiveId} from decode API:`,
+        `Failed to parse session data for key session:${sessionId}`,
         error,
       );
       return null;

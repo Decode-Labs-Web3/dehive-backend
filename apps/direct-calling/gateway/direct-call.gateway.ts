@@ -82,7 +82,6 @@ export class DirectCallGateway
   }
 
   handleDisconnect(client: Socket) {
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
@@ -98,7 +97,6 @@ export class DirectCallGateway
   private async handleUserDisconnect(userId: string, callId?: string) {
     if (callId) {
       try {
-        // Handle user disconnect - update call status if needed
         if (callId) {
           await this.dmCallModel.updateOne(
             { _id: callId },
@@ -307,58 +305,19 @@ export class DirectCallGateway
       // Store timeout ID in meta for later cleanup
       meta.callTimeout = timeoutId;
 
-      const result = {
-        call: {
-          _id: call._id,
-          status: "ringing",
-          caller_id: callerId,
-          callee_id: parsedData.target_user_id,
-          caller_audio_enabled: parsedData.with_audio ?? true,
-          caller_video_enabled: parsedData.with_video ?? true,
-          callee_audio_enabled: true,
-          callee_video_enabled: true,
-          created_at: new Date(),
-        },
-        streamInfo: {
-          callId: String(call._id),
-          callerToken: `token_${callerId}_${Date.now()}`,
-          calleeToken: `token_${parsedData.target_user_id}_${Date.now()}`,
-          streamConfig: {
-            apiKey: "stream_api_key",
-            callType: "default",
-            callId: String(call._id),
-            members: [
-              { user_id: callerId, role: "caller" },
-              { user_id: parsedData.target_user_id, role: "callee" },
-            ],
-            settings: {
-              audio: {
-                default_device: "speaker",
-                is_default_enabled: parsedData.with_audio ?? true,
-              },
-              video: {
-                camera_default_on: parsedData.with_video ?? true,
-                camera_facing: "front",
-              },
-            },
-          },
-        },
-      };
-
-      meta.callId = String(result.call._id);
+      meta.callId = String(call._id);
 
       // Notify caller
       this.send(client, "callStarted", {
-        call_id: result.call._id,
-        status: result.call.status,
+        call_id: call._id,
+        status: "ringing",
         target_user_id: parsedData.target_user_id,
-        stream_info: result.streamInfo,
         timestamp: new Date().toISOString(),
       });
 
       // Notify callee
       this.server.to(`user:${parsedData.target_user_id}`).emit("incomingCall", {
-        call_id: result.call._id,
+        call_id: call._id,
         caller_id: callerId,
         caller_info: {
           _id: callerId,
@@ -369,9 +328,6 @@ export class DirectCallGateway
           status: "ACTIVE",
           is_active: true,
         },
-        with_video: parsedData.with_video ?? true,
-        with_audio: parsedData.with_audio ?? true,
-        stream_info: result.streamInfo,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -474,49 +430,11 @@ export class DirectCallGateway
         });
       }
 
-      const result = {
-        call: {
-          _id: call._id,
-          status: call.status,
-          caller_id: call.caller_id,
-          callee_id: call.callee_id,
-          caller_audio_enabled: call.caller_audio_enabled,
-          caller_video_enabled: call.caller_video_enabled,
-          callee_audio_enabled: call.callee_audio_enabled,
-          callee_video_enabled: call.callee_video_enabled,
-          started_at: call.started_at,
-        },
-        streamInfo: {
-          callId: String(call._id),
-          callerToken: `token_${call.caller_id}_${Date.now()}`,
-          calleeToken: `token_${call.callee_id}_${Date.now()}`,
-          streamConfig: {
-            apiKey: "stream_api_key",
-            callType: "default",
-            callId: String(call._id),
-            members: [
-              { user_id: String(call.caller_id), role: "caller" },
-              { user_id: String(call.callee_id), role: "callee" },
-            ],
-            settings: {
-              audio: {
-                default_device: "speaker",
-                is_default_enabled: call.caller_audio_enabled,
-              },
-              video: {
-                camera_default_on: call.caller_video_enabled,
-                camera_facing: "front",
-              },
-            },
-          },
-        },
-      };
-
-      meta.callId = String(result.call._id);
+      meta.callId = String(call._id);
 
       // Notify both parties
-      this.server.to(`user:${result.call.caller_id}`).emit("callAccepted", {
-        call_id: result.call._id,
+      this.server.to(`user:${call.caller_id}`).emit("callAccepted", {
+        call_id: call._id,
         callee_id: calleeId,
         callee_info: {
           _id: calleeId,
@@ -527,16 +445,12 @@ export class DirectCallGateway
           status: "ACTIVE",
           is_active: true,
         },
-        with_video: parsedData.with_video ?? true,
-        with_audio: parsedData.with_audio ?? true,
-        stream_info: result.streamInfo,
         timestamp: new Date().toISOString(),
       });
 
       this.send(client, "callAccepted", {
-        call_id: result.call._id,
-        status: result.call.status,
-        stream_info: result.streamInfo,
+        call_id: call._id,
+        status: call.status,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

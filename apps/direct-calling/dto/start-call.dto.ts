@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from "class-validator";
+import { IsString, IsNotEmpty } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 
 export class StartCallDto {
@@ -9,22 +9,4 @@ export class StartCallDto {
   @IsString()
   @IsNotEmpty()
   target_user_id: string;
-
-  @ApiProperty({
-    description: "Whether to start with video enabled",
-    example: true,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  with_video?: boolean = true;
-
-  @ApiProperty({
-    description: "Whether to start with audio enabled",
-    example: true,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  with_audio?: boolean = true;
 }

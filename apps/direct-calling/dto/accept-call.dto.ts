@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsBoolean } from "class-validator";
+import { IsString, IsNotEmpty } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 
 export class AcceptCallDto {
@@ -9,22 +9,4 @@ export class AcceptCallDto {
   @IsString()
   @IsNotEmpty()
   call_id: string;
-
-  @ApiProperty({
-    description: "Whether to accept with video enabled",
-    example: true,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  with_video?: boolean = true;
-
-  @ApiProperty({
-    description: "Whether to accept with audio enabled",
-    example: true,
-    required: false,
-  })
-  @IsOptional()
-  @IsBoolean()
-  with_audio?: boolean = true;
 }

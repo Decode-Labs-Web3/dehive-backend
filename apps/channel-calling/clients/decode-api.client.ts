@@ -3,25 +3,40 @@ import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 import { firstValueFrom } from "rxjs";
 import { UserProfile } from "../interfaces/user-profile.interface";
-import { UserDehiveLean } from "../interfaces/user-dehive-lean.interface";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
 
 @Injectable()
 export class DecodeApiClient {
   private readonly logger = new Logger(DecodeApiClient.name);
-  private readonly baseUrl: string;
+  private readonly authBaseUrl: string;
+  private readonly serverBaseUrl: string;
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    @InjectRedis() private readonly redis: Redis,
   ) {
-    const host = this.configService.get<string>("DECODE_API_GATEWAY_HOST");
-    const port = this.configService.get<number>("DECODE_API_GATEWAY_PORT");
-    if (!host || !port) {
+    // For auth service (DECODE_API_GATEWAY)
+    const authHost = this.configService.get<string>("DECODE_API_GATEWAY_HOST");
+    const authPort = this.configService.get<number>("DECODE_API_GATEWAY_PORT");
+
+    // For server service (DEHIVE_SERVER) - with fallback to localhost
+    const serverHost =
+      this.configService.get<string>("DEHIVE_SERVER_HOST") || "localhost";
+    const serverPort =
+      this.configService.get<number>("DEHIVE_SERVER_PORT") || 4002;
+
+    if (!authHost || !authPort) {
       throw new Error(
         "DECODE_API_GATEWAY_HOST and DECODE_API_GATEWAY_PORT must be set in .env file!",
       );
     }
-    this.baseUrl = `http://${host}:${port}`;
+
+    // Set both URLs
+    this.authBaseUrl = `http://${authHost}:${authPort}`;
+    this.serverBaseUrl = `http://${serverHost}:${serverPort}`;
   }
 
   async getUserProfile(
@@ -36,7 +51,7 @@ export class DecodeApiClient {
 
       const response = await firstValueFrom(
         this.httpService.get(
-          `${this.baseUrl}/api/user/profile/${userDehiveId}`,
+          `${this.authBaseUrl}/api/user/profile/${userDehiveId}`,
           {
             headers: {
               "x-session-id": sessionId,
@@ -94,38 +109,147 @@ export class DecodeApiClient {
     }
   }
 
-  async getUsersByIds(userIds: string[]): Promise<UserDehiveLean[]> {
+  async getUsersByIds(
+    userIds: string[],
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<AuthenticatedUser[]> {
     try {
       this.logger.log(`Getting users by IDs: ${userIds.join(", ")}`);
 
-      const response = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}/api/user/batch`, {
-          user_ids: userIds,
-        }),
-      );
-
-      if (response.data && response.data.success) {
-        const users = response.data.data || [];
-
-        this.logger.log(
-          `Successfully retrieved ${users.length} users from decode API`,
-        );
-
-        return users.map((user: any) => ({
-          _id: user._id,
-          username: user.username || "",
-          display_name: user.display_name || "",
-          avatar_url: user.avatar_url || "",
-        }));
+      if (!sessionId || !fingerprintHash) {
+        this.logger.warn("Session ID or fingerprint hash not provided");
+        return [];
       }
 
-      this.logger.warn(
-        `Failed to get users from decode API: ${response.data?.message || "Unknown error"}`,
+      // Get access token from session
+      const accessToken = await this.getAccessTokenFromSession(sessionId);
+      if (!accessToken) {
+        this.logger.warn("Access token not available");
+        return [];
+      }
+
+      // Call each user individually in parallel
+      const userPromises = userIds.map(async (userId) => {
+        try {
+          const response = await firstValueFrom(
+            this.httpService.get(
+              `${this.authBaseUrl}/users/profile/${userId}`,
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "x-fingerprint-hashed": fingerprintHash,
+                },
+              },
+            ),
+          );
+
+          if (response.data && response.data.success) {
+            const userData = response.data.data;
+            return {
+              _id: userData._id || userId,
+              username: userData.username || "",
+              display_name: userData.display_name || "",
+              avatar_ipfs_hash: userData.avatar_ipfs_hash || "",
+              bio: userData.bio || "",
+              status: userData.status || "online",
+              is_active: userData.is_active || false,
+              session_id: "",
+              fingerprint_hash: "",
+            };
+          }
+          return null;
+        } catch (error) {
+          this.logger.error(`Error fetching user ${userId}:`, error);
+          return null;
+        }
+      });
+
+      const users = await Promise.all(userPromises);
+      const validUsers = users.filter(
+        (user) => user !== null,
+      ) as AuthenticatedUser[];
+
+      this.logger.log(
+        `Successfully retrieved ${validUsers.length} users from decode API`,
       );
-      return [];
+
+      return validUsers;
     } catch (error) {
       this.logger.error(`Error getting users from decode API:`, error);
       return [];
+    }
+  }
+
+  /**
+   * Get channel information by channel ID
+   * Used to validate channel type before joining voice calls
+   */
+  async getChannelById(
+    channelId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<{ type: string; name: string } | null> {
+    try {
+      this.logger.log(`Getting channel info for ${channelId} from server API`);
+
+      // Build headers - include auth if provided
+      const headers: Record<string, string> = {};
+      if (sessionId) {
+        headers["x-session-id"] = sessionId;
+      }
+      if (fingerprintHash) {
+        headers["x-fingerprint-hashed"] = fingerprintHash;
+      }
+
+      const response = await firstValueFrom(
+        this.httpService.get(
+          `${this.serverBaseUrl}/api/servers/channels/${channelId}`,
+          {
+            headers: headers,
+          },
+        ),
+      );
+
+      if (response.data && response.data.success && response.data.data) {
+        const channel = response.data.data;
+
+        this.logger.log(
+          `Successfully retrieved channel ${channelId} (type: ${channel.type})`,
+        );
+
+        return {
+          type: channel.type,
+          name: channel.name,
+        };
+      }
+
+      this.logger.warn(
+        `Failed to get channel ${channelId}: ${response.data?.message || "Unknown error"}`,
+      );
+      return null;
+    } catch (error) {
+      this.logger.error(`Error getting channel ${channelId}:`, error);
+      return null;
+    }
+  }
+
+  private async getAccessTokenFromSession(
+    sessionId: string,
+  ): Promise<string | null> {
+    try {
+      const sessionKey = `session:${sessionId}`;
+      const sessionRaw = await this.redis.get(sessionKey);
+      if (!sessionRaw) return null;
+
+      const sessionData = JSON.parse(sessionRaw);
+      return sessionData?.access_token || null;
+    } catch (error) {
+      this.logger.error(
+        `Failed to parse session data for key session:${sessionId}`,
+        error,
+      );
+      return null;
     }
   }
 }
