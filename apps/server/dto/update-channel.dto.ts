@@ -1,10 +1,4 @@
-import {
-  IsString,
-  IsNotEmpty,
-  Length,
-  IsOptional,
-  IsMongoId,
-} from "class-validator";
+import { IsString, IsNotEmpty, Length, IsOptional } from "class-validator";
 import { ApiProperty } from "@nestjs/swagger";
 
 export class UpdateChannelDto {
@@ -28,5 +22,4 @@ export class UpdateChannelDto {
   @IsString()
   @Length(0, 1024)
   topic?: string;
-
 }

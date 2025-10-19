@@ -64,11 +64,7 @@ import {
   ],
   controllers: [ChannelCallController],
   providers: [
-    {
-      provide: ChannelCallService,
-      useClass: ChannelCallService,
-      scope: 2, // REQUEST scope
-    },
+    ChannelCallService,
     ChannelCallGateway,
     AuthGuard,
     DecodeApiClient,

@@ -27,6 +27,7 @@ import {
 type SocketMeta = {
   userDehiveId?: string;
   sessionId?: string;
+  fingerprintHash?: string;
   callId?: string;
   channelId?: string;
 };
@@ -57,6 +58,11 @@ export class ChannelCallGateway
 
     // Debug logging
     console.log("[CHANNEL-RTC-WS] Gateway constructor called");
+    console.log("[CHANNEL-RTC-WS] Service injected:", {
+      hasService: !!this.service,
+      serviceType: typeof this.service,
+      serviceName: this.service?.constructor?.name,
+    });
     console.log(
       "[CHANNEL-RTC-WS] userDehiveModel available:",
       !!this.userDehiveModel,
@@ -102,17 +108,26 @@ export class ChannelCallGateway
       console.log(
         `[CHANNEL-RTC-WS] User ${meta.userDehiveId} disconnected from /channel-rtc`,
       );
-      this.service.handleUserDisconnect(meta.userDehiveId, meta.channelId);
+      try {
+        this.service.handleUserDisconnect(meta.userDehiveId, meta.channelId);
+      } catch (error) {
+        console.error("[CHANNEL-RTC-WS] Error in handleUserDisconnect:", error);
+      }
     }
     this.meta.delete(client);
   }
 
   @SubscribeMessage("identity")
   async handleIdentity(
-    @MessageBody() data: string | { userDehiveId: string },
+    @MessageBody()
+    data:
+      | string
+      | { userDehiveId: string; sessionId?: string; fingerprintHash?: string },
     @ConnectedSocket() client: Socket,
   ) {
     console.log(`[CHANNEL-RTC-WS] Identity request received:`, data);
+    console.log(`[CHANNEL-RTC-WS] Data type:`, typeof data);
+    console.log(`[CHANNEL-RTC-WS] Is object:`, typeof data === "object");
 
     // Ensure meta Map is initialized
     if (!this.meta) {
@@ -120,20 +135,57 @@ export class ChannelCallGateway
     }
 
     let userDehiveId: string;
+    let sessionId: string | undefined;
+    let fingerprintHash: string | undefined;
+
+    console.log(`[CHANNEL-RTC-WS] Parsing data...`);
+
     if (typeof data === "string") {
-      userDehiveId = data;
+      console.log(
+        `[CHANNEL-RTC-WS] String format detected, trying to parse as JSON`,
+      );
+      try {
+        const parsedData = JSON.parse(data);
+        if (parsedData.userDehiveId) {
+          console.log(`[CHANNEL-RTC-WS] Successfully parsed JSON string`);
+          userDehiveId = parsedData.userDehiveId;
+          sessionId = parsedData.sessionId;
+          fingerprintHash = parsedData.fingerprintHash;
+        } else {
+          console.log(
+            `[CHANNEL-RTC-WS] Parsed JSON but no userDehiveId found, treating as plain string`,
+          );
+          userDehiveId = data;
+        }
+      } catch {
+        console.log(
+          `[CHANNEL-RTC-WS] Failed to parse JSON, treating as plain string`,
+        );
+        userDehiveId = data;
+      }
     } else if (typeof data === "object" && data?.userDehiveId) {
+      console.log(`[CHANNEL-RTC-WS] Object format detected:`, data);
       userDehiveId = data.userDehiveId;
+      sessionId = data.sessionId;
+      fingerprintHash = data.fingerprintHash;
+      console.log(`[CHANNEL-RTC-WS] Extracted:`, {
+        userDehiveId,
+        sessionId,
+        fingerprintHash,
+      });
     } else {
+      console.log(`[CHANNEL-RTC-WS] Invalid format, returning error`);
       return this.send(client, "error", {
         message:
-          "Invalid identity format. Send userDehiveId as string or {userDehiveId: string}",
+          "Invalid identity format. Send userDehiveId as string or {userDehiveId: string, sessionId?: string, fingerprintHash?: string}",
         code: "INVALID_FORMAT",
         timestamp: new Date().toISOString(),
       });
     }
 
+    console.log(`[CHANNEL-RTC-WS] Validating userDehiveId:`, userDehiveId);
     if (!userDehiveId || !Types.ObjectId.isValid(userDehiveId)) {
+      console.log(`[CHANNEL-RTC-WS] Invalid userDehiveId, returning error`);
       return this.send(client, "error", {
         message: "Invalid userDehiveId",
         code: "INVALID_USER_ID",
@@ -141,17 +193,49 @@ export class ChannelCallGateway
       });
     }
 
+    console.log(`[CHANNEL-RTC-WS] Auth data (optional):`, {
+      sessionId,
+      fingerprintHash,
+    });
+
     // For now, skip database check and just validate ObjectId format
     // TODO: Implement proper user validation when database connection is stable
     console.log(
       `[CHANNEL-RTC-WS] Accepting identity for user: ${userDehiveId}`,
     );
 
+    console.log(`[CHANNEL-RTC-WS] Getting meta for client:`, client.id);
     const meta = this.meta.get(client);
+    console.log(`[CHANNEL-RTC-WS] Meta found:`, !!meta);
+
     if (meta) {
       meta.userDehiveId = userDehiveId;
+      meta.sessionId = sessionId;
+      meta.fingerprintHash = fingerprintHash;
       void client.join(`user:${userDehiveId}`);
-      console.log(`[CHANNEL-RTC-WS] User identified as ${userDehiveId}`);
+      console.log(
+        `[CHANNEL-RTC-WS] User identified as ${userDehiveId} with sessionId: ${sessionId}`,
+      );
+      this.send(client, "identityConfirmed", {
+        userDehiveId,
+        status: "success",
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      console.log(
+        `[CHANNEL-RTC-WS] No meta found for client, creating new one`,
+      );
+      this.meta.set(client, {
+        userDehiveId,
+        sessionId,
+        fingerprintHash,
+        callId: undefined,
+        channelId: undefined,
+      });
+      void client.join(`user:${userDehiveId}`);
+      console.log(
+        `[CHANNEL-RTC-WS] User identified as ${userDehiveId} with sessionId: ${sessionId}`,
+      );
       this.send(client, "identityConfirmed", {
         userDehiveId,
         status: "success",
@@ -177,6 +261,13 @@ export class ChannelCallGateway
 
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
+
+    console.log("[CHANNEL-RTC-WS] Meta debug:", {
+      hasMeta: !!meta,
+      userId: userId,
+      sessionId: meta?.sessionId,
+      fingerprintHash: meta?.fingerprintHash,
+    });
 
     // Parse data if it's a string
     let parsedData: {
@@ -213,6 +304,8 @@ export class ChannelCallGateway
     }
 
     try {
+      console.log("[CHANNEL-RTC-WS] Using service for join channel");
+
       // Join channel using service
       const result = await this.service.joinChannel(
         userId,
@@ -229,7 +322,6 @@ export class ChannelCallGateway
 
       // Notify user
       this.send(client, "channelJoined", {
-        call_id: result.call._id,
         channel_id: parsedData.channel_id,
         status: result.call.status,
         participants: result.otherParticipants,
@@ -240,7 +332,6 @@ export class ChannelCallGateway
       this.server
         .to(`channel:${parsedData.channel_id}`)
         .emit("userJoinedChannel", {
-          call_id: result.call._id,
           channel_id: parsedData.channel_id,
           user_id: userId,
           user_info: {
@@ -248,9 +339,6 @@ export class ChannelCallGateway
             username: "user_" + userId.substring(0, 8),
             display_name: "User " + userId.substring(0, 8),
             avatar_ipfs_hash: "",
-            bio: "User profile",
-            status: "ACTIVE",
-            is_active: true,
           },
           timestamp: new Date().toISOString(),
         });
@@ -304,6 +392,8 @@ export class ChannelCallGateway
     }
 
     try {
+      console.log("[CHANNEL-RTC-WS] Using service for leave channel");
+
       // Leave channel using service
       const result = await this.service.leaveCall(
         userId,
@@ -320,7 +410,6 @@ export class ChannelCallGateway
 
       // Notify user
       this.send(client, "channelLeft", {
-        call_id: result.call._id,
         channel_id: parsedData.channel_id,
         status: result.call.status,
         timestamp: new Date().toISOString(),
@@ -330,7 +419,6 @@ export class ChannelCallGateway
       this.server
         .to(`channel:${parsedData.channel_id}`)
         .emit("userLeftChannel", {
-          call_id: result.call._id,
           channel_id: parsedData.channel_id,
           user_id: userId,
           timestamp: new Date().toISOString(),

@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-  Inject,
-} from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model } from "mongoose";
 import { ConfigService } from "@nestjs/config";
@@ -23,8 +17,6 @@ import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { Participant } from "../interfaces/participant.interface";
 import { ParticipantsResponse } from "../interfaces/participants-response.interface";
 import { DecodeApiClient } from "../clients/decode-api.client";
-import { REQUEST } from "@nestjs/core";
-import { Request } from "express";
 
 @Injectable()
 export class ChannelCallService {
@@ -38,7 +30,6 @@ export class ChannelCallService {
     private configService: ConfigService,
     private decodeApiClient: DecodeApiClient,
     @InjectRedis() private readonly redis: Redis,
-    @Inject(REQUEST) private readonly request: Request,
   ) {}
 
   async joinChannel(
@@ -50,9 +41,6 @@ export class ChannelCallService {
     otherParticipants: AuthenticatedUser[];
   }> {
     this.logger.log(`User ${userId} joining voice channel ${channelId}`);
-
-    // Validate channel exists and is a VOICE channel
-    await this.validateVoiceChannel(channelId);
 
     // Find or create call for this channel (Discord style - always active)
     let call = await this.channelCallModel
@@ -402,7 +390,7 @@ export class ChannelCallService {
         .exec();
 
       if (!call) {
-        return { call_id: "", participants: [] };
+        return { participants: [] };
       }
 
       const participants = await this.channelParticipantModel
@@ -412,7 +400,7 @@ export class ChannelCallService {
       const userIds = participants.map((p) => p.user_id.toString());
 
       if (userIds.length === 0) {
-        return { call_id: String(call._id), participants: [] };
+        return { participants: [] };
       }
 
       try {
@@ -422,113 +410,25 @@ export class ChannelCallService {
           fingerprintHash,
         );
         return {
-          call_id: String(call._id),
           participants: users.map(
             (user): Participant => ({
               _id: user._id,
               username: user.username,
               display_name: user.display_name,
               avatar_ipfs_hash: user.avatar_ipfs_hash,
-              bio: user.bio,
-              status: user.status,
-              is_active: user.is_active,
             }),
           ),
         };
       } catch (error) {
         this.logger.error("Error fetching participants:", error);
-        return { call_id: String(call._id), participants: [] };
+        return { participants: [] };
       }
     } catch (error) {
       this.logger.error(
         `Error getting participants for channel ${channelId}:`,
         error,
       );
-      return { call_id: "", participants: [] };
-    }
-  }
-
-  /**
-   * Get session and fingerprint from current request
-   */
-  private getAuthHeaders(): {
-    sessionId?: string;
-    fingerprintHash?: string;
-  } {
-    const user = (this.request as { user?: AuthenticatedUser }).user;
-    return {
-      sessionId: user?.session_id,
-      fingerprintHash: user?.fingerprint_hash,
-    };
-  }
-
-  /**
-   * Validate that a channel exists and is a VOICE channel
-   */
-  private async validateVoiceChannel(channelId: string): Promise<void> {
-    try {
-      this.logger.log(`Validating channel ${channelId} is a VOICE channel`);
-
-      // Check cache first
-      const cacheKey = `channel:${channelId}:type`;
-      const cachedType = await this.redis.get(cacheKey);
-
-      if (cachedType) {
-        if (cachedType !== "VOICE") {
-          throw new BadRequestException(
-            `Cannot join voice call in TEXT channel. Channel type: ${cachedType}`,
-          );
-        }
-        this.logger.log(
-          `Channel ${channelId} validated from cache as VOICE channel`,
-        );
-        return;
-      }
-
-      // Get auth headers from current request
-      const { sessionId, fingerprintHash } = this.getAuthHeaders();
-
-      // Fetch channel info from server service via DecodeApiClient
-      const channel = await this.decodeApiClient.getChannelById(
-        channelId,
-        sessionId,
-        fingerprintHash,
-      );
-
-      if (!channel) {
-        throw new NotFoundException(
-          `Channel ${channelId} not found or failed to fetch channel information`,
-        );
-      }
-
-      // Check if channel type is VOICE
-      if (channel.type !== "VOICE") {
-        throw new BadRequestException(
-          `Cannot join voice call in TEXT channel. This channel is for text messages only.`,
-        );
-      }
-
-      // Cache the result for 1 hour
-      await this.redis.setex(cacheKey, 3600, channel.type);
-
-      this.logger.log(
-        `Channel ${channelId} validated as VOICE channel and cached`,
-      );
-    } catch (error) {
-      if (
-        error instanceof BadRequestException ||
-        error instanceof NotFoundException
-      ) {
-        throw error;
-      }
-
-      this.logger.error(
-        `Error validating channel ${channelId}:`,
-        error instanceof Error ? error.message : String(error),
-      );
-      throw new BadRequestException(
-        `Failed to validate channel: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      return { participants: [] };
     }
   }
 }

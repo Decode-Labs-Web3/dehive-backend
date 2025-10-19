@@ -170,7 +170,6 @@ export class ChannelCallController {
         message: "Participants retrieved successfully",
         data: {
           channel_id: channelId,
-          call_id: result.call_id,
           participants: result.participants,
           count: result.participants.length,
         },

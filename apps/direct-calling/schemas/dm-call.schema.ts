@@ -84,7 +84,7 @@ export class DmCall {
 
   @Prop({
     type: Object,
-    required: false
+    required: false,
   })
   connection_quality?: {
     caller: {
@@ -101,9 +101,9 @@ export class DmCall {
 
   @Prop({
     type: Object,
-    required: false
+    required: false,
   })
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export type DmCallDocument = DmCall & Document;

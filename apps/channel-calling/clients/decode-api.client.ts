@@ -11,22 +11,14 @@ import { Redis } from "ioredis";
 export class DecodeApiClient {
   private readonly logger = new Logger(DecodeApiClient.name);
   private readonly authBaseUrl: string;
-  private readonly serverBaseUrl: string;
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     @InjectRedis() private readonly redis: Redis,
   ) {
-    // For auth service (DECODE_API_GATEWAY)
     const authHost = this.configService.get<string>("DECODE_API_GATEWAY_HOST");
     const authPort = this.configService.get<number>("DECODE_API_GATEWAY_PORT");
-
-    // For server service (DEHIVE_SERVER) - with fallback to localhost
-    const serverHost =
-      this.configService.get<string>("DEHIVE_SERVER_HOST") || "localhost";
-    const serverPort =
-      this.configService.get<number>("DEHIVE_SERVER_PORT") || 4002;
 
     if (!authHost || !authPort) {
       throw new Error(
@@ -34,9 +26,8 @@ export class DecodeApiClient {
       );
     }
 
-    // Set both URLs
+    // Set auth URL only
     this.authBaseUrl = `http://${authHost}:${authPort}`;
-    this.serverBaseUrl = `http://${serverHost}:${serverPort}`;
   }
 
   async getUserProfile(
@@ -178,59 +169,6 @@ export class DecodeApiClient {
     } catch (error) {
       this.logger.error(`Error getting users from decode API:`, error);
       return [];
-    }
-  }
-
-  /**
-   * Get channel information by channel ID
-   * Used to validate channel type before joining voice calls
-   */
-  async getChannelById(
-    channelId: string,
-    sessionId?: string,
-    fingerprintHash?: string,
-  ): Promise<{ type: string; name: string } | null> {
-    try {
-      this.logger.log(`Getting channel info for ${channelId} from server API`);
-
-      // Build headers - include auth if provided
-      const headers: Record<string, string> = {};
-      if (sessionId) {
-        headers["x-session-id"] = sessionId;
-      }
-      if (fingerprintHash) {
-        headers["x-fingerprint-hashed"] = fingerprintHash;
-      }
-
-      const response = await firstValueFrom(
-        this.httpService.get(
-          `${this.serverBaseUrl}/api/servers/channels/${channelId}`,
-          {
-            headers: headers,
-          },
-        ),
-      );
-
-      if (response.data && response.data.success && response.data.data) {
-        const channel = response.data.data;
-
-        this.logger.log(
-          `Successfully retrieved channel ${channelId} (type: ${channel.type})`,
-        );
-
-        return {
-          type: channel.type,
-          name: channel.name,
-        };
-      }
-
-      this.logger.warn(
-        `Failed to get channel ${channelId}: ${response.data?.message || "Unknown error"}`,
-      );
-      return null;
-    } catch (error) {
-      this.logger.error(`Error getting channel ${channelId}:`, error);
-      return null;
     }
   }
 
