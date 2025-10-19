@@ -158,7 +158,7 @@ export class ChannelCallController {
     this.logger.log(`Getting participants for channel ${channelId}`);
 
     try {
-      const participants = await this.channelCallService.getChannelParticipants(
+      const result = await this.channelCallService.getChannelParticipants(
         channelId,
         user.session_id,
         user.fingerprint_hash,
@@ -170,8 +170,9 @@ export class ChannelCallController {
         message: "Participants retrieved successfully",
         data: {
           channel_id: channelId,
-          participants,
-          count: participants.length,
+          call_id: result.call_id,
+          participants: result.participants,
+          count: result.participants.length,
         },
       };
     } catch (error) {
@@ -180,85 +181,6 @@ export class ChannelCallController {
         success: false,
         statusCode: 500,
         message: "Failed to get participants",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  @Get("history")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Get call history for a channel" })
-  @ApiResponse({
-    status: 200,
-    description: "Call history retrieved successfully",
-  })
-  @ApiBearerAuth()
-  async getCallHistory(
-    @Query("channel_id") channelId: string,
-    @Query("limit") limit: number = 20,
-    @Query("offset") offset: number = 0,
-    @CurrentUser() _user: AuthenticatedUser,
-  ): Promise<Response> {
-    this.logger.log(`Getting call history for channel ${channelId}`);
-
-    try {
-      const history = await this.channelCallService.getChannelCallHistory(
-        channelId,
-        limit,
-        offset,
-      );
-
-      return {
-        success: true,
-        statusCode: 200,
-        message: "Call history retrieved successfully",
-        data: {
-          channel_id: channelId,
-          calls: history,
-          total: history.length,
-          limit,
-          offset,
-        },
-      };
-    } catch (error) {
-      this.logger.error("Error getting call history:", error);
-      return {
-        success: false,
-        statusCode: 500,
-        message: "Failed to get call history",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  @Get("active")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Get all active channel calls" })
-  @ApiResponse({
-    status: 200,
-    description: "Active calls retrieved successfully",
-  })
-  @ApiBearerAuth()
-  async getActiveCalls(
-    @CurrentUser() _user: AuthenticatedUser,
-  ): Promise<Response> {
-    this.logger.log("Getting all active channel calls");
-
-    try {
-      const activeCalls = await this.channelCallService.getActiveChannelCalls();
-
-      return {
-        success: true,
-        statusCode: 200,
-        message: "Active calls retrieved successfully",
-        data: activeCalls,
-      };
-    } catch (error) {
-      this.logger.error("Error getting active calls:", error);
-      return {
-        success: false,
-        statusCode: 500,
-        message: "Failed to get active calls",
         error: error instanceof Error ? error.message : String(error),
       };
     }

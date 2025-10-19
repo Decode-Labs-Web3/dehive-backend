@@ -18,16 +18,3 @@ export enum CallEndReason {
   SERVER_ERROR = "server_error",
   ALL_PARTICIPANTS_LEFT = "all_participants_left",
 }
-
-export enum MediaType {
-  AUDIO = "audio",
-  VIDEO = "video",
-  SCREEN_SHARE = "screen_share",
-}
-
-export enum MediaState {
-  ENABLED = "enabled",
-  DISABLED = "disabled",
-  MUTED = "muted",
-  UNMUTED = "unmuted",
-}

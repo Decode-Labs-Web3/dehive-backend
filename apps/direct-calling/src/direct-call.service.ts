@@ -25,7 +25,7 @@ import {
   UserDehive,
   UserDehiveDocument,
 } from "../../user-dehive-server/schemas/user-dehive.schema";
-import { CallStatus, CallEndReason, MediaState } from "../enum/enum";
+import { CallStatus, CallEndReason } from "../enum/enum";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import { REQUEST } from "@nestjs/core";
@@ -114,14 +114,6 @@ export class DirectCallService {
       caller_id: new Types.ObjectId(callerId),
       callee_id: new Types.ObjectId(targetUserId),
       status: CallStatus.RINGING,
-      caller_audio_enabled: true,
-      caller_video_enabled: true,
-      callee_audio_enabled: true,
-      callee_video_enabled: true,
-      caller_audio_muted: false,
-      caller_video_muted: false,
-      callee_audio_muted: false,
-      callee_video_muted: false,
     });
 
     await call.save();
@@ -180,8 +172,6 @@ export class DirectCallService {
     // Update call status and media settings
     call.status = CallStatus.CONNECTED;
     call.started_at = new Date();
-    call.callee_audio_enabled = true;
-    call.callee_video_enabled = true;
 
     await call.save();
 
@@ -252,18 +242,6 @@ export class DirectCallService {
   }
 
   /**
-   * Toggle media without needing to pass userId - gets it from context
-   */
-  async toggleMediaForCurrentUser(
-    callId: string,
-    mediaType: "audio" | "video",
-    state: MediaState,
-  ): Promise<void> {
-    const userId = this.getCurrentUserId();
-    return this.toggleMedia(userId, callId, mediaType, state);
-  }
-
-  /**
    * Get call history without needing to pass userId - gets it from context
    */
   async getCallHistoryForCurrentUser(
@@ -325,42 +303,6 @@ export class DirectCallService {
 
     this.logger.log(`Call ${callId} ended successfully`);
     return call;
-  }
-
-  // WebRTC signaling methods removed - Stream.io handles this automatically
-
-  async toggleMedia(
-    userId: string,
-    callId: string,
-    mediaType: "audio" | "video",
-    state: MediaState,
-  ): Promise<void> {
-    const call = await this.dmCallModel.findById(callId);
-    if (!call) {
-      throw new NotFoundException("Call not found");
-    }
-
-    if (
-      String(call.caller_id) !== userId &&
-      String(call.callee_id) !== userId
-    ) {
-      throw new ForbiddenException(
-        "You can only toggle media for calls you are part of",
-      );
-    }
-
-    const isCaller = String(call.caller_id) === userId;
-    const updateField = isCaller
-      ? `caller_${mediaType}_muted`
-      : `callee_${mediaType}_muted`;
-
-    await this.dmCallModel.findByIdAndUpdate(callId, {
-      $set: { [updateField]: state === MediaState.MUTED },
-    });
-
-    this.logger.log(
-      `Media ${mediaType} ${state} for call ${callId} by user ${userId}`,
-    );
   }
 
   async handleUserDisconnect(userId: string, callId?: string): Promise<void> {
@@ -643,7 +585,6 @@ export class DirectCallService {
             call_id: String(call._id),
             status: call.status,
             duration: duration,
-            with_video: call.caller_video_enabled || call.callee_video_enabled,
             end_reason: call.end_reason,
           },
         ],

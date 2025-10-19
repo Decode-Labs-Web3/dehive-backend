@@ -17,16 +17,3 @@ export enum CallEndReason {
   NETWORK_ERROR = "network_error",
   SERVER_ERROR = "server_error",
 }
-
-export enum MediaType {
-  AUDIO = "audio",
-  VIDEO = "video",
-  SCREEN_SHARE = "screen_share",
-}
-
-export enum MediaState {
-  ENABLED = "enabled",
-  DISABLED = "disabled",
-  MUTED = "muted",
-  UNMUTED = "unmuted",
-}

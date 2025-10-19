@@ -21,6 +21,7 @@ import {
 import { CallStatus, CallEndReason } from "../enum/enum";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { Participant } from "../interfaces/participant.interface";
+import { ParticipantsResponse } from "../interfaces/participants-response.interface";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import { REQUEST } from "@nestjs/core";
 import { Request } from "express";
@@ -96,8 +97,6 @@ export class ChannelCallService {
       call_id: call._id,
       user_id: userId,
       is_muted: false,
-      is_video_enabled: true,
-      is_audio_enabled: true,
       joined_at: new Date(),
     });
     await participant.save();
@@ -390,18 +389,11 @@ export class ChannelCallService {
     }
   }
 
-  /**
-   * Toggle media (audio/video) for a participant in a channel call
-   */
-
-  /**
-   * Get active participants in a channel call
-   */
   async getChannelParticipants(
     channelId: string,
     sessionId?: string,
     fingerprintHash?: string,
-  ): Promise<Participant[]> {
+  ): Promise<ParticipantsResponse> {
     this.logger.log(`Getting participants for channel ${channelId}`);
 
     try {
@@ -410,7 +402,7 @@ export class ChannelCallService {
         .exec();
 
       if (!call) {
-        return [];
+        return { call_id: "", participants: [] };
       }
 
       const participants = await this.channelParticipantModel
@@ -420,7 +412,7 @@ export class ChannelCallService {
       const userIds = participants.map((p) => p.user_id.toString());
 
       if (userIds.length === 0) {
-        return [];
+        return { call_id: String(call._id), participants: [] };
       }
 
       try {
@@ -429,92 +421,30 @@ export class ChannelCallService {
           sessionId,
           fingerprintHash,
         );
-        return users.map(
-          (user): Participant => ({
-            _id: user._id,
-            username: user.username,
-            display_name: user.display_name,
-            avatar_ipfs_hash: user.avatar_ipfs_hash,
-            bio: user.bio,
-            status: user.status,
-            is_active: user.is_active,
-          }),
-        );
+        return {
+          call_id: String(call._id),
+          participants: users.map(
+            (user): Participant => ({
+              _id: user._id,
+              username: user.username,
+              display_name: user.display_name,
+              avatar_ipfs_hash: user.avatar_ipfs_hash,
+              bio: user.bio,
+              status: user.status,
+              is_active: user.is_active,
+            }),
+          ),
+        };
       } catch (error) {
         this.logger.error("Error fetching participants:", error);
-        return [];
+        return { call_id: String(call._id), participants: [] };
       }
     } catch (error) {
       this.logger.error(
         `Error getting participants for channel ${channelId}:`,
         error,
       );
-      return [];
-    }
-  }
-
-  /**
-   * Get call history for a channel
-   */
-  async getChannelCallHistory(
-    channelId: string,
-    limit: number = 20,
-    offset: number = 0,
-  ): Promise<unknown[]> {
-    this.logger.log(`Getting call history for channel ${channelId}`);
-
-    try {
-      return this.channelCallModel
-        .find({ channel_id: channelId })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .skip(offset)
-        .lean();
-    } catch (error) {
-      this.logger.error(
-        `Error getting call history for channel ${channelId}:`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Get active calls across all channels
-   */
-  async getActiveChannelCalls(): Promise<
-    {
-      call_id: string;
-      channel_id: string;
-      status: string;
-      participant_count: number;
-      created_at: Date;
-      started_at?: Date;
-    }[]
-  > {
-    this.logger.log("Getting all active channel calls");
-
-    try {
-      const calls = await this.channelCallModel
-        .find({ status: CallStatus.CONNECTED })
-        .select(
-          "_id channel_id status current_participants createdAt started_at",
-        )
-        .lean();
-
-      return calls.map((call) => ({
-        call_id: String(call._id),
-        channel_id: String(call.channel_id),
-        status: call.status,
-        participant_count: call.current_participants,
-        created_at: (call as Record<string, unknown>).createdAt as Date,
-        started_at: (call as Record<string, unknown>).started_at as
-          | Date
-          | undefined,
-      }));
-    } catch (error) {
-      this.logger.error("Error getting active channel calls:", error);
-      throw error;
+      return { call_id: "", participants: [] };
     }
   }
 

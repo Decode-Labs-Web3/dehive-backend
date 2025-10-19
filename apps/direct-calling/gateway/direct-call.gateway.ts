@@ -16,7 +16,6 @@ import {
   UserDehiveDocument,
 } from "../../user-dehive-server/schemas/user-dehive.schema";
 import { DmCall, DmCallDocument } from "../schemas/dm-call.schema";
-import { MediaState } from "../enum/enum";
 
 type SocketMeta = {
   userDehiveId?: string;
@@ -166,8 +165,6 @@ export class DirectCallGateway
     data:
       | {
           target_user_id: string;
-          with_video?: boolean;
-          with_audio?: boolean;
         }
       | string,
     @ConnectedSocket() client: Socket,
@@ -183,8 +180,6 @@ export class DirectCallGateway
     // Parse data if it's a string
     let parsedData: {
       target_user_id: string;
-      with_video?: boolean;
-      with_audio?: boolean;
     };
 
     if (typeof data === "string") {
@@ -220,42 +215,12 @@ export class DirectCallGateway
       // Create call directly in database
       console.log("[RTC-WS] Creating call in database");
 
-      const callId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
       // Create call document - only essential fields
       const call = new this.dmCallModel({
         conversation_id: new Types.ObjectId(),
         caller_id: new Types.ObjectId(callerId),
         callee_id: new Types.ObjectId(parsedData.target_user_id),
         status: "ringing",
-        // Store user's actual choice from request
-        caller_audio_enabled: parsedData.with_audio ?? true,
-        caller_video_enabled: parsedData.with_video ?? true,
-        // Callee preferences will be set when they accept the call
-        callee_audio_enabled: true, // Default for callee
-        callee_video_enabled: true, // Default for callee
-        metadata: {
-          stream_call_id: callId,
-          stream_config: {
-            apiKey: "stream_api_key",
-            callType: "default",
-            callId,
-            members: [
-              { user_id: callerId, role: "caller" },
-              { user_id: parsedData.target_user_id, role: "callee" },
-            ],
-            settings: {
-              audio: {
-                default_device: "speaker",
-                is_default_enabled: parsedData.with_audio ?? true,
-              },
-              video: {
-                camera_default_on: parsedData.with_video ?? true,
-                camera_facing: "front",
-              },
-            },
-          },
-        },
       });
 
       await call.save();
@@ -343,9 +308,7 @@ export class DirectCallGateway
   @SubscribeMessage("acceptCall")
   async handleAcceptCall(
     @MessageBody()
-    data:
-      | { call_id: string; with_video?: boolean; with_audio?: boolean }
-      | string,
+    data: { call_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
     // Ensure meta Map is initialized
@@ -359,8 +322,6 @@ export class DirectCallGateway
     // Parse data if it's a string
     let parsedData: {
       call_id: string;
-      with_video?: boolean;
-      with_audio?: boolean;
     };
     if (typeof data === "string") {
       try {
@@ -416,8 +377,6 @@ export class DirectCallGateway
         {
           status: "connected",
           started_at: new Date(),
-          callee_audio_enabled: parsedData.with_audio ?? true,
-          callee_video_enabled: parsedData.with_video ?? true,
         },
         { new: true },
       );
@@ -635,91 +594,6 @@ export class DirectCallGateway
       console.error("[RTC-WS] Error ending call:", error);
       this.send(client, "error", {
         message: "Failed to end call",
-        details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-
-  // WebRTC signaling methods removed - Stream.io handles this automatically
-
-  @SubscribeMessage("toggleMedia")
-  async handleToggleMedia(
-    @MessageBody()
-    data:
-      | { call_id: string; media_type: "audio" | "video"; state: MediaState }
-      | string,
-    @ConnectedSocket() client: Socket,
-  ) {
-    // Ensure meta Map is initialized
-    if (!this.meta) {
-      this.meta = new Map<Socket, SocketMeta>();
-    }
-
-    const meta = this.meta.get(client);
-    const userId = meta?.userDehiveId;
-
-    // Parse data if it's a string
-    let parsedData: {
-      call_id: string;
-      media_type: "audio" | "video";
-      state: MediaState;
-    };
-    if (typeof data === "string") {
-      try {
-        parsedData = JSON.parse(data);
-      } catch {
-        return this.send(client, "error", {
-          message: "Invalid JSON format",
-          code: "INVALID_FORMAT",
-          timestamp: new Date().toISOString(),
-        });
-      }
-    } else {
-      parsedData = data;
-    }
-
-    if (!userId) {
-      return this.send(client, "error", {
-        message: "Please identify first",
-        code: "AUTHENTICATION_REQUIRED",
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    try {
-      // Update media status in database
-      const updateField = `${parsedData.media_type}_enabled`;
-      await this.dmCallModel.findByIdAndUpdate(parsedData.call_id, {
-        [updateField]: parsedData.state,
-      });
-
-      // Notify other participant
-      const call = await this.dmCallModel.findById(parsedData.call_id).lean();
-      if (call) {
-        const otherUserId =
-          String(call.caller_id) === userId
-            ? String(call.callee_id)
-            : String(call.caller_id);
-        this.server.to(`user:${otherUserId}`).emit("mediaToggled", {
-          call_id: parsedData.call_id,
-          user_id: userId,
-          media_type: parsedData.media_type,
-          state: parsedData.state,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      this.send(client, "mediaToggled", {
-        call_id: parsedData.call_id,
-        media_type: parsedData.media_type,
-        state: parsedData.state,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error("[RTC-WS] Error toggling media:", error);
-      this.send(client, "error", {
-        message: "Failed to toggle media",
         details: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       });
