@@ -419,9 +419,9 @@ export class DirectMessagingController {
 
   @Get("conversation/:conversationId/users")
   @ApiOperation({
-    summary: "Get users in a conversation",
+    summary: "Get other user in a conversation",
     description:
-      "Retrieves the list of users participating in a specific conversation",
+      "Retrieves the information of the other user in a specific conversation (not the current user)",
   })
   @ApiHeader({
     name: "x-session-id",
@@ -441,7 +441,7 @@ export class DirectMessagingController {
   })
   @ApiResponse({
     status: 200,
-    description: "Successfully returned conversation users.",
+    description: "Successfully returned the other user in conversation.",
     schema: {
       type: "object",
       properties: {
@@ -451,27 +451,24 @@ export class DirectMessagingController {
         data: {
           type: "object",
           properties: {
-            users: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: {
-                    type: "string",
-                    description: "User ID",
-                  },
-                  displayname: {
-                    type: "string",
-                    description: "User display name",
-                  },
-                  username: {
-                    type: "string",
-                    description: "User username",
-                  },
-                  avatar_ipfs_hash: {
-                    type: "string",
-                    description: "Avatar IPFS hash",
-                  },
+            user: {
+              type: "object",
+              properties: {
+                id: {
+                  type: "string",
+                  description: "User ID",
+                },
+                displayname: {
+                  type: "string",
+                  description: "User display name",
+                },
+                username: {
+                  type: "string",
+                  description: "User username",
+                },
+                avatar_ipfs_hash: {
+                  type: "string",
+                  description: "Avatar IPFS hash",
                 },
               },
             },

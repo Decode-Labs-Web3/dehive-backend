@@ -1222,48 +1222,36 @@ export class DirectMessagingService {
       );
     }
 
-    // Get user profiles for both participants
+    // Get the other user (not current user)
+    const otherUserId =
+      conversation.userA.toString() === currentUserId
+        ? conversation.userB.toString()
+        : conversation.userA.toString();
+
+    // Get user profile for the other user only
     const sessionId = currentUser.session_id;
     const fingerprintHash = currentUser.fingerprint_hash;
 
-    const users: ConversationUser[] = [];
+    const otherUserProfile = await this.getUserProfileWithDecode(
+      otherUserId,
+      sessionId,
+      fingerprintHash,
+    );
 
-    // Get user profiles for both userA and userB
-    const [userAProfile, userBProfile] = await Promise.all([
-      this.getUserProfileWithDecode(
-        conversation.userA.toString(),
-        sessionId,
-        fingerprintHash,
-      ),
-      this.getUserProfileWithDecode(
-        conversation.userB.toString(),
-        sessionId,
-        fingerprintHash,
-      ),
-    ]);
-
-    // Add userA
-    users.push({
-      id: conversation.userA.toString(),
-      displayname: userAProfile.display_name || `User_${conversation.userA}`,
-      username: userAProfile.username || `User_${conversation.userA}`,
-      avatar_ipfs_hash: userAProfile.avatar_ipfs_hash || undefined,
-    });
-
-    // Add userB
-    users.push({
-      id: conversation.userB.toString(),
-      displayname: userBProfile.display_name || `User_${conversation.userB}`,
-      username: userBProfile.username || `User_${conversation.userB}`,
-      avatar_ipfs_hash: userBProfile.avatar_ipfs_hash || undefined,
-    });
+    // Return only the other user's information
+    const otherUser: ConversationUser = {
+      id: otherUserId,
+      displayname: otherUserProfile.display_name || `User_${otherUserId}`,
+      username: otherUserProfile.username || `User_${otherUserId}`,
+      avatar_ipfs_hash: otherUserProfile.avatar_ipfs_hash || undefined,
+    };
 
     return {
       success: true,
       statusCode: 200,
       message: "OK",
       data: {
-        users,
+        user: otherUser,
         conversationId,
       },
     };

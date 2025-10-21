@@ -10,7 +10,7 @@ export interface ConversationUsersResponse {
   statusCode: number;
   message: string;
   data: {
-    users: ConversationUser[];
+    user: ConversationUser;
     conversationId: string;
   };
 }
