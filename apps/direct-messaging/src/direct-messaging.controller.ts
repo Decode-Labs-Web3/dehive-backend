@@ -34,6 +34,7 @@ import { ListDirectUploadsDto } from "../dto/list-direct-upload.dto";
 import { SendDirectMessageDto } from "../dto/send-direct-message.dto";
 import { GetFollowingDto } from "../dto/get-following.dto";
 import { GetFollowingMessagesDto } from "../dto/get-following-messages.dto";
+import { GetConversationUsersDto } from "../dto/get-conversation-users.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
@@ -413,6 +414,98 @@ export class DirectMessagingController {
       currentUser,
       query,
     );
+    return result;
+  }
+
+  @Get("conversation/:conversationId/users")
+  @ApiOperation({
+    summary: "Get users in a conversation",
+    description:
+      "Retrieves the list of users participating in a specific conversation",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
+    required: true,
+  })
+  @ApiParam({
+    name: "conversationId",
+    description: "ID of the conversation",
+    type: String,
+    example: "68e8b59f806fb5c06c6551a3",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Successfully returned conversation users.",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        statusCode: { type: "number" },
+        message: { type: "string" },
+        data: {
+          type: "object",
+          properties: {
+            users: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: {
+                    type: "string",
+                    description: "User ID",
+                  },
+                  displayname: {
+                    type: "string",
+                    description: "User display name",
+                  },
+                  username: {
+                    type: "string",
+                    description: "User username",
+                  },
+                  avatar_ipfs_hash: {
+                    type: "string",
+                    description: "Avatar IPFS hash",
+                  },
+                },
+              },
+            },
+            conversationId: {
+              type: "string",
+              description: "Conversation ID",
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Invalid conversation ID or user not a participant.",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Conversation not found.",
+  })
+  async getConversationUsers(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param() params: GetConversationUsersDto,
+    @Req() req: Request,
+  ) {
+    // Validate HTTP method
+    if (req.method !== "GET") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
+    const result = await this.service.getConversationUsers(currentUser, params);
     return result;
   }
 }

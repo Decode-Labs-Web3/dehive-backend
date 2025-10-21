@@ -49,6 +49,11 @@ import {
   FollowingMessagesResponse,
 } from "../interfaces/following-message.interface";
 import { FollowingMessageUpdateEvent } from "../interfaces/following-message-event.interface";
+import {
+  ConversationUser,
+  ConversationUsersResponse,
+} from "../interfaces/conversation-user.interface";
+import { GetConversationUsersDto } from "../dto/get-conversation-users.dto";
 
 @Injectable()
 export class DirectMessagingService {
@@ -1178,6 +1183,126 @@ export class DirectMessagingService {
       this.logger.log(`Emitted ${event} to user ${userId}`);
     } else {
       this.logger.warn(`WebSocket server not available for user ${userId}`);
+    }
+  }
+
+  /**
+   * Get users in a conversation
+   */
+  async getConversationUsers(
+    currentUser: AuthenticatedUser,
+    dto: GetConversationUsersDto,
+  ): Promise<ConversationUsersResponse> {
+    const { conversationId } = dto;
+
+    // Validate conversation ID
+    if (!Types.ObjectId.isValid(conversationId)) {
+      throw new BadRequestException("Invalid conversation ID");
+    }
+
+    // Get conversation
+    const conversation = await this.conversationModel
+      .findById(conversationId)
+      .lean();
+
+    if (!conversation) {
+      throw new NotFoundException("Conversation not found");
+    }
+
+    // Check if current user is a participant
+    const currentUserId = currentUser._id;
+    const isParticipant = [
+      conversation.userA.toString(),
+      conversation.userB.toString(),
+    ].includes(currentUserId);
+
+    if (!isParticipant) {
+      throw new BadRequestException(
+        "You are not a participant of this conversation",
+      );
+    }
+
+    // Get user profiles for both participants
+    const sessionId = currentUser.session_id;
+    const fingerprintHash = currentUser.fingerprint_hash;
+
+    const users: ConversationUser[] = [];
+
+    // Get user profiles for both userA and userB
+    const [userAProfile, userBProfile] = await Promise.all([
+      this.getUserProfileWithDecode(
+        conversation.userA.toString(),
+        sessionId,
+        fingerprintHash,
+      ),
+      this.getUserProfileWithDecode(
+        conversation.userB.toString(),
+        sessionId,
+        fingerprintHash,
+      ),
+    ]);
+
+    // Add userA
+    users.push({
+      id: conversation.userA.toString(),
+      displayname: userAProfile.display_name || `User_${conversation.userA}`,
+      username: userAProfile.username || `User_${conversation.userA}`,
+      avatar_ipfs_hash: userAProfile.avatar_ipfs_hash || undefined,
+    });
+
+    // Add userB
+    users.push({
+      id: conversation.userB.toString(),
+      displayname: userBProfile.display_name || `User_${conversation.userB}`,
+      username: userBProfile.username || `User_${conversation.userB}`,
+      avatar_ipfs_hash: userBProfile.avatar_ipfs_hash || undefined,
+    });
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: "OK",
+      data: {
+        users,
+        conversationId,
+      },
+    };
+  }
+
+  /**
+   * Get user profile with Decode API fallback
+   */
+  private async getUserProfileWithDecode(
+    userDehiveId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<Partial<UserProfile>> {
+    try {
+      // Try to get from Decode API if session info is available
+      if (sessionId && fingerprintHash) {
+        const profile = await this.getUserProfileFromDecode(
+          userDehiveId,
+          sessionId,
+          fingerprintHash,
+        );
+        if (profile) {
+          return profile;
+        }
+      }
+
+      // Fallback to cached profile or default
+      return await this.getUserProfile(userDehiveId);
+    } catch (error) {
+      this.logger.error(
+        `Error getting user profile for ${userDehiveId}:`,
+        error,
+      );
+      return {
+        _id: userDehiveId,
+        username: `User_${userDehiveId}`,
+        display_name: `User_${userDehiveId}`,
+        avatar_ipfs_hash: undefined,
+      };
     }
   }
 }
