@@ -33,6 +33,7 @@ import { Express } from "express";
 import { ListDirectUploadsDto } from "../dto/list-direct-upload.dto";
 import { SendDirectMessageDto } from "../dto/send-direct-message.dto";
 import { GetFollowingDto } from "../dto/get-following.dto";
+import { GetFollowingMessagesDto } from "../dto/get-following-messages.dto";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
@@ -307,6 +308,111 @@ export class DirectMessagingController {
     }
 
     const result = await this.service.getFollowing(currentUser, query);
+    return result;
+  }
+
+  @Get("following-messages")
+  @ApiOperation({
+    summary: "Get following users with message info",
+    description:
+      "Retrieves the list of following users with their conversation info, sorted by last message time",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Successfully returned following users with message info.",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        statusCode: { type: "number" },
+        message: { type: "string" },
+        data: {
+          type: "object",
+          properties: {
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: {
+                    type: "string",
+                    description: "User ID",
+                  },
+                  conversationid: {
+                    type: "string",
+                    description: "Conversation ID between 2 users",
+                  },
+                  displayname: {
+                    type: "string",
+                    description: "User display name",
+                  },
+                  username: { type: "string", description: "User username" },
+                  avatar_ipfs_hash: {
+                    type: "string",
+                    description: "Avatar IPFS hash",
+                  },
+                  isActive: {
+                    type: "boolean",
+                    description: "Whether user is active",
+                  },
+                  isCall: {
+                    type: "boolean",
+                    description: "Whether last interaction was a call",
+                  },
+                  lastMessageAt: {
+                    type: "string",
+                    format: "date-time",
+                    description:
+                      "Timestamp of the last message in the conversation",
+                  },
+                },
+              },
+            },
+            metadata: {
+              type: "object",
+              properties: {
+                page: { type: "number" },
+                limit: { type: "number" },
+                total: { type: "number" },
+                is_last_page: { type: "boolean" },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Could not retrieve following list from Decode service.",
+  })
+  async getFollowingWithMessages(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Query() query: GetFollowingMessagesDto,
+    @Req() req: Request,
+  ) {
+    // Validate HTTP method
+    if (req.method !== "GET") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
+    const result = await this.service.getFollowingWithMessages(
+      currentUser,
+      query,
+    );
     return result;
   }
 }

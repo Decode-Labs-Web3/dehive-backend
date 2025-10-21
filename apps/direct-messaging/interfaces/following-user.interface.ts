@@ -1,6 +1,7 @@
 export interface FollowingUser {
-  email: string;
-  _id: string;
+  email?: string;
+  _id?: string;
+  user_id: string; // Primary user ID from Decode API
   username: string;
   display_name: string;
   avatar_ipfs_hash?: string;

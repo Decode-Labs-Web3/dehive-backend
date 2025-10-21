@@ -38,11 +38,17 @@ import { ConfigService } from "@nestjs/config";
 import { ListDirectUploadsDto } from "../dto/list-direct-upload.dto";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import { GetFollowingDto } from "../dto/get-following.dto";
+import { GetFollowingMessagesDto } from "../dto/get-following-messages.dto";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
 import { SessionCacheDoc } from "../interfaces/session-doc.interface";
 import { UserProfile } from "../interfaces/user-profile.interface";
+import {
+  FollowingMessageUser,
+  FollowingMessagesResponse,
+} from "../interfaces/following-message.interface";
+import { FollowingMessageUpdateEvent } from "../interfaces/following-message-event.interface";
 
 @Injectable()
 export class DirectMessagingService {
@@ -678,6 +684,201 @@ export class DirectMessagingService {
     };
   }
 
+  async getFollowingWithMessages(
+    currentUser: AuthenticatedUser,
+    dto: GetFollowingMessagesDto,
+  ): Promise<FollowingMessagesResponse> {
+    const page = dto.page || 0;
+    const limit = dto.limit || 10;
+
+    const sessionId = currentUser.session_id;
+    if (!sessionId) {
+      throw new UnauthorizedException("Session ID not found in user session.");
+    }
+    const sessionKey = `session:${sessionId}`;
+    const sessionDataRaw = await this.redis.get(sessionKey);
+    if (!sessionDataRaw) {
+      throw new UnauthorizedException("Session not found in cache.");
+    }
+
+    const sessionData: SessionCacheDoc = JSON.parse(sessionDataRaw);
+    const accessToken = sessionData.access_token;
+    const fingerprintHash = currentUser.fingerprint_hash;
+
+    if (!accessToken) {
+      throw new UnauthorizedException(
+        "Access token not found in user session.",
+      );
+    }
+
+    if (!fingerprintHash) {
+      throw new UnauthorizedException(
+        "Fingerprint hash not found in user session.",
+      );
+    }
+
+    // Get following users from decode API
+    const followingResult = await this.decodeApiClient.getFollowing(
+      accessToken,
+      fingerprintHash,
+      0, // Get all following users first
+      1000, // Large limit to get all
+    );
+
+    if (!followingResult || !followingResult.success) {
+      throw new NotFoundException(
+        "Could not retrieve following list from Decode service",
+      );
+    }
+
+    const followingUsers = followingResult.data?.users || [];
+    const currentUserId = currentUser._id;
+
+    // Get conversations for current user
+    const conversations = await this.conversationModel
+      .find({
+        $or: [
+          { userA: new Types.ObjectId(currentUserId) },
+          { userB: new Types.ObjectId(currentUserId) },
+        ],
+      })
+      .lean();
+
+    // Create a map of other user ID to conversation ID
+    const userToConversationMap = new Map<string, string>();
+    conversations.forEach((conv) => {
+      const otherUserId =
+        conv.userA.toString() === currentUserId
+          ? conv.userB.toString()
+          : conv.userA.toString();
+      userToConversationMap.set(otherUserId, conv._id.toString());
+    });
+
+    // Get last message for each conversation
+    const conversationIds = conversations.map((conv) => conv._id);
+    const lastMessages = await this.messageModel.aggregate([
+      {
+        $match: {
+          conversationId: { $in: conversationIds },
+        },
+      },
+      {
+        $sort: { createdAt: -1 },
+      },
+      {
+        $group: {
+          _id: "$conversationId",
+          lastMessage: { $first: "$$ROOT" },
+          lastMessageAt: { $first: "$createdAt" },
+        },
+      },
+    ]);
+
+    // Create a map of conversation ID to last message info
+    const conversationToLastMessageMap = new Map<
+      string,
+      { lastMessage: unknown; lastMessageAt: Date }
+    >();
+    lastMessages.forEach((item) => {
+      conversationToLastMessageMap.set(item._id.toString(), {
+        lastMessage: item.lastMessage,
+        lastMessageAt: item.lastMessageAt,
+      });
+    });
+
+    // Debug logging
+    this.logger.log(`Current user ID: ${currentUserId}`);
+    this.logger.log(`Found ${conversations.length} conversations`);
+    this.logger.log(`Found ${followingUsers.length} following users`);
+
+    // Log conversation mappings for debugging
+    userToConversationMap.forEach((convId, userId) => {
+      this.logger.log(`User ${userId} -> Conversation ${convId}`);
+    });
+
+    // Process following users and add conversation info
+    const followingWithMessages: FollowingMessageUser[] = [];
+
+    for (const user of followingUsers) {
+      // Use user_id from Decode API response
+      const userId = user.user_id;
+      const conversationId = userToConversationMap.get(userId);
+
+      let lastMessageAt: Date | undefined;
+      let isActive = false;
+      const isCall = false;
+
+      if (conversationId) {
+        const lastMessageInfo =
+          conversationToLastMessageMap.get(conversationId);
+        if (lastMessageInfo) {
+          lastMessageAt = lastMessageInfo.lastMessageAt;
+          // Check if user is active (has sent a message recently - within last 5 minutes)
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+          isActive = lastMessageAt > fiveMinutesAgo;
+
+          // this.logger.log(
+          //   `User ${userId} last message at: ${lastMessageAt}, isActive: ${isActive}`,
+          // );
+        }
+      }
+
+      followingWithMessages.push({
+        id: userId, // This will be user_id from Decode API
+        conversationid: conversationId || "",
+        displayname: user.display_name || user.username || `User_${userId}`,
+        username: user.username || `User_${userId}`,
+        avatar_ipfs_hash: user.avatar_ipfs_hash || undefined,
+        isActive,
+        isCall,
+        lastMessageAt,
+      });
+    }
+
+    // Sort by last message time (most recent first), then by username
+    followingWithMessages.sort((a, b) => {
+      if (a.lastMessageAt && b.lastMessageAt) {
+        return b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
+      }
+      if (a.lastMessageAt && !b.lastMessageAt) return -1;
+      if (!a.lastMessageAt && b.lastMessageAt) return 1;
+      return a.username.localeCompare(b.username);
+    });
+
+    // this.logger.log(
+    //   `Sorted ${followingWithMessages.length} users. First few:`,
+    //   followingWithMessages.slice(0, 3).map((u) => ({
+    //     id: u.id,
+    //     username: u.username,
+    //     lastMessageAt: u.lastMessageAt,
+    //     conversationid: u.conversationid,
+    //   })),
+    // );
+
+    // Apply pagination
+    const skip = page * limit;
+    const paginatedItems = followingWithMessages.slice(skip, skip + limit);
+    const totalItemsOnPage = paginatedItems.length;
+    const totalAllFollowing = followingWithMessages.length;
+    const totalPages = Math.ceil(totalAllFollowing / limit);
+    const isLastPage = page >= totalPages - 1;
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: "OK",
+      data: {
+        items: paginatedItems,
+        metadata: {
+          page,
+          limit,
+          total: totalItemsOnPage, // Chỉ đếm số items trên trang hiện tại
+          is_last_page: isLastPage,
+        },
+      },
+    };
+  }
+
   /**
    * Cache user profile in Redis
    * This should be called when user authenticates or profile is updated
@@ -723,7 +924,6 @@ export class DirectMessagingService {
         return profile;
       }
 
-      // Fallback to basic profile if no cache
       this.logger.log(
         `No cached profile found for ${userDehiveId}, using fallback in WebSocket`,
       );
@@ -788,6 +988,196 @@ export class DirectMessagingService {
         error,
       );
       return null;
+    }
+  }
+
+  /**
+   * Emit following message update event when a new message is sent/received
+   * This will trigger real-time updates for the following messages list
+   */
+  async emitFollowingMessageUpdate(
+    senderId: string,
+    receiverId: string,
+    conversationId: string,
+    action: "message_sent" | "message_received",
+  ): Promise<void> {
+    try {
+      // Get updated following messages for both users
+      const [senderFollowing, receiverFollowing] = await Promise.all([
+        this.getFollowingWithMessagesForUser(senderId),
+        this.getFollowingWithMessagesForUser(receiverId),
+      ]);
+
+      // Emit update for sender
+      if (senderFollowing.length > 0) {
+        const senderUpdateEvent: FollowingMessageUpdateEvent = {
+          type: "following_message_update",
+          data: {
+            userId: senderId,
+            updatedUser: senderFollowing[0], // First user (most recent)
+            action,
+            timestamp: new Date().toISOString(),
+          },
+        };
+
+        // Emit to sender's socket room
+        this.emitToUserRoomWS(
+          senderId,
+          "following_message_update",
+          senderUpdateEvent,
+        );
+      }
+
+      // Emit update for receiver
+      if (receiverFollowing.length > 0) {
+        const receiverUpdateEvent: FollowingMessageUpdateEvent = {
+          type: "following_message_update",
+          data: {
+            userId: receiverId,
+            updatedUser: receiverFollowing[0], // First user (most recent)
+            action:
+              action === "message_sent" ? "message_received" : "message_sent",
+            timestamp: new Date().toISOString(),
+          },
+        };
+
+        // Emit to receiver's socket room
+        this.emitToUserRoomWS(
+          receiverId,
+          "following_message_update",
+          receiverUpdateEvent,
+        );
+      }
+
+      this.logger.log(
+        `Emitted following message updates for sender ${senderId} and receiver ${receiverId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error emitting following message update: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Get following messages for a specific user (internal method)
+   */
+  private async getFollowingWithMessagesForUser(
+    userId: string,
+  ): Promise<FollowingMessageUser[]> {
+    try {
+      // This is a simplified version of getFollowingWithMessages
+      // You might want to optimize this for real-time updates
+      const conversations = await this.conversationModel
+        .find({
+          $or: [
+            { userA: new Types.ObjectId(userId) },
+            { userB: new Types.ObjectId(userId) },
+          ],
+        })
+        .lean();
+
+      // Get last messages for conversations
+      const conversationIds = conversations.map((conv) => conv._id);
+      const lastMessages = await this.messageModel.aggregate([
+        {
+          $match: {
+            conversationId: { $in: conversationIds },
+          },
+        },
+        {
+          $sort: { createdAt: -1 },
+        },
+        {
+          $group: {
+            _id: "$conversationId",
+            lastMessageAt: { $first: "$createdAt" },
+          },
+        },
+      ]);
+
+      // Create map of conversation to last message time
+      const conversationToLastMessageMap = new Map<string, Date>();
+      lastMessages.forEach((item) => {
+        conversationToLastMessageMap.set(
+          item._id.toString(),
+          item.lastMessageAt,
+        );
+      });
+
+      // Process conversations and return top user
+      const userToConversationMap = new Map<string, string>();
+      conversations.forEach((conv) => {
+        const otherUserId =
+          conv.userA.toString() === userId
+            ? conv.userB.toString()
+            : conv.userA.toString();
+        userToConversationMap.set(otherUserId, conv._id.toString());
+      });
+
+      // Find the user with the most recent message
+      let mostRecentUser: FollowingMessageUser | null = null;
+      let mostRecentTime = new Date(0);
+
+      for (const [otherUserId, conversationId] of userToConversationMap) {
+        const lastMessageAt = conversationToLastMessageMap.get(conversationId);
+        if (lastMessageAt && lastMessageAt > mostRecentTime) {
+          mostRecentTime = lastMessageAt;
+          mostRecentUser = {
+            id: otherUserId,
+            conversationid: conversationId,
+            displayname: `User_${otherUserId}`,
+            username: `User_${otherUserId}`,
+            avatar_ipfs_hash: undefined,
+            isActive: Date.now() - lastMessageAt.getTime() < 5 * 60 * 1000,
+            isCall: false,
+            lastMessageAt,
+          };
+        }
+      }
+
+      return mostRecentUser ? [mostRecentUser] : [];
+    } catch (error) {
+      this.logger.error(
+        `Error getting following messages for user ${userId}:`,
+        error,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Emit event to user's socket room
+   * This method will be called by the WebSocket gateway
+   */
+  private emitToUserRoom(userId: string, event: string, data: unknown): void {
+    // This will be implemented in the gateway
+    // For now, we'll just log the event
+    this.logger.log(`Would emit ${event} to user ${userId}:`, data);
+  }
+
+  /**
+   * Set WebSocket server reference for emitting events
+   * This will be called by the gateway during initialization
+   */
+  setWebSocketServer(server: unknown): void {
+    (this as { wsServer?: unknown }).wsServer = server;
+  }
+
+  /**
+   * Emit event to user's socket room using WebSocket server
+   */
+  private emitToUserRoomWS(userId: string, event: string, data: unknown): void {
+    const server = (this as { wsServer?: unknown }).wsServer;
+    if (server && typeof server === "object" && server !== null) {
+      // Type assertion for WebSocket server with emit method
+      const wsServer = server as {
+        to: (room: string) => { emit: (event: string, data: unknown) => void };
+      };
+      wsServer.to(`user:${userId}`).emit(event, data);
+      this.logger.log(`Emitted ${event} to user ${userId}`);
+    } else {
+      this.logger.warn(`WebSocket server not available for user ${userId}`);
     }
   }
 }

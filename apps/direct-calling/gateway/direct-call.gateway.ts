@@ -227,7 +227,7 @@ export class DirectCallGateway
       meta.callId = String(call._id);
 
       // Set timeout for call (30 seconds)
-      const callTimeoutMs = 30000; // 30 seconds
+      const callTimeoutMs = 60000; // 60 seconds
       const timeoutId = setTimeout(async () => {
         try {
           const currentCall = await this.dmCallModel.findById(call._id);

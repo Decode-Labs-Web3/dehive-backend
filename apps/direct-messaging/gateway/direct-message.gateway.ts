@@ -38,7 +38,10 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly userDehiveModel: Model<UserDehiveDocument>,
     @InjectModel(DirectConversation.name)
     private readonly conversationModel: Model<DirectConversationDocument>,
-  ) {}
+  ) {
+    // Set WebSocket server reference in service
+    this.service.setWebSocketServer(this.server);
+  }
 
   private send(client: Socket, event: string, data: unknown) {
     // Ensure data is properly serialized
@@ -292,6 +295,22 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
         .emit("newMessage", serializedMessage);
+
+      // Emit following message update for real-time following list updates
+      try {
+        await this.service.emitFollowingMessageUpdate(
+          selfId,
+          recipientId,
+          parsedData.conversationId,
+          "message_sent",
+        );
+      } catch (followingError) {
+        console.error(
+          "[DM-WS] Error emitting following message update:",
+          followingError,
+        );
+        // Don't fail the message send if following update fails
+      }
     } catch (error) {
       console.error("[DM-WS] Error handling message:", error);
       console.error(
@@ -379,5 +398,59 @@ export class DmGateway implements OnGatewayConnection, OnGatewayDisconnect {
         details: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  @SubscribeMessage("subscribeFollowingMessages")
+  async handleSubscribeFollowingMessages(@ConnectedSocket() client: Socket) {
+    const meta = this.meta.get(client);
+    const selfId = meta?.userDehiveId;
+
+    if (!selfId) {
+      return this.send(client, "error", {
+        message: "Please identify first",
+        code: "AUTHENTICATION_REQUIRED",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Join user to their following messages room
+    await client.join(`user:${selfId}`);
+
+    this.send(client, "following_messages_subscribed", {
+      message: "Successfully subscribed to following messages updates",
+      userId: selfId,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log(
+      `[DM-WS] User ${selfId} subscribed to following messages updates`,
+    );
+  }
+
+  @SubscribeMessage("unsubscribeFollowingMessages")
+  async handleUnsubscribeFollowingMessages(@ConnectedSocket() client: Socket) {
+    const meta = this.meta.get(client);
+    const selfId = meta?.userDehiveId;
+
+    if (!selfId) {
+      return this.send(client, "error", {
+        message: "Please identify first",
+        code: "AUTHENTICATION_REQUIRED",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Leave user from their following messages room
+    await client.leave(`user:${selfId}`);
+
+    this.send(client, "following_messages_unsubscribed", {
+      message: "Successfully unsubscribed from following messages updates",
+      userId: selfId,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log(
+      `[DM-WS] User ${selfId} unsubscribed from following messages updates`,
+    );
   }
 }
