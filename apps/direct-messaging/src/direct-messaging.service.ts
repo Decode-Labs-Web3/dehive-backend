@@ -997,6 +997,101 @@ export class DirectMessagingService {
   }
 
   /**
+   * Emit following message update to all connected users (no subscription needed)
+   * This will trigger real-time updates for the following messages list
+   */
+  async emitFollowingMessageUpdateToAll(
+    senderId: string,
+    receiverId: string,
+    conversationId: string,
+    action: "message_sent" | "message_received",
+  ): Promise<void> {
+    try {
+      this.logger.log(
+        `Starting following message update for sender ${senderId} and receiver ${receiverId}`,
+      );
+
+      // Get updated following messages for both users
+      const [senderFollowing, receiverFollowing] = await Promise.all([
+        this.getFollowingWithMessagesForUser(senderId),
+        this.getFollowingWithMessagesForUser(receiverId),
+      ]);
+
+      this.logger.log(`Sender following: ${senderFollowing.length} users`);
+      this.logger.log(`Receiver following: ${receiverFollowing.length} users`);
+
+      // Emit to specific users (no subscription needed)
+      const server = (this as { wsServer?: unknown }).wsServer;
+      if (server && typeof server === "object" && server !== null) {
+        const wsServer = server as {
+          to: (room: string) => {
+            emit: (event: string, data: unknown) => void;
+          };
+        };
+
+        // Emit to sender
+        if (senderFollowing.length > 0) {
+          const senderUpdateEvent: FollowingMessageUpdateEvent = {
+            type: "following_message_update",
+            data: {
+              userId: senderId,
+              updatedUser: senderFollowing[0],
+              action,
+              timestamp: new Date().toISOString(),
+            },
+          };
+          this.logger.log(
+            `Emitting following_message_update to sender ${senderId}:`,
+            senderUpdateEvent,
+          );
+          wsServer
+            .to(`user:${senderId}`)
+            .emit("following_message_update", senderUpdateEvent);
+        } else {
+          this.logger.log(`No following users found for sender ${senderId}`);
+        }
+
+        // Emit to receiver
+        if (receiverFollowing.length > 0) {
+          const receiverUpdateEvent: FollowingMessageUpdateEvent = {
+            type: "following_message_update",
+            data: {
+              userId: receiverId,
+              updatedUser: receiverFollowing[0],
+              action:
+                action === "message_sent" ? "message_received" : "message_sent",
+              timestamp: new Date().toISOString(),
+            },
+          };
+          this.logger.log(
+            `Emitting following_message_update to receiver ${receiverId}:`,
+            receiverUpdateEvent,
+          );
+          wsServer
+            .to(`user:${receiverId}`)
+            .emit("following_message_update", receiverUpdateEvent);
+        } else {
+          this.logger.log(
+            `No following users found for receiver ${receiverId}`,
+          );
+        }
+
+        this.logger.log(
+          `Emitted following message updates to all users for sender ${senderId} and receiver ${receiverId}`,
+        );
+      } else {
+        this.logger.warn(
+          "WebSocket server not available for following message updates",
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error emitting following message update: ${error.message}`,
+      );
+    }
+  }
+
+  /**
    * Emit following message update event when a new message is sent/received
    * This will trigger real-time updates for the following messages list
    */
@@ -1071,8 +1166,9 @@ export class DirectMessagingService {
     userId: string,
   ): Promise<FollowingMessageUser[]> {
     try {
-      // This is a simplified version of getFollowingWithMessages
-      // You might want to optimize this for real-time updates
+      this.logger.log(`Getting following messages for user ${userId}`);
+
+      // Get conversations for the user
       const conversations = await this.conversationModel
         .find({
           $or: [
@@ -1081,6 +1177,15 @@ export class DirectMessagingService {
           ],
         })
         .lean();
+
+      this.logger.log(
+        `Found ${conversations.length} conversations for user ${userId}`,
+      );
+
+      if (conversations.length === 0) {
+        this.logger.log(`No conversations found for user ${userId}`);
+        return [];
+      }
 
       // Get last messages for conversations
       const conversationIds = conversations.map((conv) => conv._id);
@@ -1110,7 +1215,7 @@ export class DirectMessagingService {
         );
       });
 
-      // Process conversations and return top user
+      // Process conversations and return the most recent user
       const userToConversationMap = new Map<string, string>();
       conversations.forEach((conv) => {
         const otherUserId =
@@ -1141,7 +1246,18 @@ export class DirectMessagingService {
         }
       }
 
-      return mostRecentUser ? [mostRecentUser] : [];
+      const result = mostRecentUser ? [mostRecentUser] : [];
+      this.logger.log(
+        `Returning ${result.length} following users for user ${userId}`,
+      );
+
+      if (result.length > 0) {
+        this.logger.log(
+          `Most recent user: ${result[0].id} with lastMessageAt: ${result[0].lastMessageAt}`,
+        );
+      }
+
+      return result;
     } catch (error) {
       this.logger.error(
         `Error getting following messages for user ${userId}:`,
