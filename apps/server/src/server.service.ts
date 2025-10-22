@@ -46,7 +46,9 @@ export class ServerService {
     @InjectModel(ChannelMessage.name)
     private readonly channelMessageModel: Model<ChannelMessageDocument>,
     private readonly httpService: HttpService,
-  ) {}
+  ) {
+    // Constructor body can be empty or used for initialization
+  }
 
   async createServer(
     createServerDto: CreateServerDto,
@@ -58,7 +60,7 @@ export class ServerService {
       throw new BadRequestException("Owner ID is required");
     }
 
-    const ownerDehiveId = ownerBaseId; // user_dehive_id = user_id from Decode
+    const ownerDehiveId = ownerBaseId;
 
     console.log("🔍 [CREATE SERVER] ownerDehiveId:", ownerDehiveId);
     const session = await this.serverModel.db.startSession();
@@ -66,10 +68,10 @@ export class ServerService {
     try {
       const newServerData = {
         ...createServerDto,
-        owner_id: ownerBaseId, // Use ownerBaseId directly as string (same as Auth service _id)
+        owner_id: ownerBaseId,
         member_count: 1,
         is_private: false,
-        tags: createServerDto.tags || [], // Use provided tags or empty array
+        tags: createServerDto.tags || [],
       };
 
       const createdServers = await this.serverModel.create([newServerData], {
@@ -113,8 +115,7 @@ export class ServerService {
   }
 
   async findAllServers(actorBaseId: string): Promise<Server[]> {
-    // 1. Ensure UserDehive profile exists (auto-create if needed)
-    const actorDehiveId = actorBaseId; // user_dehive_id = user_id from Decode
+    const actorDehiveId = actorBaseId;
     const memberships = await this.userDehiveServerModel
       .find({ user_dehive_id: actorDehiveId })
       .select("server_id")
@@ -305,7 +306,6 @@ export class ServerService {
       await session.abortTransaction();
       throw new BadRequestException(
         "Could not delete category and its channels.",
-
         error.message,
       );
     } finally {
@@ -327,11 +327,9 @@ export class ServerService {
 
     const serverObjectId = new Types.ObjectId(serverId);
     const categoryObjectId = new Types.ObjectId(categoryId);
-    const actorObjectId = new Types.ObjectId(actorId);
 
     console.log("🎯 [CREATE CHANNEL] serverObjectId:", serverObjectId);
     console.log("🎯 [CREATE CHANNEL] categoryObjectId:", categoryObjectId);
-    console.log("🎯 [CREATE CHANNEL] actorObjectId:", actorObjectId);
 
     const [server, category, actorMembership] = await Promise.all([
       this.findServerById(serverId),
@@ -339,7 +337,7 @@ export class ServerService {
       this.userDehiveServerModel
         .findOne({
           server_id: serverObjectId,
-          user_dehive_id: actorObjectId,
+          user_dehive_id: actorId,
         })
         .lean(),
     ]);
@@ -358,7 +356,6 @@ export class ServerService {
     if (category.server_id.toString() !== serverId)
       throw new BadRequestException("Category does not belong to this server.");
 
-    // Check if actor is server owner
     const isOwner = server.owner_id.toString() === actorId;
     console.log("🎯 [CREATE CHANNEL] isOwner:", isOwner);
     console.log(
@@ -439,7 +436,7 @@ export class ServerService {
     const actorMembership = await this.userDehiveServerModel
       .findOne({
         server_id: category.server_id,
-        user_dehive_id: new Types.ObjectId(actorId),
+        user_dehive_id: actorId, // ✅ FIX: Use string, not ObjectId
       })
       .lean();
 
@@ -498,7 +495,7 @@ export class ServerService {
     const actorMembership = await this.userDehiveServerModel
       .findOne({
         server_id: currentCategory.server_id,
-        user_dehive_id: new Types.ObjectId(actorId),
+        user_dehive_id: actorId, // ✅ FIX: Use string, not ObjectId
       })
       .lean();
 
@@ -588,7 +585,7 @@ export class ServerService {
     const actorMembership = await this.userDehiveServerModel
       .findOne({
         server_id: category.server_id,
-        user_dehive_id: new Types.ObjectId(actorId),
+        user_dehive_id: actorId,
       })
       .lean();
 
