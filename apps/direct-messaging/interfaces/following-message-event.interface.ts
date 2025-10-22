@@ -1,5 +1,17 @@
 import { FollowingMessageUser } from "./following-message.interface";
 
+// Simplified conversation update event with only essential data
+export interface ConversationUpdateEvent {
+  type: "conversation_update";
+  data: {
+    conversationId: string;
+    isActive: boolean;
+    isCall: boolean;
+    lastMessageAt: string;
+  };
+}
+
+// Legacy interface - kept for backward compatibility
 export interface FollowingMessageUpdateEvent {
   type: "following_message_update";
   data: {

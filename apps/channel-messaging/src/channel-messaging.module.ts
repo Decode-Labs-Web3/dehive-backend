@@ -21,10 +21,6 @@ import { Server, ServerSchema } from "../../server/schemas/server.schema";
 import { Category, CategorySchema } from "../../server/schemas/category.schema";
 import { Channel, ChannelSchema } from "../../server/schemas/channel.schema";
 import {
-  ChannelConversation,
-  ChannelConversationSchema,
-} from "../schemas/channel-conversation.schema";
-import {
   UserDehiveServer,
   UserDehiveServerSchema,
 } from "../../user-dehive-server/schemas/user-dehive-server.schema";
@@ -66,7 +62,6 @@ import { AuthGuard } from "../common/guards/auth.guard";
       { name: Category.name, schema: CategorySchema },
       { name: Channel.name, schema: ChannelSchema },
       { name: UserDehiveServer.name, schema: UserDehiveServerSchema },
-      { name: ChannelConversation.name, schema: ChannelConversationSchema },
     ]),
   ],
   controllers: [MessagingController],

@@ -9,11 +9,11 @@ export class UploadInitDto {
   serverId?: string;
 
   @ApiPropertyOptional({
-    description: "Channel ConversationId ID for permission check",
+    description: "Channel ID for permission check",
   })
   @IsOptional()
   @IsMongoId()
-  conversationId?: string;
+  channelId?: string;
 }
 
 export class UploadResponseDto {

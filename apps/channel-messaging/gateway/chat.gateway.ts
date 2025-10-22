@@ -26,10 +26,6 @@ import {
   UserDehiveServer,
   UserDehiveServerDocument,
 } from "../../user-dehive-server/schemas/user-dehive-server.schema";
-import {
-  ChannelConversation,
-  ChannelConversationDocument,
-} from "../schemas/channel-conversation.schema";
 
 type SocketMeta = {
   userDehiveId?: string;
@@ -58,8 +54,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly channelModel: Model<ChannelDocument>,
     @InjectModel(UserDehiveServer.name)
     private readonly userDehiveServerModel: Model<UserDehiveServerDocument>,
-    @InjectModel(ChannelConversation.name)
-    private readonly channelConversationModel: Model<ChannelConversationDocument>,
   ) {}
 
   private readonly meta = new WeakMap<Socket, SocketMeta>();
@@ -338,14 +332,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       console.log("[WebSocket] Category validation passed");
 
-      const conversation = await this.channelConversationModel.findOneAndUpdate(
-        { channelId: new Types.ObjectId(channelId) },
-        { $setOnInsert: { channel_id: new Types.ObjectId(channelId) } },
-        { upsert: true, new: true, runValidators: true },
-      );
-
-      const conversationId = String((conversation as { _id: unknown })._id);
-
       // Leave previous rooms if any
       if (meta.currentRooms) {
         meta.currentRooms.forEach((roomId) => {
@@ -354,18 +340,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         meta.currentRooms.clear();
       }
 
-      // Join new room
-      await client.join(conversationId);
-      meta.currentRooms?.add(conversationId);
+      // Join channel room directly
+      await client.join(channelId);
+      meta.currentRooms?.add(channelId);
 
       console.log(
         `[WebSocket] ✅ SUCCESS: User ${meta.userDehiveId} joined channel ${channelId}`,
       );
-      console.log(`[WebSocket] ✅ CONVERSATION ID: ${conversationId}`);
-      console.log(`[WebSocket] ✅ ROOM JOINED: ${conversationId}`);
+      console.log(`[WebSocket] ✅ CHANNEL ID: ${channelId}`);
+      console.log(`[WebSocket] ✅ ROOM JOINED: ${channelId}`);
 
       this.send(client, "joinedChannel", {
-        conversationId,
+        channelId,
         message: "Joined channel room successfully",
       });
     } catch (error) {
@@ -403,10 +389,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           message: "Invalid payload.",
         });
       }
-      const convId = parsedData.conversationId;
-      if (!convId || !Types.ObjectId.isValid(convId)) {
+      const channelId = parsedData.channelId;
+      if (!channelId || !Types.ObjectId.isValid(channelId)) {
         return this.send(client, "error", {
-          message: "Invalid conversationId.",
+          message: "Invalid channelId.",
         });
       }
       if (typeof parsedData.content !== "string") {
@@ -448,7 +434,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       console.log(
-        `[WebSocket] 📨 SEND MESSAGE: User ${meta.userDehiveId} sending to conversation ${convId}`,
+        `[WebSocket] 📨 SEND MESSAGE: User ${meta.userDehiveId} sending to channel ${channelId}`,
       );
       console.log(`[WebSocket] 📨 MESSAGE CONTENT: "${parsedData.content}"`);
       console.log(
@@ -484,7 +470,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const messageToBroadcast = {
         _id: savedMessage._id,
-        conversationId: savedMessage.conversationId?.toString?.(),
+        channelId: channelId,
         sender: {
           dehive_id: savedMessage.senderId,
           username: userProfile.username,
@@ -501,13 +487,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         updatedAt: savedMessage.updatedAt,
       };
 
-      // Broadcast to all clients in the conversation room
+      // Broadcast to all clients in the channel room
       this.server
-        .to(String(parsedData.conversationId))
+        .to(String(parsedData.channelId))
         .emit("newMessage", messageToBroadcast);
 
       console.log(
-        `[WebSocket] 📢 MESSAGE BROADCASTED to room: ${parsedData.conversationId}`,
+        `[WebSocket] 📢 MESSAGE BROADCASTED to room: ${parsedData.channelId}`,
       );
       console.log(
         `[WebSocket] 📢 BROADCAST DATA:`,
@@ -556,9 +542,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const payload = {
         _id: updated._id,
-        conversationId: (
-          updated.conversationId as unknown as Types.ObjectId
-        ).toString(),
+        channelId: (updated.channelId as unknown as Types.ObjectId).toString(),
         sender: {
           dehive_id: updated.senderId,
           username: userProfile.username,
@@ -574,9 +558,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         createdAt: (updated as { createdAt?: Date }).createdAt,
         updatedAt: (updated as { updatedAt?: Date }).updatedAt,
       };
-      this.server
-        .to(String(payload.conversationId))
-        .emit("messageEdited", payload);
+      this.server.to(String(payload.channelId)).emit("messageEdited", payload);
     } catch (error: unknown) {
       this.send(client, "error", {
         message: "Failed to edit message.",
@@ -618,9 +600,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       const payload = {
         _id: updated._id,
-        conversationId: (
-          updated.conversationId as unknown as Types.ObjectId
-        ).toString(),
+        channelId: (updated.channelId as unknown as Types.ObjectId).toString(),
         sender: {
           dehive_id: updated.senderId,
           username: userProfile.username,
@@ -636,9 +616,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         createdAt: (updated as { createdAt?: Date }).createdAt,
         updatedAt: (updated as { updatedAt?: Date }).updatedAt,
       };
-      this.server
-        .to(String(payload.conversationId))
-        .emit("messageDeleted", payload);
+      this.server.to(String(payload.channelId)).emit("messageDeleted", payload);
     } catch (error: unknown) {
       this.send(client, "error", {
         message: "Failed to delete message.",

@@ -18,10 +18,6 @@ import {
   ChannelMessage,
   ChannelMessageDocument,
 } from "../schemas/channel-message.schema";
-import {
-  ChannelConversation,
-  ChannelConversationDocument,
-} from "../schemas/channel-conversation.schema";
 import { CreateMessageDto } from "../dto/create-message.dto";
 import { AttachmentDto } from "../dto/attachment.dto";
 import { GetMessagesDto } from "../dto/get-messages.dto";
@@ -40,14 +36,15 @@ import {
   UserDehive,
   UserDehiveDocument,
 } from "../../user-dehive-server/schemas/user-dehive.schema";
+import { Channel, ChannelDocument } from "../../server/schemas/channel.schema";
 
 @Injectable()
 export class MessagingService {
   constructor(
     @InjectModel(ChannelMessage.name)
     private readonly channelMessageModel: Model<ChannelMessageDocument>,
-    @InjectModel(ChannelConversation.name)
-    private readonly channelConversationModel: Model<ChannelConversationDocument>,
+    @InjectModel(Channel.name)
+    private readonly channelModel: Model<ChannelDocument>,
     @InjectModel(Upload.name)
     private readonly uploadModel: Model<UploadDocument>,
     @InjectModel(UserDehiveServer.name)
@@ -130,11 +127,11 @@ export class MessagingService {
     if (!Types.ObjectId.isValid(body.serverId)) {
       throw new BadRequestException("Invalid serverId");
     }
-    if (!body.conversationId) {
-      throw new BadRequestException("conversationId is required");
+    if (!body.channelId) {
+      throw new BadRequestException("channelId is required");
     }
-    if (!Types.ObjectId.isValid(body.conversationId)) {
-      throw new BadRequestException("Invalid conversationId");
+    if (!Types.ObjectId.isValid(body.channelId)) {
+      throw new BadRequestException("Invalid channelId");
     }
     if (!userId || !Types.ObjectId.isValid(userId)) {
       throw new BadRequestException("Invalid or missing user_dehive_id");
@@ -147,11 +144,10 @@ export class MessagingService {
       throw new BadRequestException("User is not a member of this server");
     }
 
-    const conversation = await this.channelConversationModel.findById(
-      body.conversationId,
-    );
-    if (!conversation) {
-      throw new NotFoundException("Conversation not found");
+    // Validate channel exists and user has access
+    const channel = await this.channelModel.findById(body.channelId);
+    if (!channel) {
+      throw new NotFoundException("Channel not found");
     }
 
     const storage = (
@@ -275,7 +271,7 @@ export class MessagingService {
           ? new Types.ObjectId(userId)
           : new Types.ObjectId(),
       serverId: body.serverId ? new Types.ObjectId(body.serverId) : undefined,
-      channelId: conversation.channelId,
+      channelId: new Types.ObjectId(body.channelId),
       type,
       url: fileUrl,
       name: originalName,
@@ -342,11 +338,12 @@ export class MessagingService {
       }));
     }
 
-    const conversation = await this.channelConversationModel.findById(
-      createMessageDto.conversationId,
+    // Validate channel exists
+    const channel = await this.channelModel.findById(
+      createMessageDto.channelId,
     );
-    if (!conversation) {
-      throw new BadRequestException("Invalid conversationId");
+    if (!channel) {
+      throw new BadRequestException("Invalid channelId");
     }
 
     // Validate replyTo if provided
@@ -356,7 +353,7 @@ export class MessagingService {
         throw new BadRequestException("Invalid replyTo message id");
       }
 
-      // Check if the message being replied to exists and is in the same conversation
+      // Check if the message being replied to exists and is in the same channel
       const replyToMessage = await this.channelMessageModel
         .findById(createMessageDto.replyTo)
         .lean();
@@ -364,12 +361,9 @@ export class MessagingService {
         throw new NotFoundException("Message being replied to not found");
       }
 
-      if (
-        String(replyToMessage.conversationId) !==
-        createMessageDto.conversationId
-      ) {
+      if (String(replyToMessage.channelId) !== createMessageDto.channelId) {
         throw new BadRequestException(
-          "Cannot reply to a message from a different conversation",
+          "Cannot reply to a message from a different channel",
         );
       }
 
@@ -380,14 +374,13 @@ export class MessagingService {
       content: createMessageDto.content,
       attachments,
       senderId: new Types.ObjectId(senderId),
-      channelId: conversation.channelId,
-      conversationId: conversation._id,
+      channelId: new Types.ObjectId(createMessageDto.channelId),
       replyTo: replyToMessageId || null,
     });
 
     const savedMessage = await newMessage.save();
 
-    // Populate the replyTo field to match the format returned by getMessagesByConversationId
+    // Populate the replyTo field to match the format returned by getMessagesByChannelId
     const populatedMessage = await this.channelMessageModel
       .findById(savedMessage._id)
       .populate("replyTo", "content senderId createdAt")
@@ -402,24 +395,8 @@ export class MessagingService {
     return formattedMessage;
   }
 
-  async getOrCreateConversationByChannelId(channelId: string) {
-    if (!Types.ObjectId.isValid(channelId)) {
-      throw new BadRequestException("Invalid channelId");
-    }
-    const conversation = await this.channelConversationModel.findOneAndUpdate(
-      { channelId: new Types.ObjectId(channelId) },
-      {
-        $setOnInsert: {
-          channelId: new Types.ObjectId(channelId),
-        },
-      },
-      { upsert: true, new: true },
-    );
-    return conversation;
-  }
-
-  async getMessagesByConversationId(
-    conversationId: string,
+  async getMessagesByChannelId(
+    channelId: string,
     getMessagesDto: GetMessagesDto,
     sessionId?: string,
     fingerprintHash?: string,
@@ -435,14 +412,14 @@ export class MessagingService {
     const { page = 0, limit = 10 } = getMessagesDto;
     const skip = page * limit;
 
-    if (!Types.ObjectId.isValid(conversationId)) {
-      throw new BadRequestException("Invalid conversationId");
+    if (!Types.ObjectId.isValid(channelId)) {
+      throw new BadRequestException("Invalid channelId");
     }
 
     // 1. Get messages with UserDehive populated and replyTo populated
     const [messages, total] = await Promise.all([
       this.channelMessageModel
-        .find({ conversationId: new Types.ObjectId(conversationId) })
+        .find({ channelId: new Types.ObjectId(channelId) })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -456,7 +433,7 @@ export class MessagingService {
         .populate("replyTo", "content senderId createdAt")
         .lean(),
       this.channelMessageModel.countDocuments({
-        conversationId: new Types.ObjectId(conversationId),
+        channelId: new Types.ObjectId(channelId),
       }),
     ]);
 
@@ -524,7 +501,7 @@ export class MessagingService {
 
       return {
         _id: msg._id,
-        conversationId: msg.conversationId,
+        channelId: msg.channelId,
         sender: {
           dehive_id: sender?._id?.toString() || "",
           username: profile?.username || `User_${userId}`,
@@ -613,7 +590,7 @@ export class MessagingService {
     (msg as unknown as { attachments?: unknown[] }).attachments = [];
     await msg.save();
 
-    // Populate the replyTo field to match the format returned by getMessagesByConversationId
+    // Populate the replyTo field to match the format returned by getMessagesByChannelId
     const populatedMessage = await this.channelMessageModel
       .findById(msg._id)
       .populate("replyTo", "content senderId createdAt")

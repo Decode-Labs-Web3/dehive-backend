@@ -8,14 +8,6 @@ export class ChannelMessage {
 
   @Prop({
     type: Types.ObjectId,
-    ref: "ChannelConversation",
-    required: true,
-    index: true,
-  })
-  conversationId?: Types.ObjectId;
-
-  @Prop({
-    type: Types.ObjectId,
     ref: "UserDehive",
     required: true,
     index: true,

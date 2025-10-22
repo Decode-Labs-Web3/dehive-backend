@@ -51,8 +51,10 @@ export class DmGateway
 
   private send(client: Socket, event: string, data: unknown) {
     // Ensure data is properly serialized
-    const serializedData = JSON.parse(JSON.stringify(data));
-    client.emit(event, serializedData);
+    // const serializedData = JSON.parse(JSON.stringify(data));
+    // client.emit(event, serializedData);
+    const jsonString = JSON.stringify(data, null, 2);
+    client.emit(event, jsonString);
   }
 
   /**
@@ -194,7 +196,6 @@ export class DmGateway
     }
 
     try {
-      // Parse JSON string if needed
       let parsedData = data;
       if (typeof data === "string") {
         try {
@@ -296,11 +297,17 @@ export class DmGateway
       );
 
       // Ensure messageToBroadcast is properly serialized
-      const serializedMessage = JSON.parse(JSON.stringify(messageToBroadcast));
+      // const serializedMessage = JSON.parse(JSON.stringify(messageToBroadcast));
+      // this.server
+      //   .to(`user:${recipientId}`)
+      //   .to(`user:${selfId}`)
+      //   .emit("newMessage", serializedMessage);
+
+      const jsonMessage = JSON.stringify(messageToBroadcast, null, 2);
       this.server
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
-        .emit("newMessage", serializedMessage);
+        .emit("newMessage", jsonMessage);
 
       // Emit following message update for real-time following list updates
       // No need for subscription - automatically emit to all connected users
@@ -358,11 +365,16 @@ export class DmGateway
         messageId: updated._id, // Keep messageId for backward compatibility
       };
       // Ensure payload is properly serialized
-      const serializedPayload = JSON.parse(JSON.stringify(payload));
+      // const serializedPayload = JSON.parse(JSON.stringify(payload));
+      // this.server
+      //   .to(`user:${recipientId}`)
+      //   .to(`user:${selfId}`)
+      //   .emit("messageEdited", serializedPayload);
+      const jsonPayload = JSON.stringify(payload, null, 2);
       this.server
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
-        .emit("messageEdited", serializedPayload);
+        .emit("messageEdited", jsonPayload);
     } catch (error) {
       this.send(client, "error", {
         message: "Failed to edit message",
@@ -394,11 +406,16 @@ export class DmGateway
         isDeleted: true, // Override isDeleted for delete events
       };
       // Ensure payload is properly serialized
-      const serializedPayload = JSON.parse(JSON.stringify(payload));
+      // const serializedPayload = JSON.parse(JSON.stringify(payload));
+      // this.server
+      //   .to(`user:${recipientId}`)
+      //   .to(`user:${selfId}`)
+      //   .emit("messageDeleted", serializedPayload);
+      const jsonPayload = JSON.stringify(payload, null, 2);
       this.server
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
-        .emit("messageDeleted", serializedPayload);
+        .emit("messageDeleted", jsonPayload);
     } catch (error) {
       this.send(client, "error", {
         message: "Failed to delete message",

@@ -12,12 +12,12 @@ import { AttachmentDto } from "./attachment.dto";
 
 export class CreateMessageDto {
   @ApiProperty({
-    description: "The ID of the channel conversation to send the message to.",
+    description: "The ID of the channel to send the message to.",
     example: "68c5adb6ec465897d540c58",
   })
-  @IsNotEmpty({ message: "conversationId is required" })
-  @IsMongoId({ message: "conversationId must be a valid MongoId" })
-  conversationId: string;
+  @IsNotEmpty({ message: "channelId is required" })
+  @IsMongoId({ message: "channelId must be a valid MongoId" })
+  channelId: string;
 
   @ApiProperty({
     description:

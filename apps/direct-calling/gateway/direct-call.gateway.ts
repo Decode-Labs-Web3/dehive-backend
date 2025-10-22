@@ -242,13 +242,15 @@ export class DirectCallGateway
               { new: true },
             );
 
-            // Notify caller about timeout
-            this.send(client, "callTimeout", {
+            const payload = {
               call_id: call._id,
               status: "timeout",
               reason: "call_timeout",
               timestamp: new Date().toISOString(),
-            });
+            };
+            // Notify caller about timeout
+            // this.send(client, "callTimeout", JSON.stringify(payload));
+            this.send(client, "callTimeout", payload);
 
             // Notify callee about timeout
             this.server

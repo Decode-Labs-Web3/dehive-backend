@@ -48,7 +48,10 @@ import {
   FollowingMessageUser,
   FollowingMessagesResponse,
 } from "../interfaces/following-message.interface";
-import { FollowingMessageUpdateEvent } from "../interfaces/following-message-event.interface";
+import {
+  FollowingMessageUpdateEvent,
+  ConversationUpdateEvent,
+} from "../interfaces/following-message-event.interface";
 import {
   ConversationUser,
   ConversationUsersResponse,
@@ -1004,21 +1007,46 @@ export class DirectMessagingService {
     senderId: string,
     receiverId: string,
     conversationId: string,
-    action: "message_sent" | "message_received",
+    _action: "message_sent" | "message_received",
   ): Promise<void> {
     try {
       this.logger.log(
-        `Starting following message update for sender ${senderId} and receiver ${receiverId}`,
+        `Starting conversation update for sender ${senderId} and receiver ${receiverId}`,
       );
 
-      // Get updated following messages for both users
-      const [senderFollowing, receiverFollowing] = await Promise.all([
-        this.getFollowingWithMessagesForUser(senderId),
-        this.getFollowingWithMessagesForUser(receiverId),
-      ]);
+      // Get the conversation
+      const conversation = await this.conversationModel
+        .findById(conversationId)
+        .lean();
 
-      this.logger.log(`Sender following: ${senderFollowing.length} users`);
-      this.logger.log(`Receiver following: ${receiverFollowing.length} users`);
+      if (!conversation) {
+        this.logger.warn(`Conversation ${conversationId} not found`);
+        return;
+      }
+
+      // Get last message timestamp
+      const lastMessage = await this.messageModel
+        .findOne({ conversationId: new Types.ObjectId(conversationId) })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      // Calculate isActive (message sent within last 5 minutes)
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const lastMessageDate = lastMessage
+        ? new Date((lastMessage as unknown as { createdAt: Date }).createdAt)
+        : new Date();
+      const isActive = lastMessageDate > fiveMinutesAgo;
+
+      // Create simplified event data
+      const conversationUpdate: ConversationUpdateEvent = {
+        type: "conversation_update",
+        data: {
+          conversationId: String(conversation._id),
+          isActive,
+          isCall: false, // This is always false for direct messages
+          lastMessageAt: lastMessageDate.toISOString(),
+        },
+      };
 
       // Emit to specific users (no subscription needed)
       const server = (this as { wsServer?: unknown }).wsServer;
@@ -1029,65 +1057,30 @@ export class DirectMessagingService {
           };
         };
 
-        // Emit to sender
-        if (senderFollowing.length > 0) {
-          const senderUpdateEvent: FollowingMessageUpdateEvent = {
-            type: "following_message_update",
-            data: {
-              userId: senderId,
-              updatedUser: senderFollowing[0],
-              action,
-              timestamp: new Date().toISOString(),
-            },
-          };
-          this.logger.log(
-            `Emitting following_message_update to sender ${senderId}:`,
-            senderUpdateEvent,
-          );
-          wsServer
-            .to(`user:${senderId}`)
-            .emit("following_message_update", senderUpdateEvent);
-        } else {
-          this.logger.log(`No following users found for sender ${senderId}`);
-        }
-
-        // Emit to receiver
-        if (receiverFollowing.length > 0) {
-          const receiverUpdateEvent: FollowingMessageUpdateEvent = {
-            type: "following_message_update",
-            data: {
-              userId: receiverId,
-              updatedUser: receiverFollowing[0],
-              action:
-                action === "message_sent" ? "message_received" : "message_sent",
-              timestamp: new Date().toISOString(),
-            },
-          };
-          this.logger.log(
-            `Emitting following_message_update to receiver ${receiverId}:`,
-            receiverUpdateEvent,
-          );
-          wsServer
-            .to(`user:${receiverId}`)
-            .emit("following_message_update", receiverUpdateEvent);
-        } else {
-          this.logger.log(
-            `No following users found for receiver ${receiverId}`,
-          );
-        }
+        // Convert to JSON string for Insomnia display
+        const jsonUpdate = JSON.stringify(conversationUpdate, null, 2);
 
         this.logger.log(
-          `Emitted following message updates to all users for sender ${senderId} and receiver ${receiverId}`,
+          `Emitting conversation_update to sender ${senderId} and receiver ${receiverId}:`,
+          conversationUpdate,
+        );
+
+        // Emit to both users
+        wsServer.to(`user:${senderId}`).emit("conversation_update", jsonUpdate);
+        wsServer
+          .to(`user:${receiverId}`)
+          .emit("conversation_update", jsonUpdate);
+
+        this.logger.log(
+          `Emitted conversation updates to sender ${senderId} and receiver ${receiverId}`,
         );
       } else {
         this.logger.warn(
-          "WebSocket server not available for following message updates",
+          "WebSocket server not available for conversation updates",
         );
       }
     } catch (error) {
-      this.logger.error(
-        `Error emitting following message update: ${error.message}`,
-      );
+      this.logger.error(`Error emitting conversation update: ${error.message}`);
     }
   }
 
@@ -1109,6 +1102,7 @@ export class DirectMessagingService {
       ]);
 
       // Emit update for sender
+
       if (senderFollowing.length > 0) {
         const senderUpdateEvent: FollowingMessageUpdateEvent = {
           type: "following_message_update",
@@ -1119,13 +1113,11 @@ export class DirectMessagingService {
             timestamp: new Date().toISOString(),
           },
         };
+        // Convert to JSON string for Insomnia display
+        const senderJson = JSON.stringify(senderUpdateEvent, null, 2);
 
         // Emit to sender's socket room
-        this.emitToUserRoomWS(
-          senderId,
-          "following_message_update",
-          senderUpdateEvent,
-        );
+        this.emitToUserRoomWS(senderId, "following_message_update", senderJson);
       }
 
       // Emit update for receiver
@@ -1141,11 +1133,14 @@ export class DirectMessagingService {
           },
         };
 
+        // Convert to JSON string for Insomnia display
+        const receiverJson = JSON.stringify(receiverUpdateEvent, null, 2);
+
         // Emit to receiver's socket room
         this.emitToUserRoomWS(
           receiverId,
           "following_message_update",
-          receiverUpdateEvent,
+          receiverJson,
         );
       }
 

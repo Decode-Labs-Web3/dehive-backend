@@ -68,16 +68,16 @@ export class MessagingController {
     };
   }
 
-  @Get("conversation/:conversationId")
-  @ApiOperation({ summary: "Get paginated messages for a conversation" })
+  @Get("channel/:channelId")
+  @ApiOperation({ summary: "Get paginated messages for a channel" })
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
     required: true,
   })
   @ApiParam({
-    name: "conversationId",
-    description: "The ID of the channel conversation to retrieve messages from",
+    name: "channelId",
+    description: "The ID of the channel to retrieve messages from",
   })
   @ApiResponse({ status: 200, description: "Returns a list of messages." })
   @ApiResponse({
@@ -86,12 +86,12 @@ export class MessagingController {
   })
   @UsePipes(new ValidationPipe({ transform: true }))
   async getMessages(
-    @Param("conversationId") conversationId: string,
+    @Param("channelId") channelId: string,
     @Query() query: GetMessagesDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const data = await this.messagingService.getMessagesByConversationId(
-      conversationId,
+    const data = await this.messagingService.getMessagesByChannelId(
+      channelId,
       query,
       user.session_id,
       user.fingerprint_hash,
@@ -113,12 +113,12 @@ export class MessagingController {
       properties: {
         file: { type: "string", format: "binary" },
         serverId: { type: "string", description: "Server ID (MongoId)" },
-        conversationId: {
+        channelId: {
           type: "string",
-          description: " Channel Conversation ID (MongoId)",
+          description: "Channel ID (MongoId)",
         },
       },
-      required: ["file", "serverId", "conversationId"],
+      required: ["file", "serverId", "channelId"],
     },
   })
   @ApiResponse({
@@ -172,55 +172,6 @@ export class MessagingController {
       statusCode: 200,
       message: "Fetched uploads successfully",
       data: result,
-    };
-  }
-
-  @Get("conversation/by-channel/:channelId")
-  @ApiOperation({ summary: "Get or create conversation ID for a channel" })
-  @ApiHeader({
-    name: "x-session-id",
-    description: "Session ID of authenticated user",
-    required: true,
-  })
-  @ApiParam({
-    name: "channelId",
-    description: "The ID of the channel to get conversation for",
-    example: "68c5adb6ec465897d540c58",
-  })
-  @ApiResponse({
-    status: 200,
-    description: "Returns conversation ID for the channel",
-    schema: {
-      type: "object",
-      properties: {
-        success: { type: "boolean" },
-        statusCode: { type: "number" },
-        message: { type: "string" },
-        data: {
-          type: "object",
-          properties: {
-            conversationId: { type: "string" },
-            channelId: { type: "string" },
-            createdAt: { type: "string", format: "date-time" },
-          },
-        },
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: "Invalid channelId." })
-  @ApiResponse({ status: 404, description: "Channel not found." })
-  async getConversationByChannelId(@Param("channelId") channelId: string) {
-    const conversation =
-      await this.messagingService.getOrCreateConversationByChannelId(channelId);
-    return {
-      success: true,
-      statusCode: 200,
-      message: "Conversation ID retrieved successfully",
-      data: {
-        conversationId: String(conversation._id),
-        channelId: String(conversation.channelId),
-        createdAt: (conversation as { createdAt?: Date }).createdAt,
-      },
     };
   }
 }
