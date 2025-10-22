@@ -525,7 +525,6 @@ export class DirectMessagingService {
           content: item.content,
           attachments: item.attachments || [],
           isEdited: item.isEdited || false,
-          editedAt: item.editedAt || null,
           isDeleted: item.isDeleted || false,
           replyTo: item.replyTo || null,
           createdAt: (item as { createdAt?: Date }).createdAt,

@@ -68,7 +68,6 @@ export class DmGateway
     content: unknown;
     attachments?: unknown[];
     isEdited?: boolean;
-    editedAt?: unknown;
     replyTo?: unknown;
     createdAt?: unknown;
     updatedAt?: unknown;
@@ -91,7 +90,6 @@ export class DmGateway
       content: message.content,
       attachments: message.attachments || [],
       isEdited: message.isEdited || false,
-      editedAt: message.editedAt || null,
       isDeleted: (message as { isDeleted?: boolean }).isDeleted || false,
       replyTo: message.replyTo || null,
       createdAt: (message as { createdAt: unknown }).createdAt,
@@ -289,7 +287,6 @@ export class DmGateway
           content: unknown;
           attachments?: unknown[];
           isEdited?: boolean;
-          editedAt?: unknown;
           replyTo?: unknown;
           createdAt?: unknown;
           updatedAt?: unknown;
