@@ -309,21 +309,16 @@ export class DmGateway
         .to(`user:${selfId}`)
         .emit("newMessage", jsonMessage);
 
-      // Emit following message update for real-time following list updates
-      // No need for subscription - automatically emit to all connected users
+      // Emit conversation update for real-time conversation list updates
       try {
-        await this.service.emitFollowingMessageUpdateToAll(
+        await this.service.emitConversationUpdate(
           selfId,
           recipientId,
           parsedData.conversationId,
-          "message_sent",
         );
-      } catch (followingError) {
-        console.error(
-          "[DM-WS] Error emitting following message update:",
-          followingError,
-        );
-        // Don't fail the message send if following update fails
+      } catch (error) {
+        console.error("[DM-WS] Error emitting conversation update:", error);
+        // Don't fail the message send if conversation update fails
       }
     } catch (error) {
       console.error("[DM-WS] Error handling message:", error);

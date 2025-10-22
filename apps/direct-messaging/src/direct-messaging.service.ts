@@ -48,10 +48,7 @@ import {
   FollowingMessageUser,
   FollowingMessagesResponse,
 } from "../interfaces/following-message.interface";
-import {
-  FollowingMessageUpdateEvent,
-  ConversationUpdateEvent,
-} from "../interfaces/following-message-event.interface";
+import { ConversationUpdateEvent } from "../interfaces/following-message-event.interface";
 import {
   ConversationUser,
   ConversationUsersResponse,
@@ -853,16 +850,6 @@ export class DirectMessagingService {
       return a.username.localeCompare(b.username);
     });
 
-    // this.logger.log(
-    //   `Sorted ${followingWithMessages.length} users. First few:`,
-    //   followingWithMessages.slice(0, 3).map((u) => ({
-    //     id: u.id,
-    //     username: u.username,
-    //     lastMessageAt: u.lastMessageAt,
-    //     conversationid: u.conversationid,
-    //   })),
-    // );
-
     // Apply pagination
     const skip = page * limit;
     const paginatedItems = followingWithMessages.slice(skip, skip + limit);
@@ -880,7 +867,7 @@ export class DirectMessagingService {
         metadata: {
           page,
           limit,
-          total: totalItemsOnPage, // Chỉ đếm số items trên trang hiện tại
+          total: totalItemsOnPage,
           is_last_page: isLastPage,
         },
       },
@@ -1000,14 +987,13 @@ export class DirectMessagingService {
   }
 
   /**
-   * Emit following message update to all connected users (no subscription needed)
-   * This will trigger real-time updates for the following messages list
+   * Emit conversation update to both users in the conversation
+   * This updates the conversation list with isActive status and last message time
    */
-  async emitFollowingMessageUpdateToAll(
+  async emitConversationUpdate(
     senderId: string,
     receiverId: string,
     conversationId: string,
-    _action: "message_sent" | "message_received",
   ): Promise<void> {
     try {
       this.logger.log(
@@ -1085,216 +1071,11 @@ export class DirectMessagingService {
   }
 
   /**
-   * Emit following message update event when a new message is sent/received
-   * This will trigger real-time updates for the following messages list
-   */
-  async emitFollowingMessageUpdate(
-    senderId: string,
-    receiverId: string,
-    conversationId: string,
-    action: "message_sent" | "message_received",
-  ): Promise<void> {
-    try {
-      // Get updated following messages for both users
-      const [senderFollowing, receiverFollowing] = await Promise.all([
-        this.getFollowingWithMessagesForUser(senderId),
-        this.getFollowingWithMessagesForUser(receiverId),
-      ]);
-
-      // Emit update for sender
-
-      if (senderFollowing.length > 0) {
-        const senderUpdateEvent: FollowingMessageUpdateEvent = {
-          type: "following_message_update",
-          data: {
-            userId: senderId,
-            updatedUser: senderFollowing[0], // First user (most recent)
-            action,
-            timestamp: new Date().toISOString(),
-          },
-        };
-        // Convert to JSON string for Insomnia display
-        const senderJson = JSON.stringify(senderUpdateEvent, null, 2);
-
-        // Emit to sender's socket room
-        this.emitToUserRoomWS(senderId, "following_message_update", senderJson);
-      }
-
-      // Emit update for receiver
-      if (receiverFollowing.length > 0) {
-        const receiverUpdateEvent: FollowingMessageUpdateEvent = {
-          type: "following_message_update",
-          data: {
-            userId: receiverId,
-            updatedUser: receiverFollowing[0], // First user (most recent)
-            action:
-              action === "message_sent" ? "message_received" : "message_sent",
-            timestamp: new Date().toISOString(),
-          },
-        };
-
-        // Convert to JSON string for Insomnia display
-        const receiverJson = JSON.stringify(receiverUpdateEvent, null, 2);
-
-        // Emit to receiver's socket room
-        this.emitToUserRoomWS(
-          receiverId,
-          "following_message_update",
-          receiverJson,
-        );
-      }
-
-      this.logger.log(
-        `Emitted following message updates for sender ${senderId} and receiver ${receiverId}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Error emitting following message update: ${error.message}`,
-      );
-    }
-  }
-
-  /**
-   * Get following messages for a specific user (internal method)
-   */
-  private async getFollowingWithMessagesForUser(
-    userId: string,
-  ): Promise<FollowingMessageUser[]> {
-    try {
-      this.logger.log(`Getting following messages for user ${userId}`);
-
-      // Get conversations for the user
-      const conversations = await this.conversationModel
-        .find({
-          $or: [
-            { userA: new Types.ObjectId(userId) },
-            { userB: new Types.ObjectId(userId) },
-          ],
-        })
-        .lean();
-
-      this.logger.log(
-        `Found ${conversations.length} conversations for user ${userId}`,
-      );
-
-      if (conversations.length === 0) {
-        this.logger.log(`No conversations found for user ${userId}`);
-        return [];
-      }
-
-      // Get last messages for conversations
-      const conversationIds = conversations.map((conv) => conv._id);
-      const lastMessages = await this.messageModel.aggregate([
-        {
-          $match: {
-            conversationId: { $in: conversationIds },
-          },
-        },
-        {
-          $sort: { createdAt: -1 },
-        },
-        {
-          $group: {
-            _id: "$conversationId",
-            lastMessageAt: { $first: "$createdAt" },
-          },
-        },
-      ]);
-
-      // Create map of conversation to last message time
-      const conversationToLastMessageMap = new Map<string, Date>();
-      lastMessages.forEach((item) => {
-        conversationToLastMessageMap.set(
-          item._id.toString(),
-          item.lastMessageAt,
-        );
-      });
-
-      // Process conversations and return the most recent user
-      const userToConversationMap = new Map<string, string>();
-      conversations.forEach((conv) => {
-        const otherUserId =
-          conv.userA.toString() === userId
-            ? conv.userB.toString()
-            : conv.userA.toString();
-        userToConversationMap.set(otherUserId, conv._id.toString());
-      });
-
-      // Find the user with the most recent message
-      let mostRecentUser: FollowingMessageUser | null = null;
-      let mostRecentTime = new Date(0);
-
-      for (const [otherUserId, conversationId] of userToConversationMap) {
-        const lastMessageAt = conversationToLastMessageMap.get(conversationId);
-        if (lastMessageAt && lastMessageAt > mostRecentTime) {
-          mostRecentTime = lastMessageAt;
-          mostRecentUser = {
-            id: otherUserId,
-            conversationid: conversationId,
-            displayname: `User_${otherUserId}`,
-            username: `User_${otherUserId}`,
-            avatar_ipfs_hash: undefined,
-            isActive: Date.now() - lastMessageAt.getTime() < 5 * 60 * 1000,
-            isCall: false,
-            lastMessageAt,
-          };
-        }
-      }
-
-      const result = mostRecentUser ? [mostRecentUser] : [];
-      this.logger.log(
-        `Returning ${result.length} following users for user ${userId}`,
-      );
-
-      if (result.length > 0) {
-        this.logger.log(
-          `Most recent user: ${result[0].id} with lastMessageAt: ${result[0].lastMessageAt}`,
-        );
-      }
-
-      return result;
-    } catch (error) {
-      this.logger.error(
-        `Error getting following messages for user ${userId}:`,
-        error,
-      );
-      return [];
-    }
-  }
-
-  /**
-   * Emit event to user's socket room
-   * This method will be called by the WebSocket gateway
-   */
-  private emitToUserRoom(userId: string, event: string, data: unknown): void {
-    // This will be implemented in the gateway
-    // For now, we'll just log the event
-    this.logger.log(`Would emit ${event} to user ${userId}:`, data);
-  }
-
-  /**
    * Set WebSocket server reference for emitting events
    * This will be called by the gateway during initialization
    */
   setWebSocketServer(server: unknown): void {
     (this as { wsServer?: unknown }).wsServer = server;
-  }
-
-  /**
-   * Emit event to user's socket room using WebSocket server
-   */
-  private emitToUserRoomWS(userId: string, event: string, data: unknown): void {
-    const server = (this as { wsServer?: unknown }).wsServer;
-    if (server && typeof server === "object" && server !== null) {
-      // Type assertion for WebSocket server with emit method
-      const wsServer = server as {
-        to: (room: string) => { emit: (event: string, data: unknown) => void };
-      };
-      wsServer.to(`user:${userId}`).emit(event, data);
-      this.logger.log(`Emitted ${event} to user ${userId}`);
-    } else {
-      this.logger.warn(`WebSocket server not available for user ${userId}`);
-    }
   }
 
   /**
