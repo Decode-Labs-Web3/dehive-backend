@@ -76,6 +76,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     avatar_ipfs_hash: string | null;
   }> {
     // Use service method to get user profile (same as direct-messaging)
+    // Service will check cache first, then fallback
     const userProfile =
       await this.messagingService.getUserProfile(userDehiveId);
 
@@ -84,6 +85,44 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       display_name: userProfile.display_name || `User_${userDehiveId}`,
       avatar_ipfs_hash:
         userProfile.avatar_ipfs_hash || userProfile.avatar || null,
+    };
+  }
+
+  /**
+   * Helper function to format message data consistently for WebSocket responses
+   * This ensures WebSocket responses match API response format and always include user profile
+   */
+  private async formatMessageData(message: {
+    _id: unknown;
+    channelId: unknown;
+    senderId: unknown;
+    content: unknown;
+    attachments?: unknown[];
+    isEdited?: boolean;
+    isDeleted?: boolean;
+    replyTo?: unknown;
+    createdAt?: unknown;
+    updatedAt?: unknown;
+  }) {
+    // Get user profile for sender - try cache first, then fallback
+    const userProfile = await this.getUserProfile(String(message.senderId));
+
+    return {
+      _id: message._id,
+      channelId: message.channelId,
+      sender: {
+        dehive_id: message.senderId,
+        username: userProfile.username,
+        display_name: userProfile.display_name,
+        avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
+      },
+      content: message.content,
+      attachments: message.attachments || [],
+      isEdited: message.isEdited || false,
+      isDeleted: message.isDeleted || false,
+      replyTo: message.replyTo || null,
+      createdAt: message.createdAt,
+      updatedAt: message.updatedAt,
     };
   }
 
@@ -111,14 +150,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage("identity")
   async handleIdentity(
-    @MessageBody() userDehiveId: string,
+    @MessageBody() data: string | { userDehiveId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    if (!userDehiveId || typeof userDehiveId !== "string") {
+    // Parse data - support both string and object format (same as direct-messaging)
+    let userDehiveId: string;
+
+    if (typeof data === "string") {
+      userDehiveId = data;
+    } else if (typeof data === "object" && data?.userDehiveId) {
+      userDehiveId = data.userDehiveId;
+    } else {
       return this.send(client, "error", {
-        message: "Invalid identity payload. Please send a string userDehiveId.",
+        message:
+          "Invalid identity format. Send userDehiveId as string or {userDehiveId: string}",
       });
     }
+
+    if (!userDehiveId || typeof userDehiveId !== "string") {
+      return this.send(client, "error", {
+        message: "Invalid userDehiveId.",
+      });
+    }
+
     const meta = this.meta.get(client);
     if (!meta) {
       return this.send(client, "error", {
@@ -148,8 +202,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log(
       `[WebSocket] Client is identifying as UserDehive ID: ${userDehiveId}`,
     );
+
     meta.userDehiveId = userDehiveId;
     meta.isAuthenticated = true;
+
     try {
       // Production: emit object (default behavior)
       // this.send(client, "identityConfirmed", {
@@ -169,10 +225,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  @SubscribeMessage("joinChannel")
-  async handleJoinChannel(
+  @SubscribeMessage("joinServer")
+  async handleJoinServer(
     @MessageBody()
-    data: string | { serverId: string; channelId: string },
+    data: string | { serverId: string },
     @ConnectedSocket() client: Socket,
   ) {
     const meta = this.meta.get(client);
@@ -184,7 +240,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     // Parse JSON string if needed
-    let parsedData: { serverId: string; channelId: string };
+    let parsedData: { serverId: string };
     try {
       if (typeof data === "string") {
         parsedData = JSON.parse(data);
@@ -201,39 +257,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     }
 
-    const { serverId, channelId } = parsedData;
+    const { serverId } = parsedData;
 
     // Debug logging
-    console.log("[WebSocket] joinChannel raw data:", data);
+    console.log("[WebSocket] joinServer raw data:", data);
     console.log(
-      "[WebSocket] joinChannel parsed data:",
+      "[WebSocket] joinServer parsed data:",
       JSON.stringify(parsedData, null, 2),
     );
-    console.log("[WebSocket] Extracted values:", {
-      serverId,
-      channelId,
-    });
+    console.log("[WebSocket] Extracted serverId:", serverId);
 
-    if (
-      !serverId ||
-      !channelId ||
-      !Types.ObjectId.isValid(serverId) ||
-      !Types.ObjectId.isValid(channelId)
-    ) {
+    if (!serverId || !Types.ObjectId.isValid(serverId)) {
       console.log("[WebSocket] Validation failed:", {
         serverId: { value: serverId, valid: Types.ObjectId.isValid(serverId) },
-        channelId: {
-          value: channelId,
-          valid: Types.ObjectId.isValid(channelId),
-        },
       });
 
       return this.send(client, "error", {
         message:
-          "Invalid payload. serverId and channelId are required and must be valid ObjectIds.",
+          "Invalid payload. serverId is required and must be a valid ObjectId.",
         details: {
           received: data,
-          extracted: { serverId, channelId },
+          extracted: { serverId },
         },
       });
     }
@@ -243,56 +287,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       console.log("[WebSocket] Query params:", {
         userDehiveId: meta.userDehiveId,
         serverId: serverId,
-        userDehiveIdObjectId: new Types.ObjectId(meta.userDehiveId),
-        serverIdObjectId: new Types.ObjectId(serverId),
       });
 
-      // Try different query approaches
-      const query1 = {
-        user_dehive_id: new Types.ObjectId(meta.userDehiveId),
-        server_id: new Types.ObjectId(serverId),
-      };
-
-      const query2 = {
+      // Check if user is member of this server
+      const isMember = await this.userDehiveServerModel.findOne({
         user_dehive_id: meta.userDehiveId,
-        server_id: serverId,
-      };
-
-      const query3 = {
-        user_dehive_id: meta.userDehiveId,
-        server_id: new Types.ObjectId(serverId),
-      };
-
-      console.log("[WebSocket] Trying query 1 (both ObjectId):", query1);
-      let isMember = await this.userDehiveServerModel.findOne(query1);
-
-      if (!isMember) {
-        console.log(
-          "[WebSocket] Query 1 failed, trying query 2 (both string):",
-          query2,
-        );
-        isMember = await this.userDehiveServerModel.findOne(query2);
-      }
-
-      if (!isMember) {
-        console.log(
-          "[WebSocket] Query 2 failed, trying query 3 (string + ObjectId):",
-          query3,
-        );
-        isMember = await this.userDehiveServerModel.findOne(query3);
-      }
-
-      // Debug: Check all documents for this user
-      const allUserMemberships = await this.userDehiveServerModel.find({
-        user_dehive_id: meta.userDehiveId,
-      });
-      console.log("[WebSocket] All memberships for user:", allUserMemberships);
-
-      // Debug: Check all documents for this server
-      const allServerMembers = await this.userDehiveServerModel.find({
         server_id: new Types.ObjectId(serverId),
       });
-      console.log("[WebSocket] All members of server:", allServerMembers);
 
       if (!isMember) {
         console.log("[WebSocket] User is not a member of server:", serverId);
@@ -301,52 +302,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           details: {
             serverId,
             userDehiveId: meta.userDehiveId,
-            allUserMemberships,
-            allServerMembers,
           },
         });
       }
 
       console.log("[WebSocket] User membership confirmed:", isMember);
 
-      console.log("[WebSocket] Checking channel...");
-      const channel = await this.channelModel.findById(channelId);
-      if (!channel) {
-        console.log("[WebSocket] Channel not found:", channelId);
+      // Verify server exists
+      const server = await this.serverModel.findById(serverId);
+      if (!server) {
+        console.log("[WebSocket] Server not found:", serverId);
         return this.send(client, "error", {
-          message: "Channel not found.",
-          details: { channelId },
+          message: "Server not found.",
+          details: { serverId },
         });
       }
 
-      console.log("[WebSocket] Channel validation passed");
-
-      console.log("[WebSocket] Checking category...");
-      const category = await this.categoryModel.findById(channel.category_id);
-      if (!category) {
-        console.log("[WebSocket] Category not found:", channel.category_id);
-        return this.send(client, "error", {
-          message: "Category not found.",
-          details: { categoryId: channel.category_id },
-        });
-      }
-
-      if (category.server_id.toString() !== serverId) {
-        console.log("[WebSocket] Category does not belong to server:", {
-          categoryServerId: category.server_id.toString(),
-          expectedServerId: serverId,
-        });
-        return this.send(client, "error", {
-          message: "Category does not belong to the specified server.",
-          details: {
-            categoryId: channel.category_id,
-            categoryServerId: category.server_id.toString(),
-            expectedServerId: serverId,
-          },
-        });
-      }
-
-      console.log("[WebSocket] Category validation passed");
+      console.log("[WebSocket] Server validation passed");
 
       // Leave previous rooms if any
       if (meta.currentRooms) {
@@ -356,31 +328,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         meta.currentRooms.clear();
       }
 
-      // Join channel room directly
-      await client.join(channelId);
-      meta.currentRooms?.add(channelId);
+      // Join server room - user will receive all messages from all channels in this server
+      await client.join(`server:${serverId}`);
+      meta.currentRooms?.add(`server:${serverId}`);
 
       console.log(
-        `[WebSocket] ✅ SUCCESS: User ${meta.userDehiveId} joined channel ${channelId}`,
+        `[WebSocket] ✅ SUCCESS: User ${meta.userDehiveId} joined server ${serverId}`,
       );
-      console.log(`[WebSocket] ✅ CHANNEL ID: ${channelId}`);
-      console.log(`[WebSocket] ✅ ROOM JOINED: ${channelId}`);
+      console.log(`[WebSocket] ✅ SERVER ID: ${serverId}`);
+      console.log(`[WebSocket] ✅ ROOM JOINED: server:${serverId}`);
 
       // Production: emit object (default behavior)
-      // this.send(client, "joinedChannel", {
-      //   channelId,
-      //   message: "Joined channel room successfully",
+      // this.send(client, "joinedServer", {
+      //   serverId,
+      //   message: "Joined server room successfully. You will receive all messages from all channels in this server.",
       // });
 
       // Debug (Insomnia): uncomment below to emit pretty JSON string
-      this.sendDebug(client, "joinedChannel", {
-        channelId,
-        message: "Joined channel room successfully",
+      this.sendDebug(client, "joinedServer", {
+        serverId,
+        message:
+          "Joined server room successfully. You will receive all messages from all channels in this server.",
       });
     } catch (error) {
-      console.error("[WebSocket] Error handling joinChannel:", error);
+      console.error("[WebSocket] Error handling joinServer:", error);
       this.send(client, "error", {
-        message: "Failed to join channel.",
+        message: "Failed to join server.",
         details: error instanceof Error ? error.message : String(error),
       });
     }
@@ -474,7 +447,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         content: string;
         attachments?: unknown[];
         isEdited?: boolean;
-        editedAt?: Date;
         isDeleted?: boolean;
         replyTo?: string;
         createdAt?: Date;
@@ -483,40 +455,40 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       console.log(`[WebSocket] ✅ MESSAGE SAVED: ${savedMessage._id}`);
 
-      // Get user profile for the sender
-      await this.userDehiveModel.findById(savedMessage.senderId).lean();
+      // Get channel to find server_id
+      const channel = await this.channelModel.findById(channelId);
+      if (!channel) {
+        return this.send(client, "error", {
+          message: "Channel not found",
+        });
+      }
 
-      // Get user profile from Decode API
-      const userProfile = await this.getUserProfile(
-        savedMessage.senderId.toString(),
-      );
+      // Get category to find server_id
+      const category = await this.categoryModel.findById(channel.category_id);
+      if (!category) {
+        return this.send(client, "error", {
+          message: "Category not found",
+        });
+      }
 
-      const messageToBroadcast = {
+      const serverId = category.server_id.toString();
+
+      // Format message with user profile (same as direct-messaging)
+      const messageToBroadcast = await this.formatMessageData({
         _id: savedMessage._id,
         channelId: channelId,
-        sender: {
-          dehive_id: savedMessage.senderId,
-          username: userProfile.username,
-          display_name: userProfile.display_name,
-          avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
-        },
+        senderId: savedMessage.senderId,
         content: savedMessage.content,
-        attachments: savedMessage.attachments || [],
-        isEdited: savedMessage.isEdited || false,
-        editedAt: savedMessage.editedAt || null,
-        isDeleted: savedMessage.isDeleted || false,
-        replyTo: savedMessage.replyTo || null,
+        attachments: savedMessage.attachments,
+        isEdited: savedMessage.isEdited,
+        isDeleted: savedMessage.isDeleted,
+        replyTo: savedMessage.replyTo,
         createdAt: savedMessage.createdAt,
         updatedAt: savedMessage.updatedAt,
-      };
-
-      // Broadcast to all clients in the channel room
-      this.server
-        .to(String(parsedData.channelId))
-        .emit("newMessage", messageToBroadcast);
+      });
 
       console.log(
-        `[WebSocket] 📢 MESSAGE BROADCASTED to room: ${parsedData.channelId}`,
+        `[WebSocket] 📢 MESSAGE BROADCASTED to server room: server:${serverId}`,
       );
       console.log(
         `[WebSocket] 📢 BROADCAST DATA:`,
@@ -524,15 +496,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       );
 
       // Production: emit object (default behavior)
+      // Broadcast to all users in the server (not just the channel)
       // this.server
-      //   .to(String(parsedData.channelId))
+      //   .to(`server:${serverId}`)
       //   .emit("newMessage", messageToBroadcast);
 
       // Debug (Insomnia): uncomment below to emit pretty JSON string
       const jsonMessage = JSON.stringify(messageToBroadcast, null, 2);
-      this.server
-        .to(String(parsedData.channelId))
-        .emit("newMessage", jsonMessage);
+      this.server.to(`server:${serverId}`).emit("newMessage", jsonMessage);
     } catch (error: unknown) {
       console.error("[WebSocket] Error handling message:", error);
       this.send(client, "error", {
@@ -569,38 +540,45 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         parsedData.content,
       );
 
-      // Get user profile from Decode API
-      const userProfile = await this.getUserProfile(
-        updated.senderId?.toString() || "Unknown",
-      );
+      // Get channel to find server_id
+      const channel = await this.channelModel.findById(updated.channelId);
+      if (!channel) {
+        return this.send(client, "error", {
+          message: "Channel not found",
+        });
+      }
 
-      const payload = {
+      // Get category to find server_id
+      const category = await this.categoryModel.findById(channel.category_id);
+      if (!category) {
+        return this.send(client, "error", {
+          message: "Category not found",
+        });
+      }
+
+      const serverId = category.server_id.toString();
+
+      // Format message with user profile (same as direct-messaging)
+      const payload = await this.formatMessageData({
         _id: updated._id,
-        channelId: (updated.channelId as unknown as Types.ObjectId).toString(),
-        sender: {
-          dehive_id: updated.senderId,
-          username: userProfile.username,
-          display_name: userProfile.display_name,
-          avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
-        },
+        channelId: updated.channelId,
+        senderId: updated.senderId,
         content: updated.content,
-        attachments: updated.attachments || [],
+        attachments: updated.attachments,
         isEdited: true,
-        editedAt: (updated as unknown as { editedAt?: Date }).editedAt,
-        isDeleted: updated.isDeleted || false,
-        replyTo: updated.replyTo || null,
+        isDeleted: updated.isDeleted,
+        replyTo: updated.replyTo,
         createdAt: (updated as { createdAt?: Date }).createdAt,
         updatedAt: (updated as { updatedAt?: Date }).updatedAt,
-      };
+      });
 
       // Production: emit object (default behavior)
-      // this.server.to(String(payload.channelId)).emit("messageEdited", payload);
+      // Broadcast to all users in the server
+      // this.server.to(`server:${serverId}`).emit("messageEdited", payload);
 
       // Debug (Insomnia): uncomment below to emit pretty JSON string
       const jsonPayload = JSON.stringify(payload, null, 2);
-      this.server
-        .to(String(payload.channelId))
-        .emit("messageEdited", jsonPayload);
+      this.server.to(`server:${serverId}`).emit("messageEdited", jsonPayload);
     } catch (error: unknown) {
       this.send(client, "error", {
         message: "Failed to edit message.",
@@ -635,38 +613,45 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         meta.userDehiveId,
       );
 
-      // Get user profile from Decode API
-      const userProfile = await this.getUserProfile(
-        updated.senderId?.toString() || "Unknown",
-      );
+      // Get channel to find server_id
+      const channel = await this.channelModel.findById(updated.channelId);
+      if (!channel) {
+        return this.send(client, "error", {
+          message: "Channel not found",
+        });
+      }
 
-      const payload = {
+      // Get category to find server_id
+      const category = await this.categoryModel.findById(channel.category_id);
+      if (!category) {
+        return this.send(client, "error", {
+          message: "Category not found",
+        });
+      }
+
+      const serverId = category.server_id.toString();
+
+      // Format message with user profile (same as direct-messaging)
+      const payload = await this.formatMessageData({
         _id: updated._id,
-        channelId: (updated.channelId as unknown as Types.ObjectId).toString(),
-        sender: {
-          dehive_id: updated.senderId,
-          username: userProfile.username,
-          display_name: userProfile.display_name,
-          avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
-        },
+        channelId: updated.channelId,
+        senderId: updated.senderId,
         content: updated.content,
-        attachments: updated.attachments || [],
-        isEdited: updated.isEdited || false,
-        editedAt: updated.editedAt || null,
-        isDeleted: true,
-        replyTo: updated.replyTo || null,
+        attachments: updated.attachments,
+        isEdited: updated.isEdited,
+        isDeleted: true, // Override to true for delete events
+        replyTo: updated.replyTo,
         createdAt: (updated as { createdAt?: Date }).createdAt,
         updatedAt: (updated as { updatedAt?: Date }).updatedAt,
-      };
+      });
 
       // Production: emit object (default behavior)
-      // this.server.to(String(payload.channelId)).emit("messageDeleted", payload);
+      // Broadcast to all users in the server
+      // this.server.to(`server:${serverId}`).emit("messageDeleted", payload);
 
       // Debug (Insomnia): uncomment below to emit pretty JSON string
       const jsonPayload = JSON.stringify(payload, null, 2);
-      this.server
-        .to(String(payload.channelId))
-        .emit("messageDeleted", jsonPayload);
+      this.server.to(`server:${serverId}`).emit("messageDeleted", jsonPayload);
     } catch (error: unknown) {
       this.send(client, "error", {
         message: "Failed to delete message.",

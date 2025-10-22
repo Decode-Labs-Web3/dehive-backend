@@ -1042,19 +1042,27 @@ export class DirectMessagingService {
           };
         };
 
-        // Convert to JSON string for Insomnia display
-        const jsonUpdate = JSON.stringify(conversationUpdate, null, 2);
-
         this.logger.log(
           `Emitting conversation_update to sender ${senderId} and receiver ${receiverId}:`,
           conversationUpdate,
         );
 
-        // Emit to both users
-        wsServer.to(`user:${senderId}`).emit("conversation_update", jsonUpdate);
+        // Production: emit the object payload (default behavior for frontend)
+        wsServer
+          .to(`user:${senderId}`)
+          .emit("conversation_update", conversationUpdate);
         wsServer
           .to(`user:${receiverId}`)
-          .emit("conversation_update", jsonUpdate);
+          .emit("conversation_update", conversationUpdate);
+
+        // Debugging (Insomnia): emit pretty JSON string to inspect (commented)
+        // const jsonUpdate = JSON.stringify(conversationUpdate, null, 2);
+        // wsServer
+        //   .to(`user:${senderId}`)
+        //   .emit("conversation_update", jsonUpdate);
+        // wsServer
+        //   .to(`user:${receiverId}`)
+        //   .emit("conversation_update", jsonUpdate);
 
         this.logger.log(
           `Emitted conversation updates to sender ${senderId} and receiver ${receiverId}`,

@@ -686,7 +686,7 @@ export class MessagingService {
 
   async getUserProfile(userDehiveId: string): Promise<Partial<UserProfile>> {
     try {
-      // First check cache for any previously fetched profile
+      // Check cache for profile (must be cached by HTTP API calls BEFORE WebSocket usage)
       const cacheKey = `user_profile:${userDehiveId}`;
       const cachedData = await this.redis.get(cacheKey);
 
@@ -698,31 +698,19 @@ export class MessagingService {
         return profile;
       }
 
-      // Fallback to basic profile if no cache
-      console.log(
-        `[CHANNEL-MESSAGING] No cached profile found for ${userDehiveId}, using fallback in WebSocket`,
+      // No fallback - throw error if profile not cached
+      // This forces HTTP API to be called first to cache user profiles
+      const error = new Error(
+        `User profile not cached for ${userDehiveId}. HTTP API must be called first to cache user profiles before WebSocket usage.`,
       );
-      return {
-        user_id: userDehiveId,
-        user_dehive_id: userDehiveId,
-        username: `User_${userDehiveId}`,
-        display_name: `User_${userDehiveId}`,
-        avatar: null,
-        avatar_ipfs_hash: null,
-      };
+      console.error(`[CHANNEL-MESSAGING] CRITICAL ERROR: ${error.message}`);
+      throw error;
     } catch (error) {
       console.error(
         `[CHANNEL-MESSAGING] Error getting user profile for ${userDehiveId}:`,
         error,
       );
-      return {
-        user_id: userDehiveId,
-        user_dehive_id: userDehiveId,
-        username: `User_${userDehiveId}`,
-        display_name: `User_${userDehiveId}`,
-        avatar: null,
-        avatar_ipfs_hash: null,
-      };
+      throw error;
     }
   }
 }

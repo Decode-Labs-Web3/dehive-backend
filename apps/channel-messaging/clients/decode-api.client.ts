@@ -101,6 +101,8 @@ export class DecodeApiClient {
           );
           if (profile) {
             profiles[userDehiveId] = profile;
+            // Cache the profile for WebSocket usage (1 hour TTL)
+            await this.cacheUserProfile(userDehiveId, profile);
           }
         } catch (error) {
           this.logger.error(
@@ -119,6 +121,37 @@ export class DecodeApiClient {
     } catch (error) {
       this.logger.error("Error in batch profile fetch:", error);
       return profiles;
+    }
+  }
+
+  /**
+   * Cache user profile in Redis for WebSocket usage
+   * This ensures WebSocket can retrieve user data without needing session
+   */
+  private async cacheUserProfile(
+    userDehiveId: string,
+    profile: Partial<UserProfile>,
+  ): Promise<void> {
+    try {
+      const cacheKey = `user_profile:${userDehiveId}`;
+      const cacheData = {
+        user_id: profile.user_id || userDehiveId,
+        user_dehive_id: profile.user_dehive_id || userDehiveId,
+        username: profile.username || `User_${userDehiveId}`,
+        display_name: profile.display_name || `User_${userDehiveId}`,
+        avatar: profile.avatar || null,
+        avatar_ipfs_hash: profile.avatar_ipfs_hash || null,
+        bio: profile.bio || null,
+      };
+
+      // Cache for 1 hour (3600 seconds)
+      await this.redis.setex(cacheKey, 3600, JSON.stringify(cacheData));
+      this.logger.log(`Cached user profile for ${userDehiveId}`);
+    } catch (error) {
+      this.logger.error(
+        `Error caching user profile for ${userDehiveId}:`,
+        error,
+      );
     }
   }
 
