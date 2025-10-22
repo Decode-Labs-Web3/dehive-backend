@@ -9,7 +9,7 @@ export class ChannelParticipant {
     required: true,
     index: true,
   })
-  call_id: Types.ObjectId;
+  channel_id: Types.ObjectId;
 
   @Prop({
     type: Types.ObjectId,
@@ -68,7 +68,7 @@ export const ChannelParticipantSchema =
   SchemaFactory.createForClass(ChannelParticipant);
 
 // Indexes
-ChannelParticipantSchema.index({ call_id: 1, user_id: 1 });
-ChannelParticipantSchema.index({ call_id: 1, is_audio_enabled: 1 });
+ChannelParticipantSchema.index({ channel_id: 1, user_id: 1 });
+ChannelParticipantSchema.index({ channel_id: 1, is_audio_enabled: 1 });
 ChannelParticipantSchema.index({ user_id: 1, is_audio_enabled: 1 });
 ChannelParticipantSchema.index({ socket_id: 1 });

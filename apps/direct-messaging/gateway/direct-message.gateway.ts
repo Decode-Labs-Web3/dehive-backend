@@ -50,9 +50,20 @@ export class DmGateway
   }
 
   private send(client: Socket, event: string, data: unknown) {
-    // Ensure data is properly serialized
-    // const serializedData = JSON.parse(JSON.stringify(data));
-    // client.emit(event, serializedData);
+    // Emit the actual object (serialized payload) by default
+    // This is the production payload consumers expect.
+    try {
+      client.emit(event, data);
+    } catch {
+      // Fallback: emit as JSON string if object emission fails
+      client.emit(event, JSON.stringify(data));
+    }
+  }
+
+  // Helper to emit a pretty-printed JSON string for debugging (Insomnia)
+  // Use this only when you need to inspect the payload in a socket.io client that
+  // displays raw strings (e.g., Insomnia). Keep calls commented-out in normal flow.
+  private sendDebug(client: Socket, event: string, data: unknown) {
     const jsonString = JSON.stringify(data, null, 2);
     client.emit(event, jsonString);
   }
@@ -165,11 +176,25 @@ export class DmGateway
       meta.userDehiveId = userDehiveId;
       void client.join(`user:${userDehiveId}`);
       console.log(`[DM-WS] User identified as ${userDehiveId}`);
+      // Production: emit the object payload
       this.send(client, "identityConfirmed", {
         userDehiveId,
         status: "success",
         timestamp: new Date().toISOString(),
       });
+
+      // Debugging (Insomnia): emit pretty JSON string to inspect (commented)
+      // const jsonIdentity = JSON.stringify({
+      //   userDehiveId,
+      //   status: "success",
+      //   timestamp: new Date().toISOString(),
+      // }, null, 2);
+      // // Use sendDebug helper or emit directly for Insomnia
+      // this.sendDebug(client, "identityConfirmed", {
+      //   userDehiveId,
+      //   status: "success",
+      //   timestamp: new Date().toISOString(),
+      // });
     }
   }
 
@@ -293,18 +318,19 @@ export class DmGateway
         },
       );
 
-      // Ensure messageToBroadcast is properly serialized
-      // const serializedMessage = JSON.parse(JSON.stringify(messageToBroadcast));
-      // this.server
-      //   .to(`user:${recipientId}`)
-      //   .to(`user:${selfId}`)
-      //   .emit("newMessage", serializedMessage);
-
-      const jsonMessage = JSON.stringify(messageToBroadcast, null, 2);
+      // Production: emit the serialized object payload (main behavior)
+      const serializedMessage = JSON.parse(JSON.stringify(messageToBroadcast));
       this.server
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
-        .emit("newMessage", jsonMessage);
+        .emit("newMessage", serializedMessage);
+
+      // Debugging (Insomnia): emit pretty JSON string so you can "open" the object
+      // const jsonMessage = JSON.stringify(messageToBroadcast, null, 2);
+      // this.server
+      //   .to(`user:${recipientId}`)
+      //   .to(`user:${selfId}`)
+      //   .emit("newMessage", jsonMessage);
 
       // Emit conversation update for real-time conversation list updates
       try {
@@ -356,17 +382,19 @@ export class DmGateway
         ...(await this.formatMessageData(updated)),
         messageId: updated._id, // Keep messageId for backward compatibility
       };
-      // Ensure payload is properly serialized
-      // const serializedPayload = JSON.parse(JSON.stringify(payload));
-      // this.server
-      //   .to(`user:${recipientId}`)
-      //   .to(`user:${selfId}`)
-      //   .emit("messageEdited", serializedPayload);
-      const jsonPayload = JSON.stringify(payload, null, 2);
+      // Production: emit the object payload
+      const serializedPayload = JSON.parse(JSON.stringify(payload));
       this.server
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
-        .emit("messageEdited", jsonPayload);
+        .emit("messageEdited", serializedPayload);
+
+      // Debugging (Insomnia): emit pretty JSON string to inspect (commented)
+      // const jsonPayload = JSON.stringify(payload, null, 2);
+      // this.server
+      //   .to(`user:${recipientId}`)
+      //   .to(`user:${selfId}`)
+      //   .emit("messageEdited", jsonPayload);
     } catch (error) {
       this.send(client, "error", {
         message: "Failed to edit message",
@@ -397,17 +425,19 @@ export class DmGateway
         messageId: updated._id, // Keep messageId for backward compatibility
         isDeleted: true, // Override isDeleted for delete events
       };
-      // Ensure payload is properly serialized
-      // const serializedPayload = JSON.parse(JSON.stringify(payload));
-      // this.server
-      //   .to(`user:${recipientId}`)
-      //   .to(`user:${selfId}`)
-      //   .emit("messageDeleted", serializedPayload);
-      const jsonPayload = JSON.stringify(payload, null, 2);
+      // Production: emit the object payload
+      const serializedPayload = JSON.parse(JSON.stringify(payload));
       this.server
         .to(`user:${recipientId}`)
         .to(`user:${selfId}`)
-        .emit("messageDeleted", jsonPayload);
+        .emit("messageDeleted", serializedPayload);
+
+      // Debugging (Insomnia): emit pretty JSON string to inspect (commented)
+      // const jsonPayload = JSON.stringify(payload, null, 2);
+      // this.server
+      //   .to(`user:${recipientId}`)
+      //   .to(`user:${selfId}`)
+      //   .emit("messageDeleted", jsonPayload);
     } catch (error) {
       this.send(client, "error", {
         message: "Failed to delete message",

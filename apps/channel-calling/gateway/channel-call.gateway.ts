@@ -28,7 +28,6 @@ type SocketMeta = {
   userDehiveId?: string;
   sessionId?: string;
   fingerprintHash?: string;
-  callId?: string;
   channelId?: string;
 };
 
@@ -229,7 +228,6 @@ export class ChannelCallGateway
         userDehiveId,
         sessionId,
         fingerprintHash,
-        callId: undefined,
         channelId: undefined,
       });
       void client.join(`user:${userDehiveId}`);
@@ -312,9 +310,8 @@ export class ChannelCallGateway
         parsedData.channel_id,
       );
 
-      // Store channel info in meta
+      // Store channel info in meta (store logical channel id only)
       meta.channelId = parsedData.channel_id;
-      meta.callId = String(result.call._id);
       this.meta.set(client, meta);
 
       // Join socket to channel room
@@ -402,7 +399,6 @@ export class ChannelCallGateway
 
       // Clear meta info
       meta.channelId = undefined;
-      meta.callId = undefined;
       this.meta.set(client, meta);
 
       // Leave socket from channel room

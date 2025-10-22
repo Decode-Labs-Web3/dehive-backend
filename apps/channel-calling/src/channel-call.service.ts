@@ -61,15 +61,15 @@ export class ChannelCallService {
       );
     }
 
-    // Check if user is already in the call
+    // Check if user is already in the call (by logical channel id)
     const existingParticipant = await this.channelParticipantModel
-      .findOne({ call_id: call._id, user_id: userId })
+      .findOne({ channel_id: channelId, user_id: userId })
       .exec();
 
     if (existingParticipant) {
       this.logger.log(`User ${userId} already in call ${call._id}`);
       const otherParticipants = await this.getOtherParticipants(
-        String(call._id),
+        channelId,
         userId,
       );
 
@@ -81,8 +81,9 @@ export class ChannelCallService {
     }
 
     // Create new participant
+    // Store logical channel id on participant (not the call document id)
     const participant = new this.channelParticipantModel({
-      call_id: call._id,
+      channel_id: channelId,
       user_id: userId,
       is_muted: false,
       joined_at: new Date(),
@@ -104,7 +105,7 @@ export class ChannelCallService {
 
     // Get other participants
     const otherParticipants = await this.getOtherParticipants(
-      String(call._id),
+      channelId,
       userId,
     );
 
@@ -140,7 +141,7 @@ export class ChannelCallService {
 
     // Find participant
     const participant = await this.channelParticipantModel
-      .findOne({ call_id: call._id, user_id: userId })
+      .findOne({ channel_id: channelId, user_id: userId })
       .exec();
 
     if (!participant) {
@@ -176,15 +177,24 @@ export class ChannelCallService {
 
   async leaveCall(
     userId: string,
-    callId: string,
+    channelId: string,
   ): Promise<{
     call: ChannelCallDocument;
   }> {
-    this.logger.log(`User ${userId} leaving voice channel call ${callId}`);
+    this.logger.log(`User ${userId} leaving voice channel ${channelId}`);
 
-    // Find participant
+    // Find the call for this channel
+    const call = await this.channelCallModel
+      .findOne({ channel_id: channelId, status: CallStatus.CONNECTED })
+      .exec();
+
+    if (!call) {
+      throw new NotFoundException("Call not found");
+    }
+
+    // Find participant by logical channel id
     const participant = await this.channelParticipantModel
-      .findOne({ call_id: callId, user_id: userId })
+      .findOne({ channel_id: channelId, user_id: userId })
       .exec();
 
     if (!participant) {
@@ -199,22 +209,22 @@ export class ChannelCallService {
       .exec();
 
     // Update call participant count
-    const call = await this.channelCallModel
+    const updatedCall = await this.channelCallModel
       .findByIdAndUpdate(
-        callId,
+        call._id,
         { $inc: { current_participants: -1 } },
         { new: true },
       )
       .exec();
 
-    if (!call) {
-      throw new NotFoundException("Call not found");
+    if (!updatedCall) {
+      throw new NotFoundException("Call not found after update");
     }
 
     // If no participants left, end the call
-    if (call.current_participants <= 0) {
+    if (updatedCall.current_participants <= 0) {
       await this.channelCallModel
-        .findByIdAndUpdate(callId, {
+        .findByIdAndUpdate(call._id, {
           status: CallStatus.ENDED,
           ended_at: new Date(),
           end_reason: CallEndReason.ALL_PARTICIPANTS_LEFT,
@@ -223,18 +233,18 @@ export class ChannelCallService {
     }
 
     this.logger.log(
-      `User ${userId} left voice channel call ${callId}. Remaining participants: ${call.current_participants}`,
+      `User ${userId} left voice channel ${channelId}. Remaining participants: ${updatedCall.current_participants}`,
     );
 
-    return { call };
+    return { call: updatedCall };
   }
 
   async getOtherParticipants(
-    callId: string,
+    channelId: string,
     userId: string,
   ): Promise<AuthenticatedUser[]> {
     const participants = await this.channelParticipantModel
-      .find({ call_id: callId, user_id: { $ne: userId } })
+      .find({ channel_id: channelId, user_id: { $ne: userId } })
       .exec();
 
     const userIds = participants.map((p) => p.user_id.toString());
@@ -306,7 +316,7 @@ export class ChannelCallService {
 
         if (call) {
           const participant = await this.channelParticipantModel
-            .findOne({ call_id: call._id, user_id: userId })
+            .findOne({ channel_id: call._id, user_id: userId })
             .exec();
 
           if (participant) {
@@ -339,11 +349,18 @@ export class ChannelCallService {
         // Handle all channel disconnects
         const participants = await this.channelParticipantModel
           .find({ user_id: userId })
-          .populate("call_id")
           .exec();
 
         for (const participant of participants) {
-          const call = participant.call_id as unknown as ChannelCallDocument;
+          // participant.channel_id stores the logical channel id (string/ObjectId)
+          const channelIdFromParticipant =
+            participant.channel_id as unknown as string;
+          const call = await this.channelCallModel
+            .findOne({
+              channel_id: channelIdFromParticipant,
+              status: CallStatus.CONNECTED,
+            })
+            .exec();
           if (call && call.status === CallStatus.CONNECTED) {
             // Remove participant
             await this.channelParticipantModel
@@ -394,7 +411,7 @@ export class ChannelCallService {
       }
 
       const participants = await this.channelParticipantModel
-        .find({ call_id: call._id })
+        .find({ channel_id: channelId })
         .exec();
 
       const userIds = participants.map((p) => p.user_id.toString());

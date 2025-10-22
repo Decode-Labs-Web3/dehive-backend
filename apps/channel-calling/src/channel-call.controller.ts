@@ -59,7 +59,6 @@ export class ChannelCallController {
         statusCode: 200,
         message: "Successfully joined voice channel call",
         data: {
-          call_id: result.call._id,
           channel_id: result.call.channel_id,
           status: result.call.status,
           participant_count: result.call.current_participants,
@@ -105,7 +104,6 @@ export class ChannelCallController {
         statusCode: 200,
         message: "Successfully left voice channel call",
         data: {
-          call_id: result.call._id,
           channel_id: leaveCallDto.channel_id,
           status: "left",
           participant_count: result.call.current_participants,

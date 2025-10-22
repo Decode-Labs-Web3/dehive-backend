@@ -107,7 +107,7 @@ Tracks individual participants in a call.
 ```typescript
 {
   _id: ObjectId,
-  call_id: ObjectId,
+  channel_id: ObjectId,
   user_id: ObjectId,
   status: String,            // joining | connected | left | disconnected
   joined_at: Date,
@@ -130,7 +130,7 @@ WebRTC session data for each participant.
 ```typescript
 {
   _id: ObjectId,
-  call_id: ObjectId,
+  channel_id: ObjectId,
   user_id: ObjectId,
   session_id: String,
   socket_id: String,
@@ -194,7 +194,7 @@ socket.emit('joinCall', {
 
 // You receive:
 socket.on('callJoined', (data) => {
-  // data.call_id, data.other_participants
+  // data.channel_id, data.other_participants
 });
 
 // Others receive:
@@ -212,14 +212,14 @@ Each user must establish P2P connection with EVERY other user:
 // User A must:
 // 1. Create offer for User B
 socket.emit('signalOffer', {
-  call_id: 'xxx',
+  channel_id: 'xxx',
   target_user_id: 'B',
   offer: 'sdp...'
 });
 
 // 2. Create offer for User C
 socket.emit('signalOffer', {
-  call_id: 'xxx',
+  channel_id: 'xxx',
   target_user_id: 'C',
   offer: 'sdp...'
 });
@@ -235,7 +235,7 @@ socket.on('signalAnswer', (data) => {
 
 ```typescript
 socket.emit('leaveCall', {
-  call_id: 'xxx'
+  channel_id: 'xxx'
 });
 
 // You receive:
@@ -315,7 +315,7 @@ ws://localhost:4007/channel-rtc
    - All users receive: `mediaToggled` event
 
 4. **User leaves**
-   - User B: `socket.emit('leaveCall', { call_id: 'xxx' })`
+  - User B: `socket.emit('leaveCall', { channel_id: 'xxx' })`
    - User A & C receive: `userLeft` event
    - User A & C close peer connection to B
 
@@ -379,7 +379,7 @@ socket.on('callJoined', async (data) => {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     socket.emit('signalOffer', {
-      call_id: data.call_id,
+      channel_id: data.channel_id,
       target_user_id: participant.user_id._id,
       offer: offer.sdp
     });
