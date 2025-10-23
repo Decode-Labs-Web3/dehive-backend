@@ -1,7 +1,5 @@
-export interface AuthenticatedUser {
-  _id: string;
-  userId: string;
-  email: string;
-  username: string;
-  role: 'user' | 'admin' | 'moderator';
+import { UserProfile } from "./user-profile.interface";
+
+export interface AuthenticatedUser extends UserProfile {
+  session_id: string;
 }

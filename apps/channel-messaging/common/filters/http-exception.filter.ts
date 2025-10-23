@@ -5,9 +5,9 @@ import {
   HttpException,
   HttpStatus,
   Logger,
-} from '@nestjs/common';
-import { Request, Response } from 'express';
-import { AxiosError } from 'axios';
+} from "@nestjs/common";
+import { Request, Response } from "express";
+import { AxiosError } from "axios";
 
 export interface ErrorResponse {
   success: false;
@@ -36,19 +36,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
-      if (typeof exceptionResponse === 'string') {
+      if (typeof exceptionResponse === "string") {
         message = exceptionResponse;
       } else if (
-        typeof exceptionResponse === 'object' &&
+        typeof exceptionResponse === "object" &&
         exceptionResponse !== null
       ) {
         const responseObj = exceptionResponse as Record<string, unknown>;
         message = (responseObj.message as string) || exception.message;
         error =
-          typeof responseObj.error === 'string' ||
-          typeof responseObj.error === 'object'
+          typeof responseObj.error === "string" ||
+          typeof responseObj.error === "object"
             ? (responseObj.error as string | Record<string, unknown>)
-            : 'Service communication failed';
+            : "Service communication failed";
       } else {
         message = exception.message;
       }
@@ -57,29 +57,29 @@ export class HttpExceptionFilter implements ExceptionFilter {
       if (exception.response) {
         status = exception.response.status;
         const responseData = exception.response.data as Record<string, unknown>;
-        message = (responseData?.message as string) || 'External service error';
+        message = (responseData?.message as string) || "External service error";
         const errorData = responseData?.error;
         error =
-          typeof errorData === 'string' || typeof errorData === 'object'
+          typeof errorData === "string" || typeof errorData === "object"
             ? (errorData as string | Record<string, unknown>)
-            : 'Service communication failed';
+            : "Service communication failed";
       } else if (exception.request) {
         status = HttpStatus.SERVICE_UNAVAILABLE;
-        message = 'Service temporarily unavailable';
-        error = 'External service is not responding';
+        message = "Service temporarily unavailable";
+        error = "External service is not responding";
       } else {
         status = HttpStatus.INTERNAL_SERVER_ERROR;
-        message = 'Internal server error';
-        error = 'Network configuration error';
+        message = "Internal server error";
+        error = "Network configuration error";
       }
     } else if (exception instanceof Error) {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
-      message = 'Internal server error';
+      message = "Internal server error";
       error = exception.message;
     } else {
       status = HttpStatus.INTERNAL_SERVER_ERROR;
-      message = 'Internal server error';
-      error = 'Unknown error occurred';
+      message = "Internal server error";
+      error = "Unknown error occurred";
     }
 
     // Log the error (concise)

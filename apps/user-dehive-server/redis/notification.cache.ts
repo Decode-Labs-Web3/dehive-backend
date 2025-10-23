@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import Redis from 'ioredis';
-import { Types } from 'mongoose';
+import { Injectable } from "@nestjs/common";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import Redis from "ioredis";
+import { Types } from "mongoose";
 
 @Injectable()
 export class NotificationCache {
@@ -10,7 +10,6 @@ export class NotificationCache {
     userId: Types.ObjectId | string,
     serverId: Types.ObjectId | string,
   ): string {
-    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
     return `notification:${userId}:${serverId}`;
   }
   async setNotificationPreference(
@@ -19,7 +18,7 @@ export class NotificationCache {
     isMuted: boolean,
   ): Promise<void> {
     const key = this.getKey(userId.toString(), serverId.toString());
-    await this.redis.set(key, isMuted ? '1' : '0');
+    await this.redis.set(key, isMuted ? "1" : "0");
   }
 
   async getNotificationPreference(
@@ -28,6 +27,6 @@ export class NotificationCache {
   ): Promise<boolean> {
     const key = this.getKey(userId.toString(), serverId.toString());
     const value = await this.redis.get(key);
-    return value === '1';
+    return value === "1";
   }
 }

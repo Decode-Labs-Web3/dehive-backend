@@ -4,15 +4,15 @@ import {
   ArgumentsHost,
   BadRequestException,
   Logger,
-} from '@nestjs/common';
-import { Request, Response } from 'express';
+} from "@nestjs/common";
+import { Request, Response } from "express";
 
 export interface ValidationErrorResponse {
   success: false;
   statusCode: number;
   message: string;
   error: {
-    type: 'validation';
+    type: "validation";
     details: Array<{
       field: string;
       message: string;
@@ -40,21 +40,21 @@ export class ValidationExceptionFilter implements ExceptionFilter {
     }> = [];
 
     // Extract validation errors from the exception
-    if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+    if (typeof exceptionResponse === "object" && exceptionResponse !== null) {
       const responseObj = exceptionResponse as Record<string, unknown>;
 
       if (Array.isArray(responseObj.message)) {
         // Handle class-validator errors
         validationDetails = (responseObj.message as string[]).map(
           (msg: string) => ({
-            field: 'unknown',
+            field: "unknown",
             message: msg,
           }),
         );
       } else if (responseObj.message) {
         validationDetails = [
           {
-            field: 'request',
+            field: "request",
             message: responseObj.message as string,
           },
         ];
@@ -63,16 +63,16 @@ export class ValidationExceptionFilter implements ExceptionFilter {
 
     // Log validation errors
     this.logger.warn(
-      `Validation failed for ${request.method} ${request.url}: ${validationDetails.map((d) => d.message).join(', ')}`,
+      `Validation failed for ${request.method} ${request.url}: ${validationDetails.map((d) => d.message).join(", ")}`,
     );
 
     // Create consistent validation error response
     const errorResponse: ValidationErrorResponse = {
       success: false,
       statusCode: 400,
-      message: 'Validation failed',
+      message: "Validation failed",
       error: {
-        type: 'validation',
+        type: "validation",
         details: validationDetails,
       },
       timestamp: new Date().toISOString(),

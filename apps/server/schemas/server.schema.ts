@@ -1,7 +1,7 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
+import { Document } from "mongoose";
 
-@Schema({ collection: 'server', timestamps: true })
+@Schema({ collection: "server", timestamps: true })
 export class Server {
   @Prop({ required: true })
   name: string;

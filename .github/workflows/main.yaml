@@ -1,0 +1,60 @@
+name: CI/CD Dehive Backend
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run ESLint
+        run: npm run lint --if-present
+
+      - name: Build
+        run: npm run build:all
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          timeout: 30s
+          debug: true
+          script: |
+            cd /root/dehive-backend
+            pm2 delete all || true
+            git fetch origin main
+            git reset --hard origin/main
+
+            rm -rf node_modules
+            rm -rf dist
+
+            npm install
+
+            npm run build:all
+
+            pm2 start ecosystem.config.js
+            pm2 save
+            pm2 status

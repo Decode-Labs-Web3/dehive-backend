@@ -5,25 +5,26 @@ import {
   IsMongoId,
   IsOptional,
   IsArray,
-} from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AttachmentDto } from './attachment.dto';
+  ValidateIf,
+} from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { AttachmentDto } from "./attachment.dto";
 
 export class CreateMessageDto {
   @ApiProperty({
-    description: 'The ID of the channel conversation to send the message to.',
-    example: '68c5adb6ec465897d540c58',
+    description: "The ID of the channel to send the message to.",
+    example: "68c5adb6ec465897d540c58",
   })
-  @IsNotEmpty({ message: 'conversationId is required' })
-  @IsMongoId({ message: 'conversationId must be a valid MongoId' })
-  conversationId: string;
+  @IsNotEmpty({ message: "channelId is required" })
+  @IsMongoId({ message: "channelId must be a valid MongoId" })
+  channelId: string;
 
   @ApiProperty({
     description:
-      'The text content of the message (empty string if only sending files)',
-    example: 'Hello everyone! How is the project going?',
+      "The text content of the message (empty string if only sending files)",
+    example: "Hello everyone! How is the project going?",
     maxLength: 2000,
-    default: '',
+    default: "",
   })
   @IsString()
   @Length(0, 2000)
@@ -31,19 +32,28 @@ export class CreateMessageDto {
 
   @ApiProperty({
     type: [String],
-    description: 'List of upload IDs to attach (empty array if no files)',
-    example: ['68db1234abcd5678efgh9013'],
+    description: "List of upload IDs to attach (empty array if no files)",
+    example: ["68db1234abcd5678efgh9013"],
     default: [],
   })
   @IsArray()
-  @IsMongoId({ each: true, message: 'Each uploadId must be a valid MongoId' })
+  @IsMongoId({ each: true, message: "Each uploadId must be a valid MongoId" })
   uploadIds: string[];
 
   @ApiPropertyOptional({
     type: [AttachmentDto],
     description:
-      'Optional explicit attachments; server may ignore if uploadIds provided',
+      "Optional explicit attachments; server may ignore if uploadIds provided",
   })
   @IsOptional()
   attachments?: AttachmentDto[];
+
+  @ApiPropertyOptional({
+    description: "ID of the message being replied to (optional)",
+    example: "68dc1234abcd5678efgh9014",
+  })
+  @IsOptional()
+  @ValidateIf((o) => o.replyTo !== null && o.replyTo !== undefined)
+  @IsMongoId({ message: "replyTo must be a valid MongoId" })
+  replyTo?: string | null;
 }

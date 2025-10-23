@@ -1,32 +1,32 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNumber, IsOptional, Max, Min } from 'class-validator';
-import { Type } from 'class-transformer';
-import { AttachmentType } from '../enum/enum';
+import { ApiPropertyOptional } from "@nestjs/swagger";
+import { IsEnum, IsNumber, IsOptional, Max, Min } from "class-validator";
+import { Type } from "class-transformer";
+import { AttachmentType } from "../enum/enum";
 
 export class ListDirectUploadsDto {
   @ApiPropertyOptional({
-    description: 'Filter uploads by a specific type.',
+    description: "Filter uploads by a specific type.",
     enum: AttachmentType,
-    example: 'image',
+    example: "image",
   })
   @IsOptional()
   @IsEnum(AttachmentType)
   type?: AttachmentType;
 
   @ApiPropertyOptional({
-    description: 'The page number to retrieve, starting from 1',
-    default: 1,
+    description: "The page number to retrieve, starting from 0",
+    default: 0,
     type: Number,
   })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @Min(1)
-  page = 1;
+  @Min(0)
+  page = 0;
 
   @ApiPropertyOptional({
-    description: 'The number of uploads to retrieve per page (max 100)',
-    default: 50,
+    description: "The number of uploads to retrieve per page (max 100)",
+    default: 10,
     type: Number,
   })
   @IsOptional()
@@ -34,5 +34,5 @@ export class ListDirectUploadsDto {
   @IsNumber()
   @Min(1)
   @Max(100)
-  limit = 50;
+  limit = 10;
 }

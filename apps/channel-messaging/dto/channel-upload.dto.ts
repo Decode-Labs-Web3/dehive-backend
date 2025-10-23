@@ -1,23 +1,23 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsMongoId, IsOptional, IsUrl, Min } from 'class-validator';
-import { AttachmentType } from '../enum/enum';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { IsInt, IsMongoId, IsOptional, IsUrl, Min } from "class-validator";
+import { AttachmentType } from "../enum/enum";
 
 export class UploadInitDto {
-  @ApiPropertyOptional({ description: 'Server ID for permission check' })
+  @ApiPropertyOptional({ description: "Server ID for permission check" })
   @IsOptional()
   @IsMongoId()
   serverId?: string;
 
   @ApiPropertyOptional({
-    description: 'Channel ConversationId ID for permission check',
+    description: "Channel ID for permission check",
   })
   @IsOptional()
   @IsMongoId()
-  conversationId?: string;
+  channelId?: string;
 }
 
 export class UploadResponseDto {
-  @ApiProperty({ description: 'Upload ID (MongoId) to reference in chat' })
+  @ApiProperty({ description: "Upload ID (MongoId) to reference in chat" })
   @IsMongoId()
   uploadId: string;
 
@@ -31,15 +31,15 @@ export class UploadResponseDto {
   @ApiProperty()
   name: string;
 
-  @ApiProperty({ description: 'File size in bytes' })
+  @ApiProperty({ description: "File size in bytes" })
   @IsInt()
   @Min(0)
   size: number;
 
-  @ApiProperty({ example: 'image/jpeg' })
+  @ApiProperty({ example: "image/jpeg" })
   mimeType: string;
 
-  @ApiPropertyOptional({ description: 'Error message if upload failed' })
+  @ApiPropertyOptional({ description: "Error message if upload failed" })
   errorMessage?: string;
 
   @ApiPropertyOptional()

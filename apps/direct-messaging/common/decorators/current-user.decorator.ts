@@ -1,5 +1,5 @@
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface';
+import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
 
 /**
  * CurrentUser decorator to extract authenticated user data from the request
@@ -18,11 +18,18 @@ import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface
  */
 export const CurrentUser = createParamDecorator(
   (
-    data: keyof AuthenticatedUser | 'sessionId' | undefined,
+    data: keyof AuthenticatedUser | "sessionId" | undefined,
     ctx: ExecutionContext,
-  ): AuthenticatedUser | string | undefined => {
+  ):
+    | AuthenticatedUser
+    | string
+    | number
+    | boolean
+    | Date
+    | string[]
+    | undefined => {
     console.log(
-      '🎯 [DIRECT-MESSAGING CURRENT USER] Decorator called with data:',
+      "🎯 [DIRECT-MESSAGING CURRENT USER] Decorator called with data:",
       data,
     );
     try {
@@ -31,16 +38,16 @@ export const CurrentUser = createParamDecorator(
         .getRequest<{ user: AuthenticatedUser; sessionId?: string }>();
 
       console.log(
-        '🎯 [DIRECT-MESSAGING CURRENT USER] Request user:',
+        "🎯 [DIRECT-MESSAGING CURRENT USER] Request user:",
         request.user,
       );
       console.log(
-        '🎯 [DIRECT-MESSAGING CURRENT USER] Request sessionId:',
+        "🎯 [DIRECT-MESSAGING CURRENT USER] Request sessionId:",
         request.sessionId,
       );
 
       // If sessionId is requested, return it from request
-      if (data === 'sessionId') {
+      if (data === "sessionId") {
         return request.sessionId;
       }
 
@@ -57,12 +64,12 @@ export const CurrentUser = createParamDecorator(
 
       // Return the entire user object
       console.log(
-        '🎯 [DIRECT-MESSAGING CURRENT USER] Returning full user:',
+        "🎯 [DIRECT-MESSAGING CURRENT USER] Returning full user:",
         user,
       );
       return user;
     } catch (error) {
-      console.error('❌ [DIRECT-MESSAGING CURRENT USER] Error:', error);
+      console.error("❌ [DIRECT-MESSAGING CURRENT USER] Error:", error);
       return undefined;
     }
   },

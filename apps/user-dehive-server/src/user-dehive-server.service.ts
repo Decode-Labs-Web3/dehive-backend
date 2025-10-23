@@ -3,30 +3,42 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
-} from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { UserDehive, UserDehiveDocument } from '../schemas/user-dehive.schema';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, Types } from "mongoose";
+import {
+  UserDehive,
+  UserDehiveDocument,
+  UserDehiveLean,
+} from "../schemas/user-dehive.schema";
 import {
   UserDehiveServer,
   UserDehiveServerDocument,
-} from '../schemas/user-dehive-server.schema';
-import { Server, ServerDocument } from '../schemas/server.schema';
-import { ServerBan, ServerBanDocument } from '../schemas/server-ban.schema';
-import { InviteLink, InviteLinkDocument } from '../schemas/invite-link.schema';
-import { AssignRoleDto } from '../dto/assign-role.dto';
-import { JoinServerDto } from '../dto/join-server.dto';
-import { LeaveServerDto } from '../dto/leave-server.dto';
-import { GenerateInviteDto } from '../dto/generate-invite.dto';
-import { KickBanDto } from '../dto/kick-ban.dto';
-import { UnbanDto } from '../dto/unban.dto';
-import { UpdateNotificationDto } from '../dto/update-notification.dto';
-import { ServerRole } from '../enum/enum';
-import { AuthServiceClient } from './auth-service.client';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import { Redis } from 'ioredis';
+} from "../schemas/user-dehive-server.schema";
+import { Server, ServerDocument } from "../schemas/server.schema";
+import { ServerBan, ServerBanDocument } from "../schemas/server-ban.schema";
+import { InviteLink, InviteLinkDocument } from "../schemas/invite-link.schema";
+import { AssignRoleDto } from "../dto/assign-role.dto";
+import { TransferOwnershipDto } from "../dto/transfer-ownership.dto";
+import { JoinServerDto } from "../dto/join-server.dto";
+import { LeaveServerDto } from "../dto/leave-server.dto";
+import { GenerateInviteDto } from "../dto/generate-invite.dto";
+import { KickBanDto } from "../dto/kick-ban.dto";
+import { UnbanDto } from "../dto/unban.dto";
+import { UpdateNotificationDto } from "../dto/update-notification.dto";
+import { UpdateBioDto } from "../dto/update-bio.dto";
+import { UpdateAvatarDto } from "../dto/update-avatar.dto";
+import { UpdateDisplayNameDto } from "../dto/update-display-name.dto";
+import { ServerRole } from "../enum/enum";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
+import { DecodeApiClient } from "../clients/decode-api.client";
+import { UserProfile } from "../interfaces/user-profile.interface";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import {
+  BannedUser,
+  BanListResponse,
+} from "../interfaces/banned-user.interface";
 
 @Injectable()
 export class UserDehiveServerService {
@@ -40,111 +52,28 @@ export class UserDehiveServerService {
     private serverBanModel: Model<ServerBanDocument>,
     @InjectModel(InviteLink.name)
     private inviteLinkModel: Model<InviteLinkDocument>,
-    private readonly authClient: AuthServiceClient,
+    private readonly decodeApiClient: DecodeApiClient,
     @InjectRedis() private readonly redis: Redis,
-    private readonly httpService: HttpService,
   ) {}
 
-  // Helper method to find UserDehive profile (without auto-create)
   private async findUserDehiveProfile(userId: string) {
     return await this.userDehiveModel.findById(userId).lean();
-  }
-
-  /**
-   * Helper function to decode session_id and get user_dehive_id
-   */
-  private async getUserDehiveIdFromSession(
-    sessionId: string,
-  ): Promise<Types.ObjectId> {
-    try {
-      console.log(
-        '🔍 [GET USER DEHIVE ID] Calling auth service for session:',
-        sessionId,
-      );
-      // Call auth service to validate session and get user_dehive_id
-      const response = await firstValueFrom(
-        this.httpService.get<{
-          success: boolean;
-          data: any;
-          message?: string;
-        }>(`http://localhost:4006/auth/session/check`, {
-          headers: {
-            'x-session-id': sessionId,
-            'Content-Type': 'application/json',
-          },
-          timeout: 5000,
-        }),
-      );
-
-      console.log(
-        '🔍 [GET USER DEHIVE ID] Auth service response:',
-        response.data,
-      );
-
-      if (!response.data.success || !response.data.data) {
-        throw new NotFoundException('Invalid session for target user');
-      }
-
-      // Extract user_dehive_id from session data
-      const sessionData = response.data.data;
-      const sessionToken = sessionData.session_token;
-
-      if (!sessionToken) {
-        throw new NotFoundException('No session token for target user');
-      }
-
-      // Decode JWT to get _id (user_dehive_id)
-      const payload = sessionToken.split('.')[1];
-      const decodedPayload = JSON.parse(
-        Buffer.from(payload, 'base64').toString(),
-      );
-
-      console.log('🔍 [GET USER DEHIVE ID] JWT payload:', decodedPayload);
-      console.log(
-        '🔍 [GET USER DEHIVE ID] Available fields:',
-        Object.keys(decodedPayload),
-      );
-
-      // Try different possible field names
-      const userDehiveId =
-        decodedPayload._id ||
-        decodedPayload.user_id ||
-        decodedPayload.sub ||
-        decodedPayload.id;
-      console.log(
-        '🔍 [GET USER DEHIVE ID] Found user_dehive_id:',
-        userDehiveId,
-      );
-
-      if (!userDehiveId) {
-        throw new NotFoundException('No user_dehive_id in target session');
-      }
-
-      return new Types.ObjectId(userDehiveId);
-    } catch (error) {
-      throw new NotFoundException(
-        `Failed to get user_dehive_id from session: ${error.message}`,
-      );
-    }
   }
 
   async joinServer(
     dto: JoinServerDto,
     userId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<{ server_id?: string; server_name?: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // 1. Ensure UserDehive profile exists (auto-create if needed)
+    const userDehiveId = userId;
 
-    const userDehiveId = userId; // user_dehive_id = _id from AuthGuard
-
-    // Check if user is banned from this specific server
     const userDehiveProfile = await this.userDehiveModel
       .findById(userId)
       .lean();
 
     if (!userDehiveProfile) {
-      throw new NotFoundException('UserDehive profile not found.');
+      throw new NotFoundException("UserDehive profile not found.");
     }
 
     const isBannedFromServer = userDehiveProfile.banned_by_servers?.includes(
@@ -160,10 +89,15 @@ export class UserDehiveServerService {
     ]);
 
     if (!server) throw new NotFoundException(`Server not found.`);
-    if (isAlreadyMember)
-      throw new BadRequestException('User is already a member.');
+    if (isAlreadyMember) {
+      // User is already a member, return server_id and server_name for frontend redirect
+      return {
+        server_id: dto.server_id,
+        server_name: server.name,
+      };
+    }
     if (isBannedFromServer)
-      throw new ForbiddenException('You are banned from this server.');
+      throw new ForbiddenException("You are banned from this server.");
     const session = await this.serverModel.db.startSession();
     session.startTransaction();
     try {
@@ -184,14 +118,13 @@ export class UserDehiveServerService {
       );
       await session.commitTransaction();
 
-      // Invalidate member list cache
       await this.invalidateMemberListCache(dto.server_id);
 
-      return { message: 'Successfully joined server.' };
+      return {};
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       await session.abortTransaction();
-      throw new BadRequestException('Failed to join server.');
+      throw new BadRequestException("Failed to join server.");
     } finally {
       void session.endSession();
     }
@@ -200,14 +133,14 @@ export class UserDehiveServerService {
   async leaveServer(
     dto: LeaveServerDto,
     userId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<Record<string, never>> {
     const serverId = new Types.ObjectId(dto.server_id);
 
     // Find UserDehive by _id
     const userDehive = await this.findUserDehiveProfile(userId);
 
     if (!userDehive) {
-      throw new NotFoundException('UserDehive profile not found.');
+      throw new NotFoundException("UserDehive profile not found.");
     }
 
     const userDehiveId = userId; // user_dehive_id = _id from AuthGuard
@@ -217,10 +150,10 @@ export class UserDehiveServerService {
     });
 
     if (!membership)
-      throw new BadRequestException('User is not a member of this server.');
+      throw new BadRequestException("User is not a member of this server.");
     if (membership.role === ServerRole.OWNER)
       throw new ForbiddenException(
-        'Server owner cannot leave. Transfer ownership first.',
+        "Server owner cannot leave. Transfer ownership first.",
       );
 
     const session = await this.userDehiveServerModel.db.startSession();
@@ -244,11 +177,11 @@ export class UserDehiveServerService {
       // Invalidate member list cache
       await this.invalidateMemberListCache(dto.server_id);
 
-      return { message: 'Successfully left server.' };
+      return {};
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       await session.abortTransaction();
-      throw new BadRequestException('Failed to leave server.');
+      throw new BadRequestException("Failed to leave server.");
     } finally {
       void session.endSession();
     }
@@ -261,7 +194,7 @@ export class UserDehiveServerService {
     const serverId = new Types.ObjectId(dto.server_id);
     const actorDehiveProfile = await this.userDehiveModel
       .findById(actorBaseId)
-      .select('_id')
+      .select("_id")
       .lean();
     if (!actorDehiveProfile)
       throw new NotFoundException(`Dehive profile not found for actor.`);
@@ -271,10 +204,10 @@ export class UserDehiveServerService {
       user_dehive_id: actorBaseId, // Use string instead of ObjectId
     });
     if (!isMember)
-      throw new ForbiddenException('Only server members can generate invites.');
-    const { customAlphabet } = await import('nanoid');
+      throw new ForbiddenException("Only server members can generate invites.");
+    const { customAlphabet } = await import("nanoid");
     const nanoid = customAlphabet(
-      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890',
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
       10,
     );
     const code = nanoid();
@@ -291,10 +224,10 @@ export class UserDehiveServerService {
   async useInvite(
     code: string,
     actorBaseId: string,
-  ): Promise<{ message: string }> {
+  ): Promise<{ server_id?: string }> {
     const invite = await this.inviteLinkModel.findOne({ code });
     if (!invite || invite.expiredAt < new Date())
-      throw new NotFoundException('Invite link is invalid or has expired.');
+      throw new NotFoundException("Invite link is invalid or has expired.");
 
     return this.joinServer(
       {
@@ -306,58 +239,121 @@ export class UserDehiveServerService {
 
   async kickOrBan(
     dto: KickBanDto,
-    action: 'kick' | 'ban',
+    action: "kick" | "ban",
     actorBaseId: string,
   ): Promise<{ message: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // Decode target session_id to get user_dehive_id
-    const targetDehiveId = await this.getUserDehiveIdFromSession(
-      dto.target_session_id,
+    // Use target_user_dehive_id directly
+    console.log(
+      "🎯 [KICK/BAN] target_user_dehive_id:",
+      dto.target_user_dehive_id,
     );
+    const targetDehiveId = new Types.ObjectId(dto.target_user_dehive_id);
+    console.log("🎯 [KICK/BAN] targetDehiveId resolved:", targetDehiveId);
 
     const actorDehiveProfile = await this.userDehiveModel
       .findById(actorBaseId)
-      .select('_id')
+      .select("_id")
       .lean();
     if (!actorDehiveProfile)
       throw new NotFoundException(`Dehive profile not found for actor.`);
     const actorDehiveId = actorDehiveProfile._id;
 
+    console.log("🎯 [KICK/BAN] serverId:", serverId);
+    console.log("🎯 [KICK/BAN] targetDehiveId:", targetDehiveId);
+    console.log("🎯 [KICK/BAN] actorDehiveId:", actorDehiveId);
+
+    // Debug: Check what we're querying for
+    console.log("🔍 [KICK/BAN] Querying for targetMembership with:");
+    console.log("🔍 [KICK/BAN] - server_id:", serverId);
+    console.log("🔍 [KICK/BAN] - user_dehive_id:", targetDehiveId);
+    console.log("🔍 [KICK/BAN] - server_id type:", typeof serverId);
+    console.log("🔍 [KICK/BAN] - user_dehive_id type:", typeof targetDehiveId);
+
+    // Debug: Check all memberships in this server first
+    const allMemberships = await this.userDehiveServerModel
+      .find({
+        server_id: serverId,
+      })
+      .lean();
+    console.log(
+      "🔍 [KICK/BAN] All memberships in server:",
+      allMemberships.length,
+    );
+    console.log(
+      "🔍 [KICK/BAN] All user_dehive_ids in server:",
+      allMemberships.map((m) => m.user_dehive_id.toString()),
+    );
+    console.log(
+      "🔍 [KICK/BAN] Looking for targetDehiveId:",
+      targetDehiveId.toString(),
+    );
+    console.log(
+      "🔍 [KICK/BAN] Looking for actorDehiveId:",
+      actorDehiveId.toString(),
+    );
+
+    // Try both ObjectId and string comparison for user_dehive_id
     const [targetMembership, actorMembership] = await Promise.all([
-      this.userDehiveServerModel.findOne({
-        server_id: serverId,
-        user_dehive_id: targetDehiveId,
-      }),
-      this.userDehiveServerModel.findOne({
-        server_id: serverId,
-        user_dehive_id: actorDehiveId,
-      }),
+      this.userDehiveServerModel
+        .findOne({
+          server_id: serverId,
+          $or: [
+            { user_dehive_id: targetDehiveId },
+            { user_dehive_id: targetDehiveId.toString() },
+          ],
+        })
+        .lean(),
+      this.userDehiveServerModel
+        .findOne({
+          server_id: serverId,
+          $or: [
+            { user_dehive_id: actorDehiveId },
+            { user_dehive_id: actorDehiveId.toString() },
+          ],
+        })
+        .lean(),
     ]);
+
+    console.log("🔍 [KICK/BAN] targetMembership found:", !!targetMembership);
+    console.log("🔍 [KICK/BAN] actorMembership found:", !!actorMembership);
+    if (targetMembership) {
+      console.log(
+        "🔍 [KICK/BAN] targetMembership data:",
+        JSON.stringify(targetMembership, null, 2),
+      );
+    }
+    if (actorMembership) {
+      console.log(
+        "🔍 [KICK/BAN] actorMembership data:",
+        JSON.stringify(actorMembership, null, 2),
+      );
+    }
     if (!targetMembership)
       throw new NotFoundException(
-        'Target user is not a member of this server.',
+        "Target user is not a member of this server.",
       );
     if (!actorMembership)
-      throw new ForbiddenException('You are not a member of this server.');
-    // eslint-disable-next-line @typescript-eslint/no-base-to-string
+      throw new ForbiddenException("You are not a member of this server.");
+
     if (actorDehiveId.toString() === targetDehiveId.toString())
       throw new BadRequestException(
-        'You cannot perform this action on yourself.',
+        "You cannot perform this action on yourself.",
       );
     const hasPermission =
       actorMembership.role === ServerRole.OWNER ||
       actorMembership.role === ServerRole.MODERATOR;
     if (!hasPermission)
-      throw new ForbiddenException('You do not have permission.');
+      throw new ForbiddenException("You do not have permission.");
     if (targetMembership.role === ServerRole.OWNER)
-      throw new ForbiddenException('Cannot kick or ban the server owner.');
+      throw new ForbiddenException("Cannot kick or ban the server owner.");
     if (
       targetMembership.role === ServerRole.MODERATOR &&
       actorMembership.role !== ServerRole.OWNER
     )
       throw new ForbiddenException(
-        'Moderators cannot kick or ban other moderators.',
+        "Moderators cannot kick or ban other moderators.",
       );
 
     const session = await this.userDehiveServerModel.db.startSession();
@@ -376,7 +372,7 @@ export class UserDehiveServerService {
         { $inc: { member_count: -1 } },
         { session },
       );
-      if (action === 'ban') {
+      if (action === "ban") {
         // Add server to user's banned_by_servers array
         await this.userDehiveModel.findByIdAndUpdate(
           targetDehiveId,
@@ -421,14 +417,12 @@ export class UserDehiveServerService {
   ): Promise<{ message: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // Decode target session_id to get user_dehive_id
-    const targetDehiveId = await this.getUserDehiveIdFromSession(
-      dto.target_session_id,
-    );
+    // Use target_user_dehive_id directly
+    const targetDehiveId = new Types.ObjectId(dto.target_user_dehive_id);
 
     const actorDehiveProfile = await this.userDehiveModel
       .findById(actorBaseId)
-      .select('_id')
+      .select("_id")
       .lean();
     if (!actorDehiveProfile)
       throw new NotFoundException(`Dehive profile not found for actor.`);
@@ -436,12 +430,15 @@ export class UserDehiveServerService {
 
     const hasPermission = await this.userDehiveServerModel.exists({
       server_id: serverId,
-      user_dehive_id: actorDehiveId,
+      $or: [
+        { user_dehive_id: actorDehiveId },
+        { user_dehive_id: actorDehiveId.toString() },
+      ],
       role: { $in: [ServerRole.OWNER, ServerRole.MODERATOR] },
     });
     if (!hasPermission)
       throw new ForbiddenException(
-        'You do not have permission to unban members.',
+        "You do not have permission to unban members.",
       );
 
     // Remove server from user's banned_by_servers array
@@ -453,7 +450,7 @@ export class UserDehiveServerService {
     );
 
     if (!result) {
-      throw new NotFoundException('User not found.');
+      throw new NotFoundException("User not found.");
     }
 
     // Check if user is still banned by any server
@@ -470,7 +467,7 @@ export class UserDehiveServerService {
       user_dehive_id: targetDehiveId,
     });
 
-    return { message: 'User successfully unbanned.' };
+    return { message: "User successfully unbanned." };
   }
 
   async assignRole(
@@ -479,14 +476,12 @@ export class UserDehiveServerService {
   ): Promise<UserDehiveServerDocument> {
     const serverId = new Types.ObjectId(dto.server_id);
 
-    // Decode target session_id to get user_dehive_id
-    const targetDehiveId = await this.getUserDehiveIdFromSession(
-      dto.target_session_id,
-    );
+    // Use target_user_dehive_id directly
+    const targetDehiveId = new Types.ObjectId(dto.target_user_dehive_id);
 
     const actorDehiveProfile = await this.userDehiveModel
       .findById(actorBaseId)
-      .select('_id')
+      .select("_id")
       .lean();
     if (!actorDehiveProfile)
       throw new NotFoundException(`Dehive profile not found for actor.`);
@@ -495,31 +490,126 @@ export class UserDehiveServerService {
     const [targetMembership, actorMembership] = await Promise.all([
       this.userDehiveServerModel.findOne({
         server_id: serverId,
-        user_dehive_id: targetDehiveId,
+        $or: [
+          { user_dehive_id: targetDehiveId },
+          { user_dehive_id: targetDehiveId.toString() },
+        ],
       }),
       this.userDehiveServerModel.findOne({
         server_id: serverId,
-        user_dehive_id: actorDehiveId,
+        $or: [
+          { user_dehive_id: actorDehiveId },
+          { user_dehive_id: actorDehiveId.toString() },
+        ],
       }),
     ]);
     if (!targetMembership)
       throw new NotFoundException(
-        'Target user is not a member of this server.',
+        "Target user is not a member of this server.",
       );
     if (!actorMembership)
-      throw new ForbiddenException('You are not a member of this server.');
-    // eslint-disable-next-line @typescript-eslint/no-base-to-string
+      throw new ForbiddenException("You are not a member of this server.");
+
     if (actorDehiveId.toString() === targetDehiveId.toString())
-      throw new BadRequestException('You cannot change your own role.');
+      throw new BadRequestException("You cannot change your own role.");
     if (actorMembership.role !== ServerRole.OWNER)
-      throw new ForbiddenException('Only the server owner can assign roles.');
+      throw new ForbiddenException("Only the server owner can assign roles.");
     if (dto.role === ServerRole.OWNER)
       throw new BadRequestException(
-        'Ownership can only be transferred, not assigned.',
+        "Ownership can only be transferred, not assigned.",
       );
 
     targetMembership.role = dto.role;
     return targetMembership.save();
+  }
+
+  async transferOwnership(
+    dto: TransferOwnershipDto,
+    currentOwnerId: string,
+  ): Promise<{ message: string }> {
+    const serverId = new Types.ObjectId(dto.server_id);
+    const newOwnerDehiveId = new Types.ObjectId(dto.user_dehive_id);
+
+    // Get current owner profile
+    const currentOwnerProfile = await this.userDehiveModel
+      .findById(currentOwnerId)
+      .select("_id")
+      .lean();
+    if (!currentOwnerProfile)
+      throw new NotFoundException(
+        `Dehive profile not found for current owner.`,
+      );
+    const currentOwnerDehiveId = currentOwnerProfile._id;
+
+    // Find current owner and new owner memberships
+    const [currentOwnerMembership, newOwnerMembership] = await Promise.all([
+      this.userDehiveServerModel.findOne({
+        server_id: serverId,
+        $or: [
+          { user_dehive_id: currentOwnerDehiveId },
+          { user_dehive_id: currentOwnerDehiveId.toString() },
+        ],
+      }),
+      this.userDehiveServerModel.findOne({
+        server_id: serverId,
+        $or: [
+          { user_dehive_id: newOwnerDehiveId },
+          { user_dehive_id: newOwnerDehiveId.toString() },
+        ],
+      }),
+    ]);
+
+    // Validate current owner
+    if (!currentOwnerMembership)
+      throw new ForbiddenException("You are not a member of this server.");
+    if (currentOwnerMembership.role !== ServerRole.OWNER)
+      throw new ForbiddenException(
+        "Only the server owner can transfer ownership.",
+      );
+
+    // Validate new owner
+    if (!newOwnerMembership)
+      throw new NotFoundException("New owner is not a member of this server.");
+    if (currentOwnerDehiveId.toString() === newOwnerDehiveId.toString())
+      throw new BadRequestException(
+        "You cannot transfer ownership to yourself.",
+      );
+
+    // Use transaction to ensure atomicity
+    const session = await this.userDehiveServerModel.db.startSession();
+    session.startTransaction();
+    try {
+      // Change current owner role to MEMBER
+      await this.userDehiveServerModel.updateOne(
+        { _id: currentOwnerMembership._id },
+        { $set: { role: ServerRole.MEMBER } },
+        { session },
+      );
+
+      await this.userDehiveServerModel.updateOne(
+        { _id: newOwnerMembership._id },
+        { $set: { role: ServerRole.OWNER } },
+        { session },
+      );
+
+      // Update owner_id in server collection
+      await this.serverModel.updateOne(
+        { _id: serverId },
+        { $set: { owner_id: newOwnerDehiveId.toString() } },
+        { session },
+      );
+
+      await session.commitTransaction();
+
+      await this.invalidateMemberListCache(dto.server_id);
+
+      return { message: "Ownership transferred successfully." };
+    } catch {
+      await session.abortTransaction();
+      throw new BadRequestException("Failed to transfer ownership.");
+    } finally {
+      void session.endSession();
+    }
   }
 
   async updateNotification(
@@ -528,7 +618,7 @@ export class UserDehiveServerService {
   ): Promise<{ message: string }> {
     const actorDehiveProfile = await this.userDehiveModel
       .findById(actorBaseId)
-      .select('_id')
+      .select("_id")
       .lean();
     if (!actorDehiveProfile)
       throw new NotFoundException(`Dehive profile not found for user.`);
@@ -537,187 +627,384 @@ export class UserDehiveServerService {
     const result = await this.userDehiveServerModel.updateOne(
       {
         server_id: new Types.ObjectId(dto.server_id),
-        user_dehive_id: actorDehiveId,
+        $or: [
+          { user_dehive_id: actorDehiveId },
+          { user_dehive_id: actorDehiveId.toString() },
+        ],
       },
       { $set: { is_muted: dto.is_muted } },
     );
     if (result.matchedCount === 0)
-      throw new NotFoundException('Membership not found.');
-    return { message: 'Notification settings updated successfully.' };
+      throw new NotFoundException("Membership not found.");
+    return { message: "Notification settings updated successfully." };
   }
 
-  async getUserProfile(userId: string) {
-    // 1. Fetch profile from auth service (with cache)
-    const authProfile = await this.authClient.getUserProfile(userId);
-    if (!authProfile) {
-      throw new NotFoundException(`User profile not found: ${userId}`);
-    }
-
-    // 2. Get Dehive-specific data
-    const userDehive = await this.userDehiveModel
-      .findById(userId)
-      .select('bio status banner_color server_count last_login')
-      .lean();
-
-    // 3. Merge auth profile with Dehive data
-    return {
-      ...authProfile,
-      dehive_data: userDehive
-        ? {
-            bio: userDehive.bio,
-            status: userDehive.status,
-            banner_color: userDehive.banner_color,
-            server_count: userDehive.server_count,
-            last_login: userDehive.last_login,
-          }
-        : {
-            bio: '',
-            status: 'offline',
-            banner_color: null,
-            server_count: 0,
-            last_login: null,
-          },
-    };
-  }
-
-  async getMembersInServer(serverId: string): Promise<any[]> {
-    const cacheKey = `server_members:${serverId}`;
-
-    // 1. Check cache for whole member list
-    const cached = await this.redis.get(cacheKey);
-    if (cached) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return JSON.parse(cached);
-    }
-
-    // 2. Cache miss - fetch from DB
-    const memberships = await this.userDehiveServerModel
-      .find({ server_id: new Types.ObjectId(serverId) })
-      .lean();
-
-    if (memberships.length === 0) {
-      return [];
-    }
-
-    // 3. Extract user IDs
-    const userIds = memberships.map((m) => m.user_dehive_id.toString());
-
-    // 4. Batch get profiles from auth service (with cache)
-    const profiles = await this.authClient.batchGetProfiles(userIds);
-
-    // 5. Merge membership data with profiles
-    const result = memberships.map((m) => {
-      const userId = m.user_dehive_id.toString();
-      const profile = profiles[userId] || {
-        username: 'Unknown User',
-        display_name: 'Unknown User',
-        avatar: null,
-      };
-
-      return {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
-        membership_id: (m._id as any).toString(),
-        user_dehive_id: m.user_dehive_id.toString(),
-        username: profile.username,
-        display_name: profile.display_name || profile.username,
-        avatar: profile.avatar,
-        role: m.role,
-        is_muted: m.is_muted,
-        joined_at: m.joined_at,
-      };
-    });
-
-    // 6. Cache whole list for 5 minutes
-    await this.redis.setex(cacheKey, 300, JSON.stringify(result));
-
-    return result;
-  }
-
-  /**
-   * Helper: Invalidate member list cache
-   */
-  private async invalidateMemberListCache(serverId: string): Promise<void> {
-    await this.redis.del(`server_members:${serverId}`);
-  }
-
-  async getEnrichedUserProfile(targetUserId: string, viewerUserId: string) {
-    // 1. Fetch target user profile from auth service (with cache)
-    const targetAuthProfile =
-      await this.authClient.getUserProfile(targetUserId);
-    if (!targetAuthProfile) {
+  private async _getEnrichedUser(
+    userId: string,
+    sessionIdOfRequester: string,
+  ): Promise<unknown> {
+    const userDecodeData = await this.decodeApiClient.getUserById(
+      userId,
+      sessionIdOfRequester,
+    );
+    if (!userDecodeData) {
       throw new NotFoundException(
-        `User profile not found for target user ID: ${targetUserId}`,
+        `User with ID ${userId} not found in Decode service`,
       );
     }
 
-    // 2. Get Dehive profiles
-    const [targetDehiveProfile] = await Promise.all([
-      this.userDehiveModel.findById(targetUserId).lean(),
-      this.userDehiveModel.findById(viewerUserId).lean(),
-    ]);
-
-    // Find UserDehive for viewer
-    const finalViewerDehiveProfile =
-      await this.findUserDehiveProfile(viewerUserId);
-
-    if (!finalViewerDehiveProfile) {
-      throw new NotFoundException('Viewer UserDehive profile not found.');
+    let userDehiveData: UserDehiveLean | null = await this.userDehiveModel
+      .findById(userId)
+      .lean<UserDehiveLean>();
+    if (!userDehiveData) {
+      const newUser = new this.userDehiveModel({
+        _id: userId,
+        status: "ACTIVE",
+      });
+      const savedDocument = await newUser.save();
+      userDehiveData = savedDocument.toObject<UserDehiveLean>();
     }
 
-    // 3. Get mutual servers
-    const targetDehiveId = targetDehiveProfile?._id;
-    if (!targetDehiveId) {
-      // User exists in auth but not in Dehive yet
-      return {
-        ...targetAuthProfile,
-        bio: '',
-        status: 'offline',
-        mutual_servers_count: 0,
-        mutual_servers: [],
-      };
-    }
+    return this._mergeUserData(userDehiveData, userDecodeData);
+  }
+
+  private _mergeUserData(
+    dehiveData: UserDehiveLean,
+    decodeData: UserProfile,
+  ): unknown {
+    return {
+      _id: decodeData._id.toString(),
+      username: decodeData.username,
+      display_name: decodeData.display_name,
+      avatar: decodeData.avatar_ipfs_hash,
+      avatar_ipfs_hash: decodeData.avatar_ipfs_hash,
+      status: dehiveData.status,
+      server_count: dehiveData.server_count,
+      bio: decodeData.bio,
+      banner_color: decodeData.banner_color || dehiveData.banner_color,
+      is_banned: dehiveData.is_banned,
+      last_login: decodeData.last_login,
+      primary_wallet: decodeData.primary_wallet,
+      following_number: decodeData.following_number,
+      followers_number: decodeData.followers_number,
+      is_following: decodeData.is_following,
+      is_follower: decodeData.is_follower,
+      is_blocked: decodeData.is_blocked,
+      is_blocked_by: decodeData.is_blocked_by,
+      mutual_followers_number: decodeData.mutual_followers_number,
+      mutual_followers_list: decodeData.mutual_followers_list,
+      is_active: decodeData.is_active,
+      last_account_deactivation: decodeData.last_account_deactivation,
+      dehive_role: decodeData.dehive_role,
+      role_subscription: decodeData.role_subscription,
+      wallets: decodeData.wallets || [],
+      __v: decodeData.__v || 0,
+    };
+  }
+
+  async getMembersInServer(
+    serverId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<unknown[]> {
+    const cacheKey = `server_members:${serverId}`;
+    const cached = await this.redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    const memberships = await this.userDehiveServerModel
+      .find({ server_id: new Types.ObjectId(serverId) })
+      .lean();
+    if (!memberships.length) return [];
+
+    const enrichedMembersPromises = memberships.map(async (m) => {
+      try {
+        const userProfile = await this._getEnrichedUser(
+          m.user_dehive_id.toString(),
+          currentUser.session_id,
+        );
+        return {
+          membership_id: m._id.toString(),
+          ...(userProfile as Record<string, unknown>),
+          role: m.role,
+          is_muted: m.is_muted,
+          joined_at: m.joined_at,
+        };
+      } catch (error) {
+        console.error(`Could not enrich member ${m.user_dehive_id}:`, error);
+        return null;
+      }
+    });
+
+    const finalResult = (await Promise.all(enrichedMembersPromises)).filter(
+      Boolean,
+    );
+    await this.redis.setex(cacheKey, 300, JSON.stringify(finalResult));
+    return finalResult;
+  }
+
+  async getEnrichedUserProfile(
+    targetUserId: string,
+    currentUser: AuthenticatedUser,
+  ): Promise<{
+    statusCode: number;
+    success: boolean;
+    message: string;
+    data: unknown;
+  }> {
+    const targetUserProfile = await this._getEnrichedUser(
+      targetUserId,
+      currentUser.session_id,
+    );
 
     const [targetServers, viewerServers] = await Promise.all([
       this.userDehiveServerModel
-        .find({ user_dehive_id: targetDehiveId })
-        .select('server_id')
-        .populate('server_id', 'name icon')
+        .find({ user_dehive_id: targetUserId })
+        .select("server_id")
         .lean(),
       this.userDehiveServerModel
-        .find({ user_dehive_id: finalViewerDehiveProfile?._id })
-        .select('server_id')
+        .find({ user_dehive_id: currentUser._id })
+        .select("server_id")
         .lean(),
     ]);
 
     const viewerServerIds = new Set(
       viewerServers.map((s) => s.server_id.toString()),
     );
+    const mutualServerIds = targetServers
+      .filter((s) => viewerServerIds.has(s.server_id.toString()))
+      .map((s) => s.server_id);
 
-    const mutualServers = targetServers.filter((s) => {
-      if (!s.server_id) return false;
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const serverId =
-        typeof s.server_id === 'object'
-          ? // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-            (s.server_id as any)?._id?.toString()
-          : String(s.server_id);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      return serverId && viewerServerIds.has(serverId);
-    });
+    // Fetch server details to include server names
+    const mutualServersWithNames = await Promise.all(
+      mutualServerIds.map(async (serverId) => {
+        const server = await this.serverModel
+          .findById(serverId)
+          .select("name")
+          .lean();
+        return {
+          server_id: serverId.toString(),
+          server_name: server?.name || "Unknown Server",
+        };
+      }),
+    );
 
-    // 4. Merge all data
-    return {
-      _id: targetUserId,
-      username: targetAuthProfile.username,
-      display_name:
-        targetAuthProfile.display_name || targetAuthProfile.username,
-      email: targetAuthProfile.email,
-      avatar: targetAuthProfile.avatar,
-      bio: targetDehiveProfile?.bio || '',
-      status: targetDehiveProfile?.status || 'offline',
-      banner_color: targetDehiveProfile?.banner_color,
-      mutual_servers_count: mutualServers.length,
-      mutual_servers: mutualServers.map((s) => s.server_id),
+    const enrichedProfile = {
+      ...(targetUserProfile as Record<string, unknown>),
+      mutual_servers_count: mutualServersWithNames.length,
+      mutual_servers: mutualServersWithNames,
     };
+
+    return {
+      statusCode: 200,
+      success: true,
+      message: "Operation successful",
+      data: enrichedProfile,
+    };
+  }
+
+  private async invalidateMemberListCache(serverId: string): Promise<void> {
+    await this.redis.del(`server_members:${serverId}`);
+  }
+
+  async updateBio(
+    dto: UpdateBioDto,
+    userId: string,
+    sessionId: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const accessToken =
+        await this.decodeApiClient.getAccessTokenFromSession(sessionId);
+      if (!accessToken) {
+        throw new NotFoundException("Access token not found.");
+      }
+
+      await this.decodeApiClient.updateBio(dto, accessToken, fingerprintHash);
+
+      // Get current user profile after update
+      const currentUserProfile =
+        await this.decodeApiClient.getCurrentUserProfile(
+          accessToken,
+          fingerprintHash,
+        );
+
+      return currentUserProfile;
+    } catch (error) {
+      throw new BadRequestException("Failed to update bio: " + error.message);
+    }
+  }
+
+  async updateAvatar(
+    dto: UpdateAvatarDto,
+    userId: string,
+    sessionId: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const accessToken =
+        await this.decodeApiClient.getAccessTokenFromSession(sessionId);
+      if (!accessToken) {
+        throw new NotFoundException("Access token not found.");
+      }
+
+      await this.decodeApiClient.updateAvatar(
+        dto,
+        accessToken,
+        fingerprintHash,
+      );
+
+      // Get current user profile after update
+      const currentUserProfile =
+        await this.decodeApiClient.getCurrentUserProfile(
+          accessToken,
+          fingerprintHash,
+        );
+
+      return currentUserProfile;
+    } catch (error) {
+      throw new BadRequestException(
+        "Failed to update avatar: " + error.message,
+      );
+    }
+  }
+
+  async updateDisplayName(
+    dto: UpdateDisplayNameDto,
+    userId: string,
+    sessionId: string,
+    fingerprintHash: string,
+  ): Promise<UserProfile> {
+    try {
+      const accessToken =
+        await this.decodeApiClient.getAccessTokenFromSession(sessionId);
+      if (!accessToken) {
+        throw new NotFoundException("Access token not found.");
+      }
+
+      await this.decodeApiClient.updateDisplayName(
+        dto,
+        accessToken,
+        fingerprintHash,
+      );
+
+      // Get current user profile after update
+      const currentUserProfile =
+        await this.decodeApiClient.getCurrentUserProfile(
+          accessToken,
+          fingerprintHash,
+        );
+
+      return currentUserProfile;
+    } catch (error) {
+      throw new BadRequestException(
+        "Failed to update display name: " + error.message,
+      );
+    }
+  }
+
+  async getBanList(
+    serverId: string,
+    requesterId: string,
+    sessionId: string,
+  ): Promise<{
+    statusCode: number;
+    success: boolean;
+    message: string;
+    data: BanListResponse;
+  }> {
+    try {
+      const serverObjectId = new Types.ObjectId(serverId);
+
+      // Check if server exists
+      const server = await this.serverModel.findById(serverObjectId);
+      if (!server) {
+        throw new NotFoundException("Server not found.");
+      }
+
+      // Check if requester is the owner of the server
+      const requesterRole = await this.userDehiveServerModel.findOne({
+        server_id: serverObjectId,
+        user_dehive_id: requesterId,
+        role: ServerRole.OWNER,
+      });
+
+      if (!requesterRole) {
+        throw new ForbiddenException(
+          "Only the server owner can view the ban list.",
+        );
+      }
+
+      const bannedUsers = (await this.serverBanModel
+        .find({ server_id: serverObjectId })
+        .sort({ createdAt: -1 })
+        .lean()) as unknown as Array<
+        ServerBan & { createdAt: Date; updatedAt: Date; _id: string }
+      >;
+
+      const bannedUsersWithProfiles: BannedUser[] = [];
+
+      for (const banEntry of bannedUsers) {
+        try {
+          const userProfile = await this.decodeApiClient.getUserById(
+            banEntry.user_dehive_id.toString(),
+            sessionId,
+          );
+
+          const bannedUser: BannedUser = {
+            _id: banEntry._id.toString(),
+            server_id: banEntry.server_id.toString(),
+            user_dehive_id: banEntry.user_dehive_id.toString(),
+            banned_by: banEntry.banned_by.toString(),
+            reason: banEntry.reason,
+            expires_at: banEntry.expires_at,
+            createdAt: banEntry.createdAt,
+            updatedAt: banEntry.updatedAt,
+            is_banned: true,
+            user_profile: userProfile || undefined,
+          };
+
+          bannedUsersWithProfiles.push(bannedUser);
+        } catch (error) {
+          console.error(
+            `Error fetching user profile for ${banEntry.user_dehive_id}:`,
+            error,
+          );
+          const bannedUser: BannedUser = {
+            _id: banEntry._id.toString(),
+            server_id: banEntry.server_id.toString(),
+            user_dehive_id: banEntry.user_dehive_id.toString(),
+            banned_by: banEntry.banned_by.toString(),
+            reason: banEntry.reason,
+            expires_at: banEntry.expires_at,
+            createdAt: banEntry.createdAt,
+            updatedAt: banEntry.updatedAt,
+            is_banned: true,
+            user_profile: undefined,
+          };
+
+          bannedUsersWithProfiles.push(bannedUser);
+        }
+      }
+
+      const result = {
+        statusCode: 200,
+        success: true,
+        message: "Operation successful",
+        data: {
+          server_id: serverId,
+          total_banned: bannedUsersWithProfiles.length,
+          banned_users: bannedUsersWithProfiles,
+        },
+      };
+
+      return result;
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException("Failed to get ban list: " + error.message);
+    }
   }
 }

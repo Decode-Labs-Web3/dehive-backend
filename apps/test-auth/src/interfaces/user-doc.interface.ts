@@ -1,4 +1,4 @@
-import { WalletDoc } from './wallet-doc.interface';
+import { WalletDoc } from "./wallet-doc.interface";
 
 export interface UserDehiveDoc {
   _id: string;

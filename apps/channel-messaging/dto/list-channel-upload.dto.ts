@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsEnum,
   IsMongoId,
@@ -6,20 +6,20 @@ import {
   IsOptional,
   Max,
   Min,
-} from 'class-validator';
-import { Type } from 'class-transformer';
-import { AttachmentType } from '../enum/enum';
+} from "class-validator";
+import { Type } from "class-transformer";
+import { AttachmentType } from "../enum/enum";
 
 export class ListUploadsDto {
   @ApiProperty({
-    description: 'Server ID for scoping and permission',
-    example: '68db1234abcd5678efgh9013',
+    description: "Server ID for scoping and permission",
+    example: "68db1234abcd5678efgh9013",
   })
   @IsMongoId()
   serverId: string;
 
   @ApiPropertyOptional({
-    description: 'Filter by attachment type',
+    description: "Filter by attachment type",
     enum: AttachmentType,
   })
   @IsOptional()
@@ -27,19 +27,19 @@ export class ListUploadsDto {
   type?: AttachmentType;
 
   @ApiPropertyOptional({
-    description: 'Page number (starting at 1)',
-    default: 1,
+    description: "Page number (starting at 0)",
+    default: 0,
     type: Number,
   })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  @Min(1)
-  page = 1;
+  @Min(0)
+  page = 0;
 
   @ApiPropertyOptional({
-    description: 'Items per page (max 100)',
-    default: 30,
+    description: "Items per page (max 100)",
+    default: 10,
     type: Number,
   })
   @IsOptional()
@@ -47,5 +47,5 @@ export class ListUploadsDto {
   @IsNumber()
   @Min(1)
   @Max(100)
-  limit = 30;
+  limit = 10;
 }

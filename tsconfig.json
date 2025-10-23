@@ -25,5 +25,7 @@
         "libs/shared/src/*"
       ]
     }
-  }
+  },
+  "include": ["apps/**/*", "libs/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }

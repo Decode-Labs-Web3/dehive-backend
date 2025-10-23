@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import { Types } from "mongoose";
 
 export interface IServer {
   readonly _id?: Types.ObjectId;

@@ -31,9 +31,9 @@
  */
 
 // Core NestJS modules for dependency injection
-import { Injectable } from '@nestjs/common';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import { Redis } from 'ioredis';
+import { Injectable } from "@nestjs/common";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
 
 /**
  * Redis Infrastructure Service
@@ -60,9 +60,9 @@ export class RedisInfrastructure {
    */
   constructor(@InjectRedis() private readonly redis: Redis) {}
 
-  async set(key: string, value: any, ttl?: number): Promise<void> {
+  async set(key: string, value: unknown, ttl?: number): Promise<void> {
     const serializedValue =
-      typeof value === 'string' ? value : JSON.stringify(value);
+      typeof value === "string" ? value : JSON.stringify(value);
 
     if (ttl) {
       await this.redis.setex(key, ttl, serializedValue);
@@ -71,7 +71,7 @@ export class RedisInfrastructure {
     }
   }
 
-  async get(key: string): Promise<any> {
+  async get(key: string): Promise<unknown> {
     const value = await this.redis.get(key);
     if (!value) return null;
 
@@ -127,7 +127,7 @@ export class RedisInfrastructure {
   }
 
   // Connection info
-  async getConnectionInfo(): Promise<any> {
+  async getConnectionInfo(): Promise<unknown> {
     const info = await this.redis.info();
     return info;
   }

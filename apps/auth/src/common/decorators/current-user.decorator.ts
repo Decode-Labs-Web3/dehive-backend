@@ -1,5 +1,5 @@
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { AuthenticatedUser } from '../../interfaces/authenticated-user.interface';
+import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
 
 /**
  * CurrentUser decorator to extract authenticated user data from the request

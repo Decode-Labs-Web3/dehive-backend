@@ -1,11 +1,11 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { MessagingModule } from './channel-messaging.module';
-import { IoAdapter } from '@nestjs/platform-socket.io';
-import * as express from 'express';
-import * as path from 'path';
+import { NestFactory } from "@nestjs/core";
+import { ValidationPipe } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import { MessagingModule } from "./channel-messaging.module";
+import { IoAdapter } from "@nestjs/platform-socket.io";
+import * as express from "express";
+import * as path from "path";
 
 async function bootstrap() {
   const app = await NestFactory.create(MessagingModule);
@@ -13,25 +13,26 @@ async function bootstrap() {
 
   app.useWebSocketAdapter(new IoAdapter(app));
 
-  app.enableCors({ origin: '*' });
-  app.setGlobalPrefix('api');
+  app.enableCors({ origin: "*" });
+  app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
+  app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 
   const config = new DocumentBuilder()
-    .setTitle('Dehive - Channel Messaging Service')
+    .setTitle("Dehive - Channel Messaging Service")
     .setDescription(
-      'API and WebSocket documentation for real-time channel chat.',
+      "API and WebSocket documentation for real-time channel chat.",
     )
-    .setVersion('1.0')
-    .addTag('Channel Messages')
+    .setVersion("1.0")
+    .addTag("Channel Messages")
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document);
+  SwaggerModule.setup("api-docs", app, document);
 
-  const port = configService.get<number>('CHANNEL_MESSAGING_PORT') || 4003;
-  await app.listen(port, 'localhost');
+  const port = configService.get<number>("CHANNEL_MESSAGING_PORT") || 4003;
+  const host = configService.get<string>("CLOUD_HOST") || "localhost";
+  await app.listen(port, host);
 
   console.log(
     `[Dehive] Channel-Messaging service is running on: ${await app.getUrl()}`,

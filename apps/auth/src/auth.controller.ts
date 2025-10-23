@@ -6,13 +6,13 @@ import {
   Body,
   Headers,
   Param,
-} from '@nestjs/common';
-import { SessionService } from './services/session.service';
-import { RegisterService } from './services/register.service';
-import { DecodeAuthGuard, Public } from './common/guards/decode-auth.guard';
-import { UserService } from './services/user.service';
+} from "@nestjs/common";
+import { SessionService } from "./services/session.service";
+import { RegisterService } from "./services/register.service";
+import { DecodeAuthGuard, Public } from "./common/guards/decode-auth.guard";
+import { UserService } from "./services/user.service";
 
-@Controller('auth')
+@Controller("auth")
 export class AuthController {
   constructor(
     private readonly sessionService: SessionService,
@@ -20,34 +20,37 @@ export class AuthController {
     private readonly userService: UserService,
   ) {}
 
-  @Post('session/create')
+  @Post("session/create")
   @Public()
   async createSession(
     @Body() body: { sso_token: string; fingerprint_hashed: string },
   ) {
-    return await this.sessionService.createDecodeSession(body.sso_token);
+    return await this.sessionService.createDecodeSession(
+      body.sso_token,
+      body.fingerprint_hashed,
+    );
   }
 
-  @Post('create-dehive-account')
+  @Post("create-dehive-account")
   async createDehiveAccount(@Body() body: { user_id: string }) {
     return await this.registerService.register(body.user_id);
   }
 
-  @Get('session/check')
-  async checkSession(@Headers('x-session-id') sessionId: string) {
+  @Get("session/check")
+  async checkSession(@Headers("x-session-id") sessionId: string) {
     // For testing purposes, accept test sessions
-    if (sessionId && sessionId.startsWith('test_session_')) {
+    if (sessionId && sessionId.startsWith("test_session_")) {
       return {
         success: true,
         statusCode: 200,
-        message: 'Test session is valid',
+        message: "Test session is valid",
         data: {
           session_id: sessionId,
           user: {
-            _id: '507f1f77bcf86cd799439011',
-            username: 'testuser',
-            display_name: 'Test User',
-            email: 'test@example.com',
+            _id: "507f1f77bcf86cd799439011",
+            username: "testuser",
+            display_name: "Test User",
+            email: "test@example.com",
             avatar: null,
           },
         },
@@ -56,20 +59,20 @@ export class AuthController {
     return await this.sessionService.checkValidSession(sessionId);
   }
 
-  @Post('session/check')
+  @Post("session/check")
   async checkSessionPost(@Body() body: { session_id: string }) {
     return await this.sessionService.checkValidSession(body.session_id);
   }
 
   @UseGuards(DecodeAuthGuard)
-  @Get('profile/:user_id')
+  @Get("profile/:user_id")
   async getUserProfile(
     @Param() param: { user_id: string },
     @Headers()
-    headers: { 'x-session-id': string; 'x-fingerprint-hashed': string },
+    headers: { "x-session-id": string; "x-fingerprint-hashed": string },
   ) {
-    const session_id = headers['x-session-id'];
-    const fingerprint_hashed = headers['x-fingerprint-hashed'];
+    const session_id = headers["x-session-id"];
+    const fingerprint_hashed = headers["x-fingerprint-hashed"];
     const user_response = await this.userService.getUser({
       user_dehive_id: param.user_id,
       session_id: session_id,
@@ -79,18 +82,18 @@ export class AuthController {
   }
 
   @UseGuards(DecodeAuthGuard)
-  @Get('profile')
+  @Get("profile")
   async getMyProfile(
     @Headers()
     headers: {
-      'x-session-id': string;
-      'x-fingerprint-hashed': string;
+      "x-session-id": string;
+      "x-fingerprint-hashed": string;
     },
   ) {
-    const session_id = headers['x-session-id'];
-    const fingerprint_hashed = headers['x-fingerprint-hashed'];
+    const session_id = headers["x-session-id"];
+    const fingerprint_hashed = headers["x-fingerprint-hashed"];
     console.log(
-      'auth controller getMyProfile headers',
+      "auth controller getMyProfile headers",
       session_id,
       fingerprint_hashed,
     );

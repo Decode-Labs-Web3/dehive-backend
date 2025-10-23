@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import type { Redis } from 'ioredis';
+import { Injectable } from "@nestjs/common";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import type { Redis } from "ioredis";
 
 @Injectable()
 export class InviteLinkCache {
@@ -11,7 +11,7 @@ export class InviteLinkCache {
     await this.redis.set(
       key,
       server_id,
-      'EX',
+      "EX",
       Math.floor((expiredAt.getTime() - Date.now()) / 1000),
     );
   }

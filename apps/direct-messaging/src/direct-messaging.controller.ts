@@ -8,7 +8,10 @@ import {
   UploadedFile,
   UseInterceptors,
   UseGuards,
-} from '@nestjs/common';
+  HttpException,
+  HttpStatus,
+  Req,
+} from "@nestjs/common";
 import {
   ApiBody,
   ApiConsumes,
@@ -17,162 +20,489 @@ import {
   ApiParam,
   ApiResponse,
   ApiTags,
-} from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { DirectMessagingService } from './direct-messaging.service';
-import { CreateOrGetConversationDto } from '../dto/create-or-get-conversation.dto.ts';
+} from "@nestjs/swagger";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { DirectMessagingService } from "./direct-messaging.service";
+import { CreateOrGetConversationDto } from "../dto/create-or-get-conversation.dto.ts";
 import {
   DirectUploadInitDto,
   DirectUploadResponseDto,
-} from '../dto/direct-upload.dto';
-import { ListDirectMessagesDto } from '../dto/list-direct-messages.dto';
-import { Express } from 'express';
-import { ListDirectUploadsDto } from '../dto/list-direct-upload.dto';
-import { SendDirectMessageDto } from '../dto/send-direct-message.dto';
-import { AuthGuard } from '../common/guards/auth.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+} from "../dto/direct-upload.dto";
+import { ListDirectMessagesDto } from "../dto/list-direct-messages.dto";
+import { Express } from "express";
+import { ListDirectUploadsDto } from "../dto/list-direct-upload.dto";
+import { SendDirectMessageDto } from "../dto/send-direct-message.dto";
+import { GetFollowingDto } from "../dto/get-following.dto";
+import { GetFollowingMessagesDto } from "../dto/get-following-messages.dto";
+import { GetConversationUsersDto } from "../dto/get-conversation-users.dto";
+import { AuthGuard } from "../common/guards/auth.guard";
+import { CurrentUser } from "../common/decorators/current-user.decorator";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import { Request } from "express";
 
-@ApiTags('Direct Messages')
-@Controller('dm')
+@ApiTags("Direct Messages")
+@Controller("dm")
 @UseGuards(AuthGuard)
 export class DirectMessagingController {
   constructor(private readonly service: DirectMessagingService) {}
 
-  @Post('send')
-  @ApiOperation({ summary: 'Send a message to a direct conversation' })
+  @Post("send")
+  @ApiOperation({ summary: "Send a message to a direct conversation" })
   @ApiHeader({
-    name: 'x-session-id',
-    description: 'The session ID of the authenticated user',
+    name: "x-session-id",
+    description: "The session ID of the authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
     required: true,
   })
   @ApiBody({ type: SendDirectMessageDto })
-  @ApiResponse({ status: 201, description: 'Message sent successfully.' })
-  @ApiResponse({ status: 400, description: 'Invalid input or missing fields.' })
+  @ApiResponse({ status: 201, description: "Message sent successfully." })
+  @ApiResponse({ status: 400, description: "Invalid input or missing fields." })
   @ApiResponse({
     status: 403,
-    description: 'User is not a participant of this conversation.',
+    description: "User is not a participant of this conversation.",
   })
-  @ApiResponse({ status: 404, description: 'Conversation not found.' })
+  @ApiResponse({ status: 404, description: "Conversation not found." })
   async sendMessage(
-    @CurrentUser('userId') selfId: string,
+    @CurrentUser("_id") selfId: string,
     @Body() body: SendDirectMessageDto,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== "POST") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only POST is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const newMessage = await this.service.sendMessage(selfId, body);
     return {
       success: true,
       statusCode: 201,
-      message: 'Message sent successfully',
+      message: "Message sent successfully",
       data: newMessage,
     };
   }
 
-  @Post('conversation')
-  @ApiOperation({ summary: 'Create or get a 1:1 conversation' })
+  @Post("conversation")
+  @ApiOperation({ summary: "Create or get a 1:1 conversation" })
   @ApiHeader({
-    name: 'x-session-id',
-    description: 'Session ID of authenticated user',
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
     required: true,
   })
   async createOrGet(
-    @CurrentUser('userId') selfId: string,
+    @CurrentUser("_id") selfId: string,
     @Body() body: CreateOrGetConversationDto,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== "POST") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only POST is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const conv = await this.service.createOrGetConversation(selfId, body);
-    return { success: true, statusCode: 200, message: 'OK', data: conv };
+    return { success: true, statusCode: 200, message: "OK", data: conv };
   }
 
-  @Get('messages/:conversationId')
-  @ApiOperation({ summary: 'List messages in a conversation' })
+  @Get("messages/:conversationId")
+  @ApiOperation({ summary: "List messages in a conversation" })
   @ApiHeader({
-    name: 'x-session-id',
-    description: 'Session ID of authenticated user',
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
     required: true,
   })
-  @ApiParam({ name: 'conversationId' })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
+    required: true,
+  })
+  @ApiParam({ name: "conversationId" })
   async list(
-    @CurrentUser('userId') selfId: string,
-    @Param('conversationId') conversationId: string,
+    @CurrentUser("_id") selfId: string,
+    @Param("conversationId") conversationId: string,
     @Query() query: ListDirectMessagesDto,
+    @Req() req: Request,
   ) {
-    const data = await this.service.listMessages(selfId, conversationId, query);
-    return { success: true, statusCode: 200, message: 'OK', data };
+    // Validate HTTP method
+    if (req.method !== "GET") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
+    // Get session ID from headers to get access token from Redis
+    const sessionId = req.headers["x-session-id"] as string;
+    const fingerprintHash = req.headers["x-fingerprint-hashed"] as string;
+
+    console.log(`[DM-CONTROLLER] Headers:`, {
+      "x-session-id": req.headers["x-session-id"],
+      "x-fingerprint-hashed": req.headers["x-fingerprint-hashed"],
+      sessionId,
+      fingerprintHash,
+    });
+
+    const data = await this.service.listMessages(
+      selfId,
+      conversationId,
+      query,
+      sessionId,
+      fingerprintHash,
+    );
+    return { success: true, statusCode: 200, message: "OK", data };
   }
 
-  @Post('files/upload')
-  @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Upload a file to a direct conversation' })
+  @Post("files/upload")
+  @UseInterceptors(FileInterceptor("file"))
+  @ApiOperation({ summary: "Upload a file to a direct conversation" })
   @ApiHeader({
-    name: 'x-session-id',
-    description: 'Session ID of authenticated user',
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
     required: true,
   })
-  @ApiConsumes('multipart/form-data')
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
+    required: true,
+  })
+  @ApiConsumes("multipart/form-data")
   @ApiBody({
     schema: {
-      type: 'object',
+      type: "object",
       properties: {
         file: {
-          type: 'string',
-          format: 'binary',
-          description: 'The file to upload.',
+          type: "string",
+          format: "binary",
+          description: "The file to upload.",
         },
         conversationId: {
-          type: 'string',
-          description: 'The ID of the direct conversation the file belongs to.',
+          type: "string",
+          description: "The ID of the direct conversation the file belongs to.",
         },
       },
-      required: ['file', 'conversationId'],
+      required: ["file", "conversationId"],
     },
   })
   @ApiResponse({
     status: 201,
-    description: 'File uploaded successfully and metadata returned.',
+    description: "File uploaded successfully and metadata returned.",
     type: DirectUploadResponseDto,
   })
   @ApiResponse({
     status: 400,
     description:
-      'Bad request, missing file, invalid ID, or file size exceeds limit.',
+      "Bad request, missing file, invalid ID, or file size exceeds limit.",
   })
   @ApiResponse({
     status: 403,
-    description: 'User is not a participant of the conversation.',
+    description: "User is not a participant of the conversation.",
   })
-  @ApiResponse({ status: 404, description: 'Conversation not found.' })
+  @ApiResponse({ status: 404, description: "Conversation not found." })
   async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: DirectUploadInitDto,
-    @CurrentUser('userId') selfId: string,
+    @CurrentUser("_id") selfId: string,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== "POST") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only POST is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const result = await this.service.handleUpload(selfId, file, body);
     return {
       success: true,
       statusCode: 201,
-      message: 'File uploaded successfully',
+      message: "File uploaded successfully",
       data: result,
     };
   }
 
-  @Get('files/list')
-  @ApiOperation({ summary: 'List files uploaded by the current user in DMs' })
+  @Get("files/list")
+  @ApiOperation({ summary: "List files uploaded by the current user in DMs" })
   @ApiHeader({
-    name: 'x-session-id',
-    description: 'Session ID of authenticated user',
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
     required: true,
   })
   @ApiResponse({
     status: 200,
-    description: 'Successfully returned a list of uploaded files.',
+    description: "Successfully returned a list of uploaded files.",
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid user ID or pagination parameters.',
+    description: "Invalid user ID or pagination parameters.",
   })
   async listUploads(
-    @CurrentUser('userId') selfId: string,
+    @CurrentUser("_id") selfId: string,
     @Query() query: ListDirectUploadsDto,
+    @Req() req: Request,
   ) {
+    // Validate HTTP method
+    if (req.method !== "GET") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
     const data = await this.service.listUploads(selfId, query);
-    return { success: true, statusCode: 200, message: 'OK', data };
+    return { success: true, statusCode: 200, message: "OK", data };
+  }
+
+  @Get("following")
+  @ApiOperation({
+    summary: "Get following list",
+    description:
+      "Retrieves the list of users that the current user is following from Decode service",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Successfully returned following list.",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Could not retrieve following list from Decode service.",
+  })
+  async getFollowing(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Query() query: GetFollowingDto,
+    @Req() req: Request,
+  ) {
+    // Validate HTTP method
+    if (req.method !== "GET") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
+    const result = await this.service.getFollowing(currentUser, query);
+    return result;
+  }
+
+  @Get("following-messages")
+  @ApiOperation({
+    summary: "Get following users with message info",
+    description:
+      "Retrieves the list of following users with their conversation info, sorted by last message time",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Successfully returned following users with message info.",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        statusCode: { type: "number" },
+        message: { type: "string" },
+        data: {
+          type: "object",
+          properties: {
+            items: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: {
+                    type: "string",
+                    description: "User ID",
+                  },
+                  conversationid: {
+                    type: "string",
+                    description: "Conversation ID between 2 users",
+                  },
+                  displayname: {
+                    type: "string",
+                    description: "User display name",
+                  },
+                  username: { type: "string", description: "User username" },
+                  avatar_ipfs_hash: {
+                    type: "string",
+                    description: "Avatar IPFS hash",
+                  },
+                  isActive: {
+                    type: "boolean",
+                    description: "Whether user is active",
+                  },
+                  isCall: {
+                    type: "boolean",
+                    description: "Whether last interaction was a call",
+                  },
+                  lastMessageAt: {
+                    type: "string",
+                    format: "date-time",
+                    description:
+                      "Timestamp of the last message in the conversation",
+                  },
+                },
+              },
+            },
+            metadata: {
+              type: "object",
+              properties: {
+                page: { type: "number" },
+                limit: { type: "number" },
+                total: { type: "number" },
+                is_last_page: { type: "boolean" },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Could not retrieve following list from Decode service.",
+  })
+  async getFollowingWithMessages(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Query() query: GetFollowingMessagesDto,
+    @Req() req: Request,
+  ) {
+    // Validate HTTP method
+    if (req.method !== "GET") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
+    const result = await this.service.getFollowingWithMessages(
+      currentUser,
+      query,
+    );
+    return result;
+  }
+
+  @Get("conversation/:conversationId/users")
+  @ApiOperation({
+    summary: "Get other user in a conversation",
+    description:
+      "Retrieves the information of the other user in a specific conversation (not the current user)",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
+    required: true,
+  })
+  @ApiParam({
+    name: "conversationId",
+    description: "ID of the conversation",
+    type: String,
+    example: "68e8b59f806fb5c06c6551a3",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Successfully returned the other user in conversation.",
+    schema: {
+      type: "object",
+      properties: {
+        success: { type: "boolean" },
+        statusCode: { type: "number" },
+        message: { type: "string" },
+        data: {
+          type: "object",
+          properties: {
+            user: {
+              type: "object",
+              properties: {
+                id: {
+                  type: "string",
+                  description: "User ID",
+                },
+                displayname: {
+                  type: "string",
+                  description: "User display name",
+                },
+                username: {
+                  type: "string",
+                  description: "User username",
+                },
+                avatar_ipfs_hash: {
+                  type: "string",
+                  description: "Avatar IPFS hash",
+                },
+              },
+            },
+            conversationId: {
+              type: "string",
+              description: "Conversation ID",
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Invalid conversation ID or user not a participant.",
+  })
+  @ApiResponse({
+    status: 404,
+    description: "Conversation not found.",
+  })
+  async getConversationUsers(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param() params: GetConversationUsersDto,
+    @Req() req: Request,
+  ) {
+    // Validate HTTP method
+    if (req.method !== "GET") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
+    const result = await this.service.getConversationUsers(currentUser, params);
+    return result;
   }
 }

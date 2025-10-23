@@ -1,4 +1,4 @@
-declare namespace NodeJS {
+declare global {
   interface ProcessEnv {
     REDIS_HOST: string;
     REDIS_PORT: string;
@@ -7,6 +7,7 @@ declare namespace NodeJS {
     KAFKA_GROUP_ID: string;
     MONGODB_URI: string;
     PORT: string;
-    NODE_ENV: 'development' | 'production' | 'test';
+    NODE_ENV: "development" | "production" | "test";
   }
 }
+export {};
