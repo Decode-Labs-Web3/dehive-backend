@@ -14,5 +14,16 @@
         "**/.git/subtree-cache/**": false,
         "**/node_modules/**": false,
         "**/.env": false
+    },
+    // 🔧 Fix format on save conflict
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "never"
+    },
+    "[typescript]": {
+        "editor.formatOnSave": false
+    },
+    "[javascript]": {
+        "editor.formatOnSave": false
     }
 }

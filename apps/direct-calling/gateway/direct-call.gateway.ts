@@ -10,7 +10,6 @@ import {
 import { Server, Socket } from "socket.io";
 import { Model, Types } from "mongoose";
 import { InjectModel } from "@nestjs/mongoose";
-// import { DirectCallService } from "../src/service/direct-call.service";
 import {
   UserDehive,
   UserDehiveDocument,
@@ -51,7 +50,11 @@ export class DirectCallGateway
   }
 
   private send(client: Socket, event: string, data: unknown) {
-    const serializedData = JSON.parse(JSON.stringify(data));
+    // Production: emit object (default for frontend)
+    // client.emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string (commented)
+    const serializedData = JSON.stringify(data, null, 2);
     client.emit(event, serializedData);
   }
 
@@ -142,8 +145,22 @@ export class DirectCallGateway
       });
     }
 
-    // For now, skip database check and just validate ObjectId format
-    // TODO: Implement proper user validation when database connection is stable
+    // Validate user exists in database
+    console.log(`[RTC-WS] Checking if user exists: ${userDehiveId}`);
+    const exists = await this.userDehiveModel.exists({
+      _id: new Types.ObjectId(userDehiveId),
+    });
+
+    console.log(`[RTC-WS] User exists result: ${exists}`);
+    if (!exists) {
+      console.log(`[RTC-WS] User not found in database: ${userDehiveId}`);
+      return this.send(client, "error", {
+        message: "User not found",
+        code: "USER_NOT_FOUND",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     console.log(`[RTC-WS] Accepting identity for user: ${userDehiveId}`);
 
     const meta = this.meta.get(client);
@@ -249,18 +266,32 @@ export class DirectCallGateway
               timestamp: new Date().toISOString(),
             };
             // Notify caller about timeout
-            // this.send(client, "callTimeout", JSON.stringify(payload));
             this.send(client, "callTimeout", payload);
 
-            // Notify callee about timeout
-            this.server
-              .to(`user:${parsedData.target_user_id}`)
-              .emit("callTimeout", {
-                call_id: call._id,
-                caller_id: callerId,
-                reason: "call_timeout",
-                timestamp: new Date().toISOString(),
-              });
+            // Notify callee about timeout - Production (object)
+            // this.server
+            //   .to(`user:${parsedData.target_user_id}`)
+            //   .emit("callTimeout", {
+            //     call_id: call._id,
+            //     caller_id: callerId,
+            //     reason: "call_timeout",
+            //     timestamp: new Date().toISOString(),
+            //   });
+
+            // Debug (Insomnia): emit pretty JSON string (commented)
+            this.server.to(`user:${parsedData.target_user_id}`).emit(
+              "callTimeout",
+              JSON.stringify(
+                {
+                  call_id: call._id,
+                  caller_id: callerId,
+                  reason: "call_timeout",
+                  timestamp: new Date().toISOString(),
+                },
+                null,
+                2,
+              ),
+            );
 
             console.log(`[RTC-WS] Call ${call._id} timed out after 30 seconds`);
           }
@@ -283,20 +314,43 @@ export class DirectCallGateway
       });
 
       // Notify callee
-      this.server.to(`user:${parsedData.target_user_id}`).emit("incomingCall", {
-        call_id: call._id,
-        caller_id: callerId,
-        caller_info: {
-          _id: callerId,
-          username: "user_" + callerId.substring(0, 8),
-          display_name: "User " + callerId.substring(0, 8),
-          avatar_ipfs_hash: "",
-          bio: "User profile",
-          status: "ACTIVE",
-          is_active: true,
-        },
-        timestamp: new Date().toISOString(),
-      });
+      // this.server.to(`user:${parsedData.target_user_id}`).emit("incomingCall", {
+      //   call_id: call._id,
+      //   caller_id: callerId,
+      //   caller_info: {
+      //     _id: callerId,
+      //     username: "user_" + callerId.substring(0, 8),
+      //     display_name: "User " + callerId.substring(0, 8),
+      //     avatar_ipfs_hash: "",
+      //     bio: "User profile",
+      //     status: "ACTIVE",
+      //     is_active: true,
+      //   },
+      //   timestamp: new Date().toISOString(),
+      // });
+
+      // Debug (Insomnia): emit pretty JSON string (commented)
+      this.server.to(`user:${parsedData.target_user_id}`).emit(
+        "incomingCall",
+        JSON.stringify(
+          {
+            call_id: call._id,
+            caller_id: callerId,
+            caller_info: {
+              _id: callerId,
+              username: "user_" + callerId.substring(0, 8),
+              display_name: "User " + callerId.substring(0, 8),
+              avatar_ipfs_hash: "",
+              bio: "User profile",
+              status: "ACTIVE",
+              is_active: true,
+            },
+            timestamp: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+      );
     } catch (error) {
       console.error("[RTC-WS] Error starting call:", error);
       this.send(client, "error", {
@@ -394,20 +448,43 @@ export class DirectCallGateway
       meta.callId = String(call._id);
 
       // Notify both parties
-      this.server.to(`user:${call.caller_id}`).emit("callAccepted", {
-        call_id: call._id,
-        callee_id: calleeId,
-        callee_info: {
-          _id: calleeId,
-          username: "user_" + calleeId.substring(0, 8),
-          display_name: "User " + calleeId.substring(0, 8),
-          avatar_ipfs_hash: "",
-          bio: "User profile",
-          status: "ACTIVE",
-          is_active: true,
-        },
-        timestamp: new Date().toISOString(),
-      });
+      // this.server.to(`user:${call.caller_id}`).emit("callAccepted", {
+      //   call_id: call._id,
+      //   callee_id: calleeId,
+      //   callee_info: {
+      //     _id: calleeId,
+      //     username: "user_" + calleeId.substring(0, 8),
+      //     display_name: "User " + calleeId.substring(0, 8),
+      //     avatar_ipfs_hash: "",
+      //     bio: "User profile",
+      //     status: "ACTIVE",
+      //     is_active: true,
+      //   },
+      //   timestamp: new Date().toISOString(),
+      // });
+
+      // Debug (Insomnia): emit pretty JSON string (commented)
+      this.server.to(`user:${call.caller_id}`).emit(
+        "callAccepted",
+        JSON.stringify(
+          {
+            call_id: call._id,
+            callee_id: calleeId,
+            callee_info: {
+              _id: calleeId,
+              username: "user_" + calleeId.substring(0, 8),
+              display_name: "User " + calleeId.substring(0, 8),
+              avatar_ipfs_hash: "",
+              bio: "User profile",
+              status: "ACTIVE",
+              is_active: true,
+            },
+            timestamp: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+      );
 
       this.send(client, "callAccepted", {
         call_id: call._id,
@@ -491,12 +568,27 @@ export class DirectCallGateway
 
       if (call) {
         // Notify caller
-        this.server.to(`user:${call.caller_id}`).emit("callDeclined", {
-          call_id: call._id,
-          callee_id: calleeId,
-          reason: "user_declined",
-          timestamp: new Date().toISOString(),
-        });
+        // this.server.to(`user:${call.caller_id}`).emit("callDeclined", {
+        //   call_id: call._id,
+        //   callee_id: calleeId,
+        //   reason: "user_declined",
+        //   timestamp: new Date().toISOString(),
+        // });
+
+        // Debug (Insomnia): emit pretty JSON string (commented)
+        this.server.to(`user:${call.caller_id}`).emit(
+          "callDeclined",
+          JSON.stringify(
+            {
+              call_id: call._id,
+              callee_id: calleeId,
+              reason: "user_declined",
+              timestamp: new Date().toISOString(),
+            },
+            null,
+            2,
+          ),
+        );
 
         this.send(client, "callDeclined", {
           call_id: call._id,
@@ -577,13 +669,29 @@ export class DirectCallGateway
             ? String(call.callee_id)
             : String(call.caller_id);
 
-        this.server.to(`user:${otherUserId}`).emit("callEnded", {
-          call_id: call._id,
-          ended_by: userId,
-          reason: "user_hangup",
-          duration: call.duration_seconds,
-          timestamp: new Date().toISOString(),
-        });
+        // this.server.to(`user:${otherUserId}`).emit("callEnded", {
+        //   call_id: call._id,
+        //   ended_by: userId,
+        //   reason: "user_hangup",
+        //   duration: call.duration_seconds,
+        //   timestamp: new Date().toISOString(),
+        // });
+
+        // Debug (Insomnia): emit pretty JSON string (commented)
+        this.server.to(`user:${otherUserId}`).emit(
+          "callEnded",
+          JSON.stringify(
+            {
+              call_id: call._id,
+              ended_by: userId,
+              reason: "user_hangup",
+              duration: call.duration_seconds,
+              timestamp: new Date().toISOString(),
+            },
+            null,
+            2,
+          ),
+        );
 
         this.send(client, "callEnded", {
           call_id: call._id,
