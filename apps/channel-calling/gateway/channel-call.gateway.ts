@@ -75,8 +75,12 @@ export class ChannelCallGateway
   }
 
   private send(client: Socket, event: string, data: unknown) {
-    const serializedData = JSON.parse(JSON.stringify(data));
-    client.emit(event, serializedData);
+    // Production: emit object (default for frontend)
+    client.emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string (commented)
+    // const serializedData = JSON.stringify(data, null, 2);
+    // client.emit(event, serializedData);
   }
 
   handleConnection(client: Socket) {
@@ -311,20 +315,62 @@ export class ChannelCallGateway
         timestamp: new Date().toISOString(),
       });
 
+      // Get user profile from cache
+      let userInfo;
+      try {
+        const profile = await this.service.getUserProfile(userId);
+        if (profile) {
+          userInfo = {
+            _id: profile._id,
+            username: profile.username,
+            display_name: profile.display_name,
+            avatar_ipfs_hash: profile.avatar_ipfs_hash,
+          };
+        } else {
+          throw new Error("Profile is null");
+        }
+      } catch (error) {
+        console.error("[CHANNEL-RTC-WS] Error getting user profile:", error);
+        // Fallback if cache not available
+        userInfo = {
+          _id: userId,
+          username: "user_" + userId.substring(0, 8),
+          display_name: "User " + userId.substring(0, 8),
+          avatar_ipfs_hash: "",
+        };
+      }
+
       // Notify other participants in channel
       this.server
         .to(`channel:${parsedData.channel_id}`)
         .emit("userJoinedChannel", {
           channel_id: parsedData.channel_id,
           user_id: userId,
-          user_info: {
-            _id: userId,
-            username: "user_" + userId.substring(0, 8),
-            display_name: "User " + userId.substring(0, 8),
-            avatar_ipfs_hash: "",
-          },
+          user_info: userInfo,
           timestamp: new Date().toISOString(),
         });
+
+      // Debug (Insomnia): emit pretty JSON string (commented)
+      // this.server
+      //   .to(`channel:${parsedData.channel_id}`)
+      //   .emit(
+      //     "userJoinedChannel",
+      //     JSON.stringify(
+      //       {
+      //         channel_id: parsedData.channel_id,
+      //         user_id: userId,
+      //         user_info: {
+      //           _id: userId,
+      //           username: "user_" + userId.substring(0, 8),
+      //           display_name: "User " + userId.substring(0, 8),
+      //           avatar_ipfs_hash: "",
+      //         },
+      //         timestamp: new Date().toISOString(),
+      //       },
+      //       null,
+      //       2,
+      //     ),
+      //   );
     } catch (error) {
       console.error("[CHANNEL-RTC-WS] Error joining channel:", error);
       this.send(client, "error", {
@@ -405,6 +451,22 @@ export class ChannelCallGateway
           user_id: userId,
           timestamp: new Date().toISOString(),
         });
+
+      // Debug (Insomnia): emit pretty JSON string (commented)
+      // this.server
+      //   .to(`channel:${parsedData.channel_id}`)
+      //   .emit(
+      //     "userLeftChannel",
+      //     JSON.stringify(
+      //       {
+      //         channel_id: parsedData.channel_id,
+      //         user_id: userId,
+      //         timestamp: new Date().toISOString(),
+      //       },
+      //       null,
+      //       2,
+      //     ),
+      //   );
     } catch (error) {
       console.error("[CHANNEL-RTC-WS] Error leaving channel:", error);
       this.send(client, "error", {

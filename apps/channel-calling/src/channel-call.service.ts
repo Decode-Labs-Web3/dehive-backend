@@ -272,30 +272,45 @@ export class ChannelCallService {
     }
   }
 
-  async getUserProfile(userId: string): Promise<AuthenticatedUser | null> {
+  async getUserProfile(userId: string): Promise<{
+    _id: string;
+    username: string;
+    display_name: string;
+    avatar_ipfs_hash: string;
+  } | null> {
     this.logger.log(`Getting user profile for ${userId}`);
 
     try {
-      const users = await this.decodeApiClient.getUsersByIds([userId]);
-      if (users.length === 0) {
-        return null;
+      // Check cache for profile (must be cached by HTTP API calls BEFORE WebSocket usage)
+      const cacheKey = `user_profile:${userId}`;
+      const cachedData = await this.redis.get(cacheKey);
+
+      if (cachedData) {
+        const profile = JSON.parse(cachedData);
+        this.logger.log(
+          `[CHANNEL-CALLING] Retrieved cached profile for ${userId} in WebSocket`,
+        );
+        return {
+          _id: profile.user_dehive_id || profile.user_id || userId,
+          username: profile.username || `User_${userId}`,
+          display_name: profile.display_name || `User_${userId}`,
+          avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
+        };
       }
 
-      const user = users[0];
-      return {
-        _id: user._id,
-        username: user.username,
-        display_name: user.display_name,
-        avatar_ipfs_hash: user.avatar_ipfs_hash,
-        bio: user.bio,
-        status: user.status,
-        is_active: user.is_active,
-        session_id: "",
-        fingerprint_hash: "",
-      };
+      // No fallback - throw error if profile not cached
+      // This forces HTTP API to be called first to cache user profiles
+      const error = new Error(
+        `User profile not cached for ${userId}. HTTP API must be called first to cache user profiles before WebSocket usage.`,
+      );
+      this.logger.error(`[CHANNEL-CALLING] CRITICAL ERROR: ${error.message}`);
+      throw error;
     } catch (error) {
-      this.logger.error("Error getting user profile:", error);
-      return null;
+      this.logger.error(
+        `[CHANNEL-CALLING] Error getting user profile for ${userId}:`,
+        error,
+      );
+      throw error;
     }
   }
 

@@ -21,10 +21,7 @@ import {
   DirectMessage,
   DirectMessageDocument,
 } from "../schemas/direct-message.schema";
-import {
-  UserDehive,
-  UserDehiveDocument,
-} from "../../user-dehive-server/schemas/user-dehive.schema";
+import { UserDehive, UserDehiveDocument } from "../schemas/user-dehive.schema";
 import { CallStatus, CallEndReason } from "../enum/enum";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { DecodeApiClient } from "../clients/decode-api.client";
@@ -793,6 +790,64 @@ export class DirectCallService {
       return validResults;
     } catch (error) {
       this.logger.error("Error getting active calls:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if user exists in database
+   */
+  async checkUserExists(userId: string): Promise<boolean> {
+    try {
+      const exists = await this.userDehiveModel.exists({
+        _id: new Types.ObjectId(userId),
+      });
+      return !!exists;
+    } catch (error) {
+      this.logger.error(`Error checking user exists for ${userId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Get user profile from Redis cache (must be cached by HTTP API first)
+   */
+  async getUserProfileSimple(userId: string): Promise<{
+    _id: string;
+    username: string;
+    display_name: string;
+    avatar_ipfs_hash: string;
+  } | null> {
+    try {
+      // Check cache for profile (must be cached by HTTP API calls BEFORE WebSocket usage)
+      const cacheKey = `user_profile:${userId}`;
+      const cachedData = await this.redis.get(cacheKey);
+
+      if (cachedData) {
+        const profile = JSON.parse(cachedData);
+        this.logger.log(
+          `[DIRECT-CALLING] Retrieved cached profile for ${userId} in WebSocket`,
+        );
+        return {
+          _id: profile.user_dehive_id || profile.user_id || userId,
+          username: profile.username || `User_${userId}`,
+          display_name: profile.display_name || `User_${userId}`,
+          avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
+        };
+      }
+
+      // No fallback - throw error if profile not cached
+      // This forces HTTP API to be called first to cache user profiles
+      const error = new Error(
+        `User profile not cached for ${userId}. HTTP API must be called first to cache user profiles before WebSocket usage.`,
+      );
+      this.logger.error(`[DIRECT-CALLING] CRITICAL ERROR: ${error.message}`);
+      throw error;
+    } catch (error) {
+      this.logger.error(
+        `[DIRECT-CALLING] Error getting user profile for ${userId}:`,
+        error,
+      );
       throw error;
     }
   }

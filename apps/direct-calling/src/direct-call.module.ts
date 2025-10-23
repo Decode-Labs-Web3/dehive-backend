@@ -20,10 +20,7 @@ import {
   DirectMessage,
   DirectMessageSchema,
 } from "../schemas/direct-message.schema";
-import {
-  UserDehive,
-  UserDehiveSchema,
-} from "../../user-dehive-server/schemas/user-dehive.schema";
+import { UserDehive, UserDehiveSchema } from "../schemas/user-dehive.schema";
 
 @Module({
   imports: [

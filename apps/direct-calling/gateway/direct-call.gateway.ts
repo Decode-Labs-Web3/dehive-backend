@@ -10,11 +10,9 @@ import {
 import { Server, Socket } from "socket.io";
 import { Model, Types } from "mongoose";
 import { InjectModel } from "@nestjs/mongoose";
-import {
-  UserDehive,
-  UserDehiveDocument,
-} from "../../user-dehive-server/schemas/user-dehive.schema";
+import { UserDehive, UserDehiveDocument } from "../schemas/user-dehive.schema";
 import { DmCall, DmCallDocument } from "../schemas/dm-call.schema";
+import { DirectCallService } from "../src/direct-call.service";
 
 type SocketMeta = {
   userDehiveId?: string;
@@ -35,6 +33,7 @@ export class DirectCallGateway
   private meta: Map<Socket, SocketMeta>;
 
   constructor(
+    private readonly service: DirectCallService,
     @InjectModel(UserDehive.name)
     private readonly userDehiveModel: Model<UserDehiveDocument>,
     @InjectModel(DmCall.name)
@@ -45,6 +44,7 @@ export class DirectCallGateway
 
     // Debug logging
     console.log("[RTC-WS] Gateway constructor called");
+    console.log("[RTC-WS] Service injected:", !!this.service);
     console.log("[RTC-WS] userDehiveModel available:", !!this.userDehiveModel);
     console.log("[RTC-WS] dmCallModel available:", !!this.dmCallModel);
   }
@@ -313,19 +313,36 @@ export class DirectCallGateway
         timestamp: new Date().toISOString(),
       });
 
-      // Notify callee
+      // Get caller profile from cache
+      let callerInfo;
+      try {
+        const profile = await this.service.getUserProfileSimple(callerId);
+        if (profile) {
+          callerInfo = {
+            _id: profile._id,
+            username: profile.username,
+            display_name: profile.display_name,
+            avatar_ipfs_hash: profile.avatar_ipfs_hash,
+          };
+        } else {
+          throw new Error("Profile is null");
+        }
+      } catch (error) {
+        console.error("[RTC-WS] Error getting caller profile:", error);
+        // Fallback if cache not available
+        callerInfo = {
+          _id: callerId,
+          username: "user_" + callerId.substring(0, 8),
+          display_name: "User " + callerId.substring(0, 8),
+          avatar_ipfs_hash: "",
+        };
+      }
+
+      // Notify callee - Production (object)
       // this.server.to(`user:${parsedData.target_user_id}`).emit("incomingCall", {
       //   call_id: call._id,
       //   caller_id: callerId,
-      //   caller_info: {
-      //     _id: callerId,
-      //     username: "user_" + callerId.substring(0, 8),
-      //     display_name: "User " + callerId.substring(0, 8),
-      //     avatar_ipfs_hash: "",
-      //     bio: "User profile",
-      //     status: "ACTIVE",
-      //     is_active: true,
-      //   },
+      //   caller_info: callerInfo,
       //   timestamp: new Date().toISOString(),
       // });
 
@@ -336,15 +353,7 @@ export class DirectCallGateway
           {
             call_id: call._id,
             caller_id: callerId,
-            caller_info: {
-              _id: callerId,
-              username: "user_" + callerId.substring(0, 8),
-              display_name: "User " + callerId.substring(0, 8),
-              avatar_ipfs_hash: "",
-              bio: "User profile",
-              status: "ACTIVE",
-              is_active: true,
-            },
+            caller_info: callerInfo,
             timestamp: new Date().toISOString(),
           },
           null,
@@ -447,19 +456,36 @@ export class DirectCallGateway
 
       meta.callId = String(call._id);
 
-      // Notify both parties
+      // Get callee profile from cache
+      let calleeInfo;
+      try {
+        const profile = await this.service.getUserProfileSimple(calleeId);
+        if (profile) {
+          calleeInfo = {
+            _id: profile._id,
+            username: profile.username,
+            display_name: profile.display_name,
+            avatar_ipfs_hash: profile.avatar_ipfs_hash,
+          };
+        } else {
+          throw new Error("Profile is null");
+        }
+      } catch (error) {
+        console.error("[RTC-WS] Error getting callee profile:", error);
+        // Fallback if cache not available
+        calleeInfo = {
+          _id: calleeId,
+          username: "user_" + calleeId.substring(0, 8),
+          display_name: "User " + calleeId.substring(0, 8),
+          avatar_ipfs_hash: "",
+        };
+      }
+
+      // Notify both parties - Production (object)
       // this.server.to(`user:${call.caller_id}`).emit("callAccepted", {
       //   call_id: call._id,
       //   callee_id: calleeId,
-      //   callee_info: {
-      //     _id: calleeId,
-      //     username: "user_" + calleeId.substring(0, 8),
-      //     display_name: "User " + calleeId.substring(0, 8),
-      //     avatar_ipfs_hash: "",
-      //     bio: "User profile",
-      //     status: "ACTIVE",
-      //     is_active: true,
-      //   },
+      //   callee_info: calleeInfo,
       //   timestamp: new Date().toISOString(),
       // });
 
@@ -470,15 +496,7 @@ export class DirectCallGateway
           {
             call_id: call._id,
             callee_id: calleeId,
-            callee_info: {
-              _id: calleeId,
-              username: "user_" + calleeId.substring(0, 8),
-              display_name: "User " + calleeId.substring(0, 8),
-              avatar_ipfs_hash: "",
-              bio: "User profile",
-              status: "ACTIVE",
-              is_active: true,
-            },
+            callee_info: calleeInfo,
             timestamp: new Date().toISOString(),
           },
           null,
