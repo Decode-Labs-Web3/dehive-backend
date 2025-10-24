@@ -86,52 +86,32 @@ export class ChannelCallGateway
   }
 
   /**
-   * Get user profile - tries cache first, returns fallback if not found
-   * This matches the behavior of messaging services
-   * Returns minimal user data needed for call events (only 4 fields)
+   * Get user profile from public API (for WebSocket responses)
+   * Fetches profile in real-time from public endpoint
    */
   private async getUserProfile(userDehiveId: string): Promise<{
     _id: string;
     username: string;
     display_name: string;
     avatar_ipfs_hash: string;
-  }> {
+  } | null> {
     try {
       const profile =
-        await this.decodeApiClient.getCachedUserProfile(userDehiveId);
+        await this.decodeApiClient.getUserProfilePublic(userDehiveId);
 
       if (profile) {
-        console.log(
-          `[CHANNEL-RTC-WS] Retrieved cached profile for ${userDehiveId}`,
-        );
         return {
           _id: userDehiveId,
-          username: profile.username || `User_${userDehiveId}`,
-          display_name:
-            profile.display_name || profile.username || `User_${userDehiveId}`,
-          avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
+          username: profile.username,
+          display_name: profile.display_name,
+          avatar_ipfs_hash: profile.avatar_ipfs_hash,
         };
       }
 
-      // Fallback: return basic profile (same as messaging services)
-      console.log(
-        `[CHANNEL-RTC-WS] No cached profile found for ${userDehiveId}, using fallback`,
-      );
-      return {
-        _id: userDehiveId,
-        username: `User_${userDehiveId}`,
-        display_name: `User_${userDehiveId}`,
-        avatar_ipfs_hash: "",
-      };
+      return null;
     } catch (error) {
       console.error(`[CHANNEL-RTC-WS] Error getting user profile:`, error);
-      // Return fallback on error
-      return {
-        _id: userDehiveId,
-        username: `User_${userDehiveId}`,
-        display_name: `User_${userDehiveId}`,
-        avatar_ipfs_hash: "",
-      };
+      return null;
     }
   }
 
@@ -337,20 +317,26 @@ export class ChannelCallGateway
       // Get user profile for userJoinedChannel event
       const userProfile = await this.getUserProfile(userId);
 
-      // Always emit (profile is guaranteed to exist, fallback if needed)
-      this.server
-        .to(`channel:${parsedData.channel_id}`)
-        .emit("userJoinedChannel", {
-          channel_id: parsedData.channel_id,
-          user_id: userId,
-          user_info: {
-            _id: userProfile._id,
-            username: userProfile.username,
-            display_name: userProfile.display_name,
-            avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
-          },
-          timestamp: new Date().toISOString(),
-        });
+      // Only emit if profile was successfully fetched
+      if (userProfile) {
+        this.server
+          .to(`channel:${parsedData.channel_id}`)
+          .emit("userJoinedChannel", {
+            channel_id: parsedData.channel_id,
+            user_id: userId,
+            user_info: {
+              _id: userProfile._id,
+              username: userProfile.username,
+              display_name: userProfile.display_name,
+              avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
+            },
+            timestamp: new Date().toISOString(),
+          });
+      } else {
+        console.warn(
+          `[CHANNEL-RTC-WS] Could not fetch profile for ${userId}, skipping userJoinedChannel event`,
+        );
+      }
     } catch (error) {
       console.error("[CHANNEL-RTC-WS] Error joining channel:", error);
       this.send(client, "error", {

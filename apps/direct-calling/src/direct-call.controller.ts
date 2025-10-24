@@ -7,25 +7,21 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
-  Query,
-  Headers,
 } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiHeader,
 } from "@nestjs/swagger";
 import { DirectCallService } from "./direct-call.service";
-import { AuthGuard, Public } from "../common/guards/auth.guard";
+import { AuthGuard } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { Response } from "../interfaces/response.interface";
 import { StartCallDto } from "../dto/start-call.dto";
 import { AcceptCallDto } from "../dto/accept-call.dto";
 import { EndCallDto } from "../dto/end-call.dto";
-import { DecodeApiClient } from "../clients/decode-api.client";
 
 @ApiTags("Direct Calling")
 @Controller("calls")
@@ -33,93 +29,7 @@ import { DecodeApiClient } from "../clients/decode-api.client";
 export class DirectCallController {
   private readonly logger = new Logger(DirectCallController.name);
 
-  constructor(
-    private readonly directCallService: DirectCallService,
-    private readonly decodeApiClient: DecodeApiClient,
-  ) {}
-
-  @Public()
-  @Get("cache-profile")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: "Cache user profiles to Redis",
-    description:
-      "Caches BOTH caller (from session) and target user profiles. Frontend calls this before making a call with target userDehiveId. This ensures both caller and callee profiles are available for WebSocket events.",
-  })
-  @ApiHeader({
-    name: "x-session-id",
-    description: "Caller's session ID",
-    required: true,
-  })
-  @ApiHeader({
-    name: "x-fingerprint-hash",
-    description: "Caller's fingerprint hash",
-    required: true,
-  })
-  @ApiResponse({
-    status: 200,
-    description: "Both profiles cached successfully",
-  })
-  @ApiResponse({
-    status: 400,
-    description:
-      "Failed to cache profiles - missing headers or invalid userDehiveId",
-  })
-  async cacheUserProfile(
-    @Headers("x-session-id") sessionId: string,
-    @Headers("x-fingerprint-hash") fingerprintHash: string,
-    @Query("userDehiveId") targetUserId: string,
-  ): Promise<Response> {
-    this.logger.log(
-      `Caching profiles: caller (from session) and target user ${targetUserId}`,
-    );
-
-    if (!sessionId || !fingerprintHash || !targetUserId) {
-      return {
-        success: false,
-        statusCode: 400,
-        message:
-          "Missing required parameters: x-session-id, x-fingerprint-hash, and userDehiveId",
-      };
-    }
-
-    try {
-      // Cache target user profile
-      const targetCached = await this.decodeApiClient.cacheUserProfile(
-        targetUserId,
-        sessionId,
-        fingerprintHash,
-      );
-
-      // Cache caller profile (get caller ID from session, then call /users/profile/me)
-      const callerCached = await this.decodeApiClient.cacheCallerProfile(
-        sessionId,
-        fingerprintHash,
-      );
-
-      if (!targetCached || !callerCached) {
-        return {
-          success: false,
-          statusCode: 400,
-          message: `Failed to cache profiles. Target: ${targetCached ? "✓" : "✗"}, Caller: ${callerCached ? "✓" : "✗"}`,
-        };
-      }
-
-      return {
-        success: true,
-        statusCode: 200,
-        message: "Both caller and target profiles cached successfully",
-      };
-    } catch (error) {
-      this.logger.error("Error caching user profiles:", error);
-      return {
-        success: false,
-        statusCode: 400,
-        message: "Failed to cache profiles",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
+  constructor(private readonly directCallService: DirectCallService) {}
 
   @Post("start")
   @HttpCode(HttpStatus.OK)
@@ -137,10 +47,7 @@ export class DirectCallController {
     );
 
     try {
-      // Note: Caller profile is already cached via AuthGuard when they authenticated
-      // Target user profile should be cached by frontend calling GET /cache-profile before starting call
-      // Both profiles will be available in Redis for WebSocket events
-
+      // User profiles fetched in real-time by WebSocket gateway via public API
       const call = await this.directCallService.startCallForCurrentUser(
         startCallDto.target_user_id,
       );
@@ -181,9 +88,6 @@ export class DirectCallController {
     this.logger.log(`Accepting call ${acceptCallDto.call_id} by ${user._id}`);
 
     try {
-      // Note: Callee profile is already cached when they authenticated via AuthGuard
-      // No need to cache again
-
       const call = await this.directCallService.acceptCallForCurrentUser(
         acceptCallDto.call_id,
       );

@@ -371,10 +371,36 @@ export class DirectCallService {
             userId,
           );
 
-          if (userProfile) {
+          if (
+            userProfile &&
+            userProfile._id &&
+            userProfile.username &&
+            userProfile.display_name
+          ) {
             // Convert UserProfile to AuthenticatedUser
             profile = {
-              ...userProfile,
+              _id: userProfile._id,
+              username: userProfile.username,
+              display_name: userProfile.display_name,
+              avatar_ipfs_hash: userProfile.avatar_ipfs_hash || "",
+              bio: userProfile.bio,
+              status: userProfile.status,
+              banner_color: userProfile.banner_color,
+              server_count: userProfile.server_count,
+              last_login: userProfile.last_login,
+              primary_wallet: userProfile.primary_wallet,
+              following_number: userProfile.following_number,
+              followers_number: userProfile.followers_number,
+              is_following: userProfile.is_following,
+              is_follower: userProfile.is_follower,
+              is_blocked: userProfile.is_blocked,
+              is_blocked_by: userProfile.is_blocked_by,
+              mutual_followers_number: userProfile.mutual_followers_number,
+              mutual_followers_list: userProfile.mutual_followers_list,
+              is_active: userProfile.is_active,
+              last_account_deactivation: userProfile.last_account_deactivation,
+              dehive_role: userProfile.dehive_role,
+              role_subscription: userProfile.role_subscription,
               session_id: sessionId,
               fingerprint_hash: fingerprintHash,
             };
@@ -449,7 +475,7 @@ export class DirectCallService {
         role_subscription: user.role_subscription,
         session_id: sessionId || "",
         fingerprint_hash: fingerprintHash || "",
-      };
+      } as AuthenticatedUser;
 
       // Cache for 5 minutes
       await this.redis.setex(cacheKey, 300, JSON.stringify(profile));
@@ -707,10 +733,10 @@ export class DirectCallService {
         `Successfully fetched user details for ${userId} from decode API`,
       );
       return {
-        dehive_id: profile._id,
-        username: profile.username,
-        display_name: profile.display_name,
-        avatar_ipfs_hash: profile.avatar_ipfs_hash,
+        dehive_id: profile._id || userId,
+        username: profile.username || "",
+        display_name: profile.display_name || "",
+        avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
       };
     } catch (error) {
       this.logger.error(`Error fetching user details for ${userId}:`, error);

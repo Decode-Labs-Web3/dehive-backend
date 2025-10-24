@@ -8,24 +8,20 @@ import {
   Logger,
   UseGuards,
   Query,
-  Headers,
 } from "@nestjs/common";
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiHeader,
 } from "@nestjs/swagger";
 import { ChannelCallService } from "./channel-call.service";
-import { AuthGuard } from "../common/guards/auth.guard";
+import { AuthGuard, Public } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
-import { Public } from "../common/guards/auth.guard";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { Response } from "../interfaces/response.interface";
 import { JoinCallDto } from "../dto/join-call.dto";
 import { LeaveCallDto } from "../dto/leave-call.dto";
-import { DecodeApiClient } from "../clients/decode-api.client";
 
 @ApiTags("Channel Calling")
 @Controller("channel-calls")
@@ -33,75 +29,7 @@ import { DecodeApiClient } from "../clients/decode-api.client";
 export class ChannelCallController {
   private readonly logger = new Logger(ChannelCallController.name);
 
-  constructor(
-    private readonly channelCallService: ChannelCallService,
-    private readonly decodeApiClient: DecodeApiClient,
-  ) {}
-
-  @Get("cache-profile")
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: "Cache user profile to Redis",
-    description:
-      "Frontend should call this endpoint before connecting to WebSocket to cache user profile data. Requires x-session-id and x-fingerprint-hash in headers, and userDehiveId in query params.",
-  })
-  @ApiHeader({
-    name: "x-session-id",
-    description: "User session ID",
-    required: true,
-  })
-  @ApiHeader({
-    name: "x-fingerprint-hash",
-    description: "User fingerprint hash",
-    required: true,
-  })
-  @ApiResponse({
-    status: 200,
-    description: "Profile cached successfully",
-  })
-  @ApiResponse({
-    status: 400,
-    description:
-      "Failed to cache profile - missing headers or invalid userDehiveId",
-  })
-  async cacheUserProfile(
-    @Headers("x-session-id") sessionId: string,
-    @Headers("x-fingerprint-hash") fingerprintHash: string,
-    @Query("userDehiveId") userDehiveId: string,
-  ): Promise<Response> {
-    this.logger.log(`Caching profile for user ${userDehiveId}`);
-
-    if (!sessionId || !fingerprintHash || !userDehiveId) {
-      return {
-        success: false,
-        statusCode: 400,
-        message:
-          "Missing required parameters: x-session-id, x-fingerprint-hash, and userDehiveId",
-      };
-    }
-
-    try {
-      await this.decodeApiClient.cacheUserProfile(
-        userDehiveId,
-        sessionId,
-        fingerprintHash,
-      );
-
-      return {
-        success: true,
-        statusCode: 200,
-        message: "Profile cached successfully",
-      };
-    } catch (error) {
-      this.logger.error("Error caching user profile:", error);
-      return {
-        success: false,
-        statusCode: 400,
-        message: "Failed to cache profile",
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
+  constructor(private readonly channelCallService: ChannelCallService) {}
 
   @Post("join")
   @HttpCode(HttpStatus.OK)
@@ -120,13 +48,7 @@ export class ChannelCallController {
     );
 
     try {
-      // Cache user profile to Redis before joining channel
-      await this.decodeApiClient.cacheUserProfile(
-        user._id,
-        user.session_id,
-        user.fingerprint_hash,
-      );
-
+      // User profiles fetched in real-time by WebSocket gateway via public API
       const result = await this.channelCallService.joinChannel(
         user._id,
         joinCallDto.channel_id,

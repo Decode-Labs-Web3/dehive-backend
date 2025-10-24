@@ -13,7 +13,6 @@ import {
   ChannelParticipantDocument,
 } from "../schemas/channel-participant.schema";
 import { CallStatus, CallEndReason } from "../enum/enum";
-import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { Participant } from "../interfaces/participant.interface";
 import { ParticipantsResponse } from "../interfaces/participants-response.interface";
 import { DecodeApiClient } from "../clients/decode-api.client";
@@ -38,7 +37,12 @@ export class ChannelCallService {
   ): Promise<{
     call: ChannelCallDocument;
     participant: ChannelParticipantDocument;
-    otherParticipants: AuthenticatedUser[];
+    otherParticipants: Array<{
+      _id: string;
+      username: string;
+      display_name: string;
+      avatar_ipfs_hash: string;
+    }>;
   }> {
     this.logger.log(`User ${userId} joining voice channel ${channelId}`);
 
@@ -242,7 +246,14 @@ export class ChannelCallService {
   async getOtherParticipants(
     channelId: string,
     userId: string,
-  ): Promise<AuthenticatedUser[]> {
+  ): Promise<
+    Array<{
+      _id: string;
+      username: string;
+      display_name: string;
+      avatar_ipfs_hash: string;
+    }>
+  > {
     const participants = await this.channelParticipantModel
       .find({ channel_id: channelId, user_id: { $ne: userId } })
       .exec();
@@ -254,44 +265,48 @@ export class ChannelCallService {
     }
 
     try {
-      const users = await this.decodeApiClient.getUsersByIds(userIds);
-      return users.map((user) => ({
-        _id: user._id,
-        username: user.username,
-        display_name: user.display_name,
-        avatar_ipfs_hash: user.avatar_ipfs_hash,
-        bio: user.bio,
-        status: user.status,
-        is_active: user.is_active,
-        session_id: "",
-        fingerprint_hash: "",
-      }));
+      // Fetch each user profile in parallel
+      const userProfiles = await Promise.all(
+        userIds.map((id) => this.decodeApiClient.getUserProfilePublic(id)),
+      );
+
+      // Filter out null results and return only 4 essential fields
+      return userProfiles
+        .filter(
+          (profile): profile is NonNullable<typeof profile> => profile !== null,
+        )
+        .map((profile) => ({
+          _id: profile._id,
+          username: profile.username,
+          display_name: profile.display_name,
+          avatar_ipfs_hash: profile.avatar_ipfs_hash,
+        }));
     } catch (error) {
       this.logger.error("Error fetching other participants:", error);
       return [];
     }
   }
 
-  async getUserProfile(userId: string): Promise<AuthenticatedUser | null> {
+  async getUserProfile(userId: string): Promise<{
+    _id: string;
+    username: string;
+    display_name: string;
+    avatar_ipfs_hash: string;
+  } | null> {
     this.logger.log(`Getting user profile for ${userId}`);
 
     try {
-      const users = await this.decodeApiClient.getUsersByIds([userId]);
-      if (users.length === 0) {
+      const profile = await this.decodeApiClient.getUserProfilePublic(userId);
+
+      if (!profile) {
         return null;
       }
 
-      const user = users[0];
       return {
-        _id: user._id,
-        username: user.username,
-        display_name: user.display_name,
-        avatar_ipfs_hash: user.avatar_ipfs_hash,
-        bio: user.bio,
-        status: user.status,
-        is_active: user.is_active,
-        session_id: "",
-        fingerprint_hash: "",
+        _id: profile._id,
+        username: profile.username,
+        display_name: profile.display_name,
+        avatar_ipfs_hash: profile.avatar_ipfs_hash,
       };
     } catch (error) {
       this.logger.error("Error getting user profile:", error);
@@ -396,8 +411,8 @@ export class ChannelCallService {
 
   async getChannelParticipants(
     channelId: string,
-    sessionId?: string,
-    fingerprintHash?: string,
+    _sessionId?: string,
+    _fingerprintHash?: string,
   ): Promise<ParticipantsResponse> {
     this.logger.log(`Getting participants for channel ${channelId}`);
 
@@ -421,18 +436,23 @@ export class ChannelCallService {
       }
 
       try {
-        const users = await this.decodeApiClient.getUsersByIds(
-          userIds,
-          sessionId,
-          fingerprintHash,
+        // Fetch each user profile in parallel
+        const userProfiles = await Promise.all(
+          userIds.map((id) => this.decodeApiClient.getUserProfilePublic(id)),
         );
+
+        // Filter out null results and convert to Participant
+        const validProfiles = userProfiles.filter(
+          (profile): profile is NonNullable<typeof profile> => profile !== null,
+        );
+
         return {
-          participants: users.map(
-            (user): Participant => ({
-              _id: user._id,
-              username: user.username,
-              display_name: user.display_name,
-              avatar_ipfs_hash: user.avatar_ipfs_hash,
+          participants: validProfiles.map(
+            (profile): Participant => ({
+              _id: profile._id,
+              username: profile.username,
+              display_name: profile.display_name,
+              avatar_ipfs_hash: profile.avatar_ipfs_hash,
             }),
           ),
         };

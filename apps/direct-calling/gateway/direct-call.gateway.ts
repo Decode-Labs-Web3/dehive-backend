@@ -73,8 +73,8 @@ export class DirectCallGateway
   }
 
   /**
-   * Get user profile - NO FALLBACK
-   * Returns null if profile not found in cache
+   * Get user profile from public API (for WebSocket responses)
+   * Fetches profile in real-time from public endpoint
    */
   private async getUserProfile(userDehiveId: string): Promise<{
     _id: string;
@@ -84,7 +84,7 @@ export class DirectCallGateway
   } | null> {
     try {
       const profile =
-        await this.decodeApiClient.getCachedUserProfile(userDehiveId);
+        await this.decodeApiClient.getUserProfilePublic(userDehiveId);
 
       if (profile) {
         return {
@@ -95,7 +95,6 @@ export class DirectCallGateway
         };
       }
 
-      // NO FALLBACK - return null if not found
       return null;
     } catch (error) {
       console.error(`[Direct-Calling] Error getting user profile:`, error);
