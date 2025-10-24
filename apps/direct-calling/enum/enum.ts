@@ -1,11 +1,10 @@
 export enum CallStatus {
-  CALLING = "calling", // Caller side - đang gọi
-  RINGING = "ringing", // Callee side - đang nhận chuông
+  CALLING = "calling",
+  RINGING = "ringing",
   CONNECTING = "connecting",
-  CONNECTED = "connected", // Đang trong cuộc gọi
-  ENDED = "ended", // Kết thúc (timeout hoặc endCall)
-  DECLINED = "declined", // Từ chối cuộc gọi
-  MISSED = "missed",
+  CONNECTED = "connected",
+  ENDED = "ended",
+  DECLINED = "declined",
   TIMEOUT = "timeout",
 }
 

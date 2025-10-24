@@ -358,127 +358,31 @@ export class DirectCallService {
         return JSON.parse(cached);
       }
 
-      let profile: AuthenticatedUser | null = null;
+      // Fetch from public API (no authentication needed)
+      this.logger.log(
+        `Fetching profile for ${userId} from decode API (public)`,
+      );
+      const userProfile =
+        await this.decodeApiClient.getUserProfilePublic(userId);
 
-      if (sessionId && fingerprintHash) {
-        try {
-          this.logger.log(
-            `Fetching profile for ${userId} from decode API using session ${sessionId}`,
-          );
-          const userProfile = await this.decodeApiClient.getUserProfile(
-            sessionId,
-            fingerprintHash,
-            userId,
-          );
-
-          if (
-            userProfile &&
-            userProfile._id &&
-            userProfile.username &&
-            userProfile.display_name
-          ) {
-            // Convert UserProfile to AuthenticatedUser
-            profile = {
-              _id: userProfile._id,
-              username: userProfile.username,
-              display_name: userProfile.display_name,
-              avatar_ipfs_hash: userProfile.avatar_ipfs_hash || "",
-              bio: userProfile.bio,
-              status: userProfile.status,
-              banner_color: userProfile.banner_color,
-              server_count: userProfile.server_count,
-              last_login: userProfile.last_login,
-              primary_wallet: userProfile.primary_wallet,
-              following_number: userProfile.following_number,
-              followers_number: userProfile.followers_number,
-              is_following: userProfile.is_following,
-              is_follower: userProfile.is_follower,
-              is_blocked: userProfile.is_blocked,
-              is_blocked_by: userProfile.is_blocked_by,
-              mutual_followers_number: userProfile.mutual_followers_number,
-              mutual_followers_list: userProfile.mutual_followers_list,
-              is_active: userProfile.is_active,
-              last_account_deactivation: userProfile.last_account_deactivation,
-              dehive_role: userProfile.dehive_role,
-              role_subscription: userProfile.role_subscription,
-              session_id: sessionId,
-              fingerprint_hash: fingerprintHash,
-            };
-            await this.redis.setex(cacheKey, 300, JSON.stringify(profile));
-            this.logger.log(
-              `Successfully fetched and cached profile for ${userId} from decode API`,
-            );
-            return profile;
-          }
-        } catch (error) {
-          this.logger.warn(
-            `Failed to get profile from decode API for ${userId}:`,
-            error,
-          );
-        }
+      if (!userProfile) {
+        throw new NotFoundException(`User profile not found for ${userId}`);
       }
 
-      // Fallback to database if decode API fails or no session info
-      this.logger.log(`Fetching profile for ${userId} from database`);
-      const user = (await this.userDehiveModel
-        .findById(userId)
-        .lean()) as unknown as {
-        _id: unknown;
-        username?: string;
-        display_name?: string;
-        avatar_ipfs_hash?: string;
-        bio?: string;
-        status?: string;
-        banner_color?: string;
-        server_count?: number;
-        last_login?: Date;
-        primary_wallet?: string;
-        following_number?: number;
-        followers_number?: number;
-        is_following?: boolean;
-        is_follower?: boolean;
-        is_blocked?: boolean;
-        is_blocked_by?: boolean;
-        mutual_followers_number?: number;
-        mutual_followers_list?: string[];
-        is_active?: boolean;
-        last_account_deactivation?: Date;
-        dehive_role?: string;
-        role_subscription?: string;
-      };
-      if (!user) {
-        throw new NotFoundException("User not found");
-      }
-
-      profile = {
-        _id: String(user._id),
-        username: user.username || "",
-        display_name: user.display_name || "",
-        avatar_ipfs_hash: user.avatar_ipfs_hash || "",
-        bio: user.bio,
-        status: user.status,
-        banner_color: user.banner_color,
-        server_count: user.server_count,
-        last_login: user.last_login,
-        primary_wallet: user.primary_wallet,
-        following_number: user.following_number,
-        followers_number: user.followers_number,
-        is_following: user.is_following,
-        is_follower: user.is_follower,
-        is_blocked: user.is_blocked,
-        is_blocked_by: user.is_blocked_by,
-        mutual_followers_number: user.mutual_followers_number,
-        mutual_followers_list: user.mutual_followers_list,
-        is_active: user.is_active,
-        last_account_deactivation: user.last_account_deactivation,
-        dehive_role: user.dehive_role,
-        role_subscription: user.role_subscription,
+      // Return only 4 essential fields
+      const profile = {
+        _id: userProfile._id,
+        username: userProfile.username,
+        display_name: userProfile.display_name,
+        avatar_ipfs_hash: userProfile.avatar_ipfs_hash || "",
         session_id: sessionId || "",
         fingerprint_hash: fingerprintHash || "",
       } as AuthenticatedUser;
 
       // Cache for 5 minutes
       await this.redis.setex(cacheKey, 300, JSON.stringify(profile));
+
+      this.logger.log(`Successfully fetched and cached profile for ${userId}`);
 
       return profile;
     } catch (error) {
@@ -711,16 +615,12 @@ export class DirectCallService {
         return null;
       }
 
-      // Only use authenticated API call - no fallback
+      // Use public API call (no authentication needed)
       this.logger.log(
-        `Fetching user details for ${userId} from decode API with auth`,
+        `Fetching user details for ${userId} from decode API (public)`,
       );
 
-      const profile = await this.decodeApiClient.getUserProfile(
-        sessionId,
-        fingerprintHash,
-        userId,
-      );
+      const profile = await this.decodeApiClient.getUserProfilePublic(userId);
 
       if (!profile) {
         this.logger.error(

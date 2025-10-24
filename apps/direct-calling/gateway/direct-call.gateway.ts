@@ -228,6 +228,7 @@ export class DirectCallGateway
     if (typeof data === "string") {
       try {
         parsedData = JSON.parse(data);
+        console.log("[DEBUG] Parsed from string:", parsedData);
       } catch {
         return this.send(client, "error", {
           message: "Invalid JSON format",
@@ -237,6 +238,7 @@ export class DirectCallGateway
       }
     } else {
       parsedData = data;
+      console.log("[DEBUG] Using object directly:", parsedData);
     }
 
     if (!callerId) {
