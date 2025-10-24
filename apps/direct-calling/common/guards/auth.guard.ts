@@ -124,6 +124,24 @@ export class AuthGuard implements CanActivate {
       );
       if (ttl > 0) {
         await this.redis.set(sessionKey, JSON.stringify(cacheData), "EX", ttl);
+
+        // Also cache user profile for calling features
+        const userProfileCacheKey = `user_profile:${userProfile._id}`;
+        const profileData = {
+          user_dehive_id: userProfile._id,
+          username: userProfile.username,
+          display_name: userProfile.display_name,
+          avatar_ipfs_hash: userProfile.avatar_ipfs_hash || "",
+        };
+        await this.redis.set(
+          userProfileCacheKey,
+          JSON.stringify(profileData),
+          "EX",
+          3600, // 1 hour TTL
+        );
+        this.logger.log(
+          `Cached user profile for ${userProfile._id} via AuthGuard`,
+        );
       }
 
       const authenticatedUser: AuthenticatedUser = {

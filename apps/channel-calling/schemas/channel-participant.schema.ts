@@ -28,33 +28,8 @@ export class ChannelParticipant {
   @Prop({ required: false })
   duration_seconds?: number;
 
-  @Prop({ default: true })
-  is_audio_enabled: boolean;
-
-  @Prop({ default: false })
-  is_video_enabled: boolean;
-
-  @Prop({ default: false })
-  is_audio_muted: boolean;
-
-  @Prop({ default: false })
-  is_video_muted: boolean;
-
-  @Prop({ default: false })
-  screen_sharing: boolean;
-
   @Prop({ type: String, required: false })
   socket_id?: string;
-
-  @Prop({
-    type: Object,
-    required: false,
-  })
-  connection_quality?: {
-    audio_quality: number;
-    video_quality: number;
-    network_latency: number;
-  };
 
   @Prop({
     type: Object,
@@ -69,6 +44,4 @@ export const ChannelParticipantSchema =
 
 // Indexes
 ChannelParticipantSchema.index({ channel_id: 1, user_id: 1 });
-ChannelParticipantSchema.index({ channel_id: 1, is_audio_enabled: 1 });
-ChannelParticipantSchema.index({ user_id: 1, is_audio_enabled: 1 });
 ChannelParticipantSchema.index({ socket_id: 1 });

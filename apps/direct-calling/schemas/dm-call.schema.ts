@@ -52,53 +52,6 @@ export class DmCall {
   @Prop({ required: false })
   duration_seconds?: number;
 
-  @Prop({ default: true })
-  caller_audio_enabled: boolean;
-
-  @Prop({ default: true })
-  caller_video_enabled: boolean;
-
-  @Prop({ default: true })
-  callee_audio_enabled: boolean;
-
-  @Prop({ default: true })
-  callee_video_enabled: boolean;
-
-  @Prop({ required: false })
-  caller_audio_muted?: boolean;
-
-  @Prop({ required: false })
-  caller_video_muted?: boolean;
-
-  @Prop({ required: false })
-  callee_audio_muted?: boolean;
-
-  @Prop({ required: false })
-  callee_video_muted?: boolean;
-
-  @Prop({ required: false })
-  caller_screen_share?: boolean;
-
-  @Prop({ required: false })
-  callee_screen_share?: boolean;
-
-  @Prop({
-    type: Object,
-    required: false,
-  })
-  connection_quality?: {
-    caller: {
-      audio_quality: number;
-      video_quality: number;
-      network_latency: number;
-    };
-    callee: {
-      audio_quality: number;
-      video_quality: number;
-      network_latency: number;
-    };
-  };
-
   @Prop({
     type: Object,
     required: false,

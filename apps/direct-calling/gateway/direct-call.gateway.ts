@@ -15,6 +15,7 @@ import {
   UserDehiveDocument,
 } from "../../user-dehive-server/schemas/user-dehive.schema";
 import { DmCall, DmCallDocument } from "../schemas/dm-call.schema";
+import { DecodeApiClient } from "../clients/decode-api.client";
 
 type SocketMeta = {
   userDehiveId?: string;
@@ -23,7 +24,7 @@ type SocketMeta = {
 };
 
 @WebSocketGateway({
-  namespace: "/rtc",
+  namespace: "/",
   cors: { origin: "*" },
 })
 export class DirectCallGateway
@@ -39,23 +40,27 @@ export class DirectCallGateway
     private readonly userDehiveModel: Model<UserDehiveDocument>,
     @InjectModel(DmCall.name)
     private readonly dmCallModel: Model<DmCallDocument>,
+    private readonly decodeApiClient: DecodeApiClient,
   ) {
-    // Initialize meta Map
     this.meta = new Map<Socket, SocketMeta>();
-
-    // Debug logging
-    console.log("[RTC-WS] Gateway constructor called");
-    console.log("[RTC-WS] userDehiveModel available:", !!this.userDehiveModel);
-    console.log("[RTC-WS] dmCallModel available:", !!this.dmCallModel);
   }
 
   private send(client: Socket, event: string, data: unknown) {
     // Production: emit object (default for frontend)
     // client.emit(event, data);
 
-    // Debug (Insomnia): emit pretty JSON string (commented)
+    // Debug (Insomnia): emit pretty JSON string
     const serializedData = JSON.stringify(data, null, 2);
     client.emit(event, serializedData);
+  }
+
+  private broadcast(room: string, event: string, data: unknown) {
+    // Production: emit object (default for frontend)
+    // this.server.to(room).emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string
+    const serializedData = JSON.stringify(data, null, 2);
+    this.server.to(room).emit(event, serializedData);
   }
 
   private findSocketByUserId(userId: string): Socket | null {
@@ -67,19 +72,41 @@ export class DirectCallGateway
     return null;
   }
 
-  handleConnection(client: Socket) {
-    console.log("[RTC-WS] ========================================");
-    console.log(
-      "[RTC-WS] Client connected to /rtc namespace. Awaiting identity.",
-    );
-    console.log(`[RTC-WS] Socket ID: ${client.id}`);
-    console.log("[RTC-WS] ========================================");
+  /**
+   * Get user profile - NO FALLBACK
+   * Returns null if profile not found in cache
+   */
+  private async getUserProfile(userDehiveId: string): Promise<{
+    _id: string;
+    username: string;
+    display_name: string;
+    avatar_ipfs_hash: string;
+  } | null> {
+    try {
+      const profile =
+        await this.decodeApiClient.getCachedUserProfile(userDehiveId);
 
-    // Ensure meta Map is initialized
+      if (profile) {
+        return {
+          _id: userDehiveId,
+          username: profile.username,
+          display_name: profile.display_name,
+          avatar_ipfs_hash: profile.avatar_ipfs_hash,
+        };
+      }
+
+      // NO FALLBACK - return null if not found
+      return null;
+    } catch (error) {
+      console.error(`[Direct-Calling] Error getting user profile:`, error);
+      return null;
+    }
+  }
+
+  handleConnection(client: Socket) {
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
-
     this.meta.set(client, {});
   }
 
@@ -90,7 +117,6 @@ export class DirectCallGateway
 
     const meta = this.meta.get(client);
     if (meta?.userDehiveId) {
-      console.log(`[RTC-WS] User ${meta.userDehiveId} disconnected from /rtc.`);
       this.handleUserDisconnect(meta.userDehiveId, meta.callId);
     }
     this.meta.delete(client);
@@ -99,14 +125,12 @@ export class DirectCallGateway
   private async handleUserDisconnect(userId: string, callId?: string) {
     if (callId) {
       try {
-        if (callId) {
-          await this.dmCallModel.updateOne(
-            { _id: callId },
-            { status: "ended", ended_at: new Date() },
-          );
-        }
+        await this.dmCallModel.updateOne(
+          { _id: callId },
+          { status: "ended", ended_at: new Date() },
+        );
       } catch (error) {
-        console.error("[RTC-WS] Error handling user disconnect:", error);
+        console.error("[Direct-Calling] Error handling disconnect:", error);
       }
     }
   }
@@ -116,16 +140,24 @@ export class DirectCallGateway
     @MessageBody() data: string | { userDehiveId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    console.log(`[RTC-WS] Identity request received:`, data);
-
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
 
     let userDehiveId: string;
+
+    // Parse data - handle string (plain or JSON) or object format
     if (typeof data === "string") {
-      userDehiveId = data;
+      try {
+        const parsedData = JSON.parse(data) as { userDehiveId: string };
+        if (parsedData.userDehiveId) {
+          userDehiveId = parsedData.userDehiveId;
+        } else {
+          userDehiveId = data;
+        }
+      } catch {
+        userDehiveId = data;
+      }
     } else if (typeof data === "object" && data?.userDehiveId) {
       userDehiveId = data.userDehiveId;
     } else {
@@ -146,14 +178,11 @@ export class DirectCallGateway
     }
 
     // Validate user exists in database
-    console.log(`[RTC-WS] Checking if user exists: ${userDehiveId}`);
     const exists = await this.userDehiveModel.exists({
       _id: new Types.ObjectId(userDehiveId),
     });
 
-    console.log(`[RTC-WS] User exists result: ${exists}`);
     if (!exists) {
-      console.log(`[RTC-WS] User not found in database: ${userDehiveId}`);
       return this.send(client, "error", {
         message: "User not found",
         code: "USER_NOT_FOUND",
@@ -161,13 +190,11 @@ export class DirectCallGateway
       });
     }
 
-    console.log(`[RTC-WS] Accepting identity for user: ${userDehiveId}`);
-
     const meta = this.meta.get(client);
     if (meta) {
       meta.userDehiveId = userDehiveId;
       void client.join(`user:${userDehiveId}`);
-      console.log(`[RTC-WS] User identified as ${userDehiveId}`);
+
       this.send(client, "identityConfirmed", {
         userDehiveId,
         status: "success",
@@ -213,13 +240,6 @@ export class DirectCallGateway
       parsedData = data;
     }
 
-    console.log("[RTC-WS] ========================================");
-    console.log("[RTC-WS] startCall event received");
-    console.log("[RTC-WS] Parsed data:", parsedData);
-    console.log("[RTC-WS] target_user_id:", parsedData?.target_user_id);
-    console.log("[RTC-WS] Caller ID:", callerId);
-    console.log("[RTC-WS] ========================================");
-
     if (!callerId) {
       return this.send(client, "error", {
         message: "Please identify first",
@@ -229,134 +249,119 @@ export class DirectCallGateway
     }
 
     try {
-      // Create call directly in database
-      console.log("[RTC-WS] Creating call in database");
+      // Get callee profile first - NO EMIT if not found
+      const calleeProfile = await this.getUserProfile(
+        parsedData.target_user_id,
+      );
+      if (!calleeProfile) {
+        return this.send(client, "error", {
+          message:
+            "Target user profile not found in cache. Please call GET /cache-profile first.",
+          code: "PROFILE_NOT_CACHED",
+        });
+      }
 
-      // Create call document - only essential fields
+      // Get caller profile - NO EMIT if not found
+      const callerProfile = await this.getUserProfile(callerId);
+      if (!callerProfile) {
+        return this.send(client, "error", {
+          message:
+            "Caller profile not found in cache. Please call GET /cache-profile first.",
+          code: "PROFILE_NOT_CACHED",
+        });
+      }
+
+      // Create call document
       const call = new this.dmCallModel({
         conversation_id: new Types.ObjectId(),
         caller_id: new Types.ObjectId(callerId),
         callee_id: new Types.ObjectId(parsedData.target_user_id),
-        status: "ringing",
+        status: "calling",
       });
 
       await call.save();
       meta.callId = String(call._id);
 
-      // Set timeout for call (30 seconds)
-      const callTimeoutMs = 60000; // 60 seconds
+      // Set timeout for call (60 seconds)
+      const callTimeoutMs = 60000;
       const timeoutId = setTimeout(async () => {
         try {
           const currentCall = await this.dmCallModel.findById(call._id);
-          if (currentCall && currentCall.status === "ringing") {
-            // Update call status to timeout
+          if (
+            currentCall &&
+            (currentCall.status === "calling" ||
+              currentCall.status === "ringing")
+          ) {
+            // Update call status to ended
             await this.dmCallModel.findByIdAndUpdate(
               call._id,
               {
-                status: "timeout",
+                status: "ended",
                 ended_at: new Date(),
               },
               { new: true },
             );
 
-            const payload = {
+            // Notify caller - status: ended, user_info: callee
+            this.send(client, "callTimeout", {
               call_id: call._id,
-              status: "timeout",
-              reason: "call_timeout",
-              timestamp: new Date().toISOString(),
-            };
-            // Notify caller about timeout
-            this.send(client, "callTimeout", payload);
+              status: "ended",
+              user_info: {
+                _id: calleeProfile._id,
+                username: calleeProfile.username,
+                display_name: calleeProfile.display_name,
+                avatar_ipfs_hash: calleeProfile.avatar_ipfs_hash,
+              },
+            });
 
-            // Notify callee about timeout - Production (object)
-            // this.server
-            //   .to(`user:${parsedData.target_user_id}`)
-            //   .emit("callTimeout", {
-            //     call_id: call._id,
-            //     caller_id: callerId,
-            //     reason: "call_timeout",
-            //     timestamp: new Date().toISOString(),
-            //   });
-
-            // Debug (Insomnia): emit pretty JSON string (commented)
-            this.server.to(`user:${parsedData.target_user_id}`).emit(
-              "callTimeout",
-              JSON.stringify(
-                {
-                  call_id: call._id,
-                  caller_id: callerId,
-                  reason: "call_timeout",
-                  timestamp: new Date().toISOString(),
-                },
-                null,
-                2,
-              ),
-            );
-
-            console.log(`[RTC-WS] Call ${call._id} timed out after 30 seconds`);
+            // Notify callee - status: ended, user_info: caller
+            this.broadcast(`user:${parsedData.target_user_id}`, "callTimeout", {
+              call_id: call._id,
+              status: "ended",
+              user_info: {
+                _id: callerProfile._id,
+                username: callerProfile.username,
+                display_name: callerProfile.display_name,
+                avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+              },
+            });
           }
         } catch (error) {
-          console.error("[RTC-WS] Error handling call timeout:", error);
+          console.error("[Direct-Calling] Error handling call timeout:", error);
         }
       }, callTimeoutMs);
 
       // Store timeout ID in meta for later cleanup
       meta.callTimeout = timeoutId;
 
-      meta.callId = String(call._id);
-
-      // Notify caller
+      // Notify caller - status: calling, user_info: callee
       this.send(client, "callStarted", {
         call_id: call._id,
-        status: "ringing",
-        target_user_id: parsedData.target_user_id,
-        timestamp: new Date().toISOString(),
+        status: "calling",
+        user_info: {
+          _id: calleeProfile._id,
+          username: calleeProfile.username,
+          display_name: calleeProfile.display_name,
+          avatar_ipfs_hash: calleeProfile.avatar_ipfs_hash,
+        },
       });
 
-      // Notify callee
-      // this.server.to(`user:${parsedData.target_user_id}`).emit("incomingCall", {
-      //   call_id: call._id,
-      //   caller_id: callerId,
-      //   caller_info: {
-      //     _id: callerId,
-      //     username: "user_" + callerId.substring(0, 8),
-      //     display_name: "User " + callerId.substring(0, 8),
-      //     avatar_ipfs_hash: "",
-      //     bio: "User profile",
-      //     status: "ACTIVE",
-      //     is_active: true,
-      //   },
-      //   timestamp: new Date().toISOString(),
-      // });
-
-      // Debug (Insomnia): emit pretty JSON string (commented)
-      this.server.to(`user:${parsedData.target_user_id}`).emit(
-        "incomingCall",
-        JSON.stringify(
-          {
-            call_id: call._id,
-            caller_id: callerId,
-            caller_info: {
-              _id: callerId,
-              username: "user_" + callerId.substring(0, 8),
-              display_name: "User " + callerId.substring(0, 8),
-              avatar_ipfs_hash: "",
-              bio: "User profile",
-              status: "ACTIVE",
-              is_active: true,
-            },
-            timestamp: new Date().toISOString(),
-          },
-          null,
-          2,
-        ),
-      );
+      // Notify callee - status: ringing, user_info: caller
+      this.broadcast(`user:${parsedData.target_user_id}`, "incomingCall", {
+        call_id: call._id,
+        status: "ringing",
+        user_info: {
+          _id: callerProfile._id,
+          username: callerProfile.username,
+          display_name: callerProfile.display_name,
+          avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+        },
+      });
     } catch (error) {
-      console.error("[RTC-WS] Error starting call:", error);
+      console.error("[Direct-Calling] Error starting call:", error);
       this.send(client, "error", {
         message: "Failed to start call",
         details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
       });
     }
   }
@@ -402,28 +407,35 @@ export class DirectCallGateway
     }
 
     try {
-      // Get call info first to find caller
+      // Get call info first
       const existingCall = await this.dmCallModel.findById(parsedData.call_id);
       if (!existingCall) {
         return this.send(client, "error", {
           message: "Call not found",
           code: "CALL_NOT_FOUND",
-          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const callerId = String(existingCall.caller_id);
+
+      // Get both profiles - NO EMIT if not found
+      const calleeProfile = await this.getUserProfile(calleeId);
+      const callerProfile = await this.getUserProfile(callerId);
+
+      if (!calleeProfile || !callerProfile) {
+        return this.send(client, "error", {
+          message: "User profiles not found in cache",
+          code: "PROFILE_NOT_CACHED",
         });
       }
 
       // Clear timeout if it exists
-      const callerSocket = this.findSocketByUserId(
-        String(existingCall.caller_id),
-      );
+      const callerSocket = this.findSocketByUserId(callerId);
       if (callerSocket) {
         const callerMeta = this.meta.get(callerSocket);
         if (callerMeta?.callTimeout) {
           clearTimeout(callerMeta.callTimeout);
           callerMeta.callTimeout = undefined;
-          console.log(
-            `[RTC-WS] Cleared timeout for call ${parsedData.call_id}`,
-          );
         }
       }
 
@@ -441,62 +453,39 @@ export class DirectCallGateway
         return this.send(client, "error", {
           message: "Call not found",
           code: "CALL_NOT_FOUND",
-          timestamp: new Date().toISOString(),
         });
       }
 
       meta.callId = String(call._id);
 
-      // Notify both parties
-      // this.server.to(`user:${call.caller_id}`).emit("callAccepted", {
-      //   call_id: call._id,
-      //   callee_id: calleeId,
-      //   callee_info: {
-      //     _id: calleeId,
-      //     username: "user_" + calleeId.substring(0, 8),
-      //     display_name: "User " + calleeId.substring(0, 8),
-      //     avatar_ipfs_hash: "",
-      //     bio: "User profile",
-      //     status: "ACTIVE",
-      //     is_active: true,
-      //   },
-      //   timestamp: new Date().toISOString(),
-      // });
+      // Notify caller - status: connected, user_info: callee
+      this.broadcast(`user:${call.caller_id}`, "callAccepted", {
+        call_id: call._id,
+        status: "connected",
+        user_info: {
+          _id: calleeProfile._id,
+          username: calleeProfile.username,
+          display_name: calleeProfile.display_name,
+          avatar_ipfs_hash: calleeProfile.avatar_ipfs_hash,
+        },
+      });
 
-      // Debug (Insomnia): emit pretty JSON string (commented)
-      this.server.to(`user:${call.caller_id}`).emit(
-        "callAccepted",
-        JSON.stringify(
-          {
-            call_id: call._id,
-            callee_id: calleeId,
-            callee_info: {
-              _id: calleeId,
-              username: "user_" + calleeId.substring(0, 8),
-              display_name: "User " + calleeId.substring(0, 8),
-              avatar_ipfs_hash: "",
-              bio: "User profile",
-              status: "ACTIVE",
-              is_active: true,
-            },
-            timestamp: new Date().toISOString(),
-          },
-          null,
-          2,
-        ),
-      );
-
+      // Notify callee - status: connected, user_info: caller
       this.send(client, "callAccepted", {
         call_id: call._id,
-        status: call.status,
-        timestamp: new Date().toISOString(),
+        status: "connected",
+        user_info: {
+          _id: callerProfile._id,
+          username: callerProfile.username,
+          display_name: callerProfile.display_name,
+          avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+        },
       });
     } catch (error) {
-      console.error("[RTC-WS] Error accepting call:", error);
+      console.error("[Direct-Calling] Error accepting call:", error);
       this.send(client, "error", {
         message: "Failed to accept call",
         details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
       });
     }
   }
@@ -539,24 +528,39 @@ export class DirectCallGateway
     }
 
     try {
-      // Clear timeout if it exists
+      // Get call info first
       const existingCall = await this.dmCallModel.findById(parsedData.call_id);
-      if (existingCall) {
-        const callerSocket = this.findSocketByUserId(
-          String(existingCall.caller_id),
-        );
-        if (callerSocket) {
-          const callerMeta = this.meta.get(callerSocket);
-          if (callerMeta?.callTimeout) {
-            clearTimeout(callerMeta.callTimeout);
-            callerMeta.callTimeout = undefined;
-            console.log(
-              `[RTC-WS] Cleared timeout for declined call ${parsedData.call_id}`,
-            );
-          }
+      if (!existingCall) {
+        return this.send(client, "error", {
+          message: "Call not found",
+          code: "CALL_NOT_FOUND",
+        });
+      }
+
+      const callerId = String(existingCall.caller_id);
+
+      // Get both profiles - NO EMIT if not found
+      const calleeProfile = await this.getUserProfile(calleeId);
+      const callerProfile = await this.getUserProfile(callerId);
+
+      if (!calleeProfile || !callerProfile) {
+        return this.send(client, "error", {
+          message: "User profiles not found in cache",
+          code: "PROFILE_NOT_CACHED",
+        });
+      }
+
+      // Clear timeout if it exists
+      const callerSocket = this.findSocketByUserId(callerId);
+      if (callerSocket) {
+        const callerMeta = this.meta.get(callerSocket);
+        if (callerMeta?.callTimeout) {
+          clearTimeout(callerMeta.callTimeout);
+          callerMeta.callTimeout = undefined;
         }
       }
 
+      // Update call status to declined
       const call = await this.dmCallModel.findByIdAndUpdate(
         parsedData.call_id,
         {
@@ -566,42 +570,41 @@ export class DirectCallGateway
         { new: true },
       );
 
-      if (call) {
-        // Notify caller
-        // this.server.to(`user:${call.caller_id}`).emit("callDeclined", {
-        //   call_id: call._id,
-        //   callee_id: calleeId,
-        //   reason: "user_declined",
-        //   timestamp: new Date().toISOString(),
-        // });
-
-        // Debug (Insomnia): emit pretty JSON string (commented)
-        this.server.to(`user:${call.caller_id}`).emit(
-          "callDeclined",
-          JSON.stringify(
-            {
-              call_id: call._id,
-              callee_id: calleeId,
-              reason: "user_declined",
-              timestamp: new Date().toISOString(),
-            },
-            null,
-            2,
-          ),
-        );
-
-        this.send(client, "callDeclined", {
-          call_id: call._id,
-          status: call.status,
-          timestamp: new Date().toISOString(),
+      if (!call) {
+        return this.send(client, "error", {
+          message: "Call not found",
+          code: "CALL_NOT_FOUND",
         });
       }
+
+      // Notify caller - status: declined, user_info: callee
+      this.broadcast(`user:${call.caller_id}`, "callDeclined", {
+        call_id: call._id,
+        status: "declined",
+        user_info: {
+          _id: calleeProfile._id,
+          username: calleeProfile.username,
+          display_name: calleeProfile.display_name,
+          avatar_ipfs_hash: calleeProfile.avatar_ipfs_hash,
+        },
+      });
+
+      // Notify callee - status: declined, user_info: caller
+      this.send(client, "callDeclined", {
+        call_id: call._id,
+        status: "declined",
+        user_info: {
+          _id: callerProfile._id,
+          username: callerProfile.username,
+          display_name: callerProfile.display_name,
+          avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+        },
+      });
     } catch (error) {
-      console.error("[RTC-WS] Error declining call:", error);
+      console.error("[Direct-Calling] Error declining call:", error);
       this.send(client, "error", {
         message: "Failed to decline call",
         details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
       });
     }
   }
@@ -653,6 +656,33 @@ export class DirectCallGateway
     }
 
     try {
+      // Get call info first
+      const existingCall = await this.dmCallModel.findById(parsedData.call_id);
+      if (!existingCall) {
+        return this.send(client, "error", {
+          message: "Call not found",
+          code: "CALL_NOT_FOUND",
+        });
+      }
+
+      const callerId = String(existingCall.caller_id);
+      const calleeId = String(existingCall.callee_id);
+
+      // Determine other user
+      const otherUserId = callerId === userId ? calleeId : callerId;
+
+      // Get both profiles - NO EMIT if not found
+      const currentUserProfile = await this.getUserProfile(userId);
+      const otherUserProfile = await this.getUserProfile(otherUserId);
+
+      if (!currentUserProfile || !otherUserProfile) {
+        return this.send(client, "error", {
+          message: "User profiles not found in cache",
+          code: "PROFILE_NOT_CACHED",
+        });
+      }
+
+      // Update call status to ended
       const call = await this.dmCallModel.findByIdAndUpdate(
         parsedData.call_id,
         {
@@ -662,50 +692,41 @@ export class DirectCallGateway
         { new: true },
       );
 
-      if (call) {
-        // Notify both parties
-        const otherUserId =
-          String(call.caller_id) === userId
-            ? String(call.callee_id)
-            : String(call.caller_id);
-
-        // this.server.to(`user:${otherUserId}`).emit("callEnded", {
-        //   call_id: call._id,
-        //   ended_by: userId,
-        //   reason: "user_hangup",
-        //   duration: call.duration_seconds,
-        //   timestamp: new Date().toISOString(),
-        // });
-
-        // Debug (Insomnia): emit pretty JSON string (commented)
-        this.server.to(`user:${otherUserId}`).emit(
-          "callEnded",
-          JSON.stringify(
-            {
-              call_id: call._id,
-              ended_by: userId,
-              reason: "user_hangup",
-              duration: call.duration_seconds,
-              timestamp: new Date().toISOString(),
-            },
-            null,
-            2,
-          ),
-        );
-
-        this.send(client, "callEnded", {
-          call_id: call._id,
-          status: call.status,
-          duration: call.duration_seconds,
-          timestamp: new Date().toISOString(),
+      if (!call) {
+        return this.send(client, "error", {
+          message: "Call not found",
+          code: "CALL_NOT_FOUND",
         });
       }
+
+      // Notify other user - status: ended, user_info: current user
+      this.broadcast(`user:${otherUserId}`, "callEnded", {
+        call_id: call._id,
+        status: "ended",
+        user_info: {
+          _id: currentUserProfile._id,
+          username: currentUserProfile.username,
+          display_name: currentUserProfile.display_name,
+          avatar_ipfs_hash: currentUserProfile.avatar_ipfs_hash,
+        },
+      });
+
+      // Notify current user - status: ended, user_info: other user
+      this.send(client, "callEnded", {
+        call_id: call._id,
+        status: "ended",
+        user_info: {
+          _id: otherUserProfile._id,
+          username: otherUserProfile.username,
+          display_name: otherUserProfile.display_name,
+          avatar_ipfs_hash: otherUserProfile.avatar_ipfs_hash,
+        },
+      });
     } catch (error) {
-      console.error("[RTC-WS] Error ending call:", error);
+      console.error("[Direct-Calling] Error ending call:", error);
       this.send(client, "error", {
         message: "Failed to end call",
         details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
       });
     }
   }

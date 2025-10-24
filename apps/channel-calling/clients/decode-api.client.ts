@@ -172,6 +172,114 @@ export class DecodeApiClient {
     }
   }
 
+  /**
+   * Get cached user profile from Redis
+   * Returns minimal user data needed for call events (only 4 fields)
+   * Returns null if not cached - no fallback data
+   */
+  async getCachedUserProfile(userDehiveId: string): Promise<{
+    _id: string;
+    username: string;
+    display_name: string;
+    avatar_ipfs_hash: string;
+  } | null> {
+    try {
+      const cacheKey = `user_profile:${userDehiveId}`;
+      const cachedData = await this.redis.get(cacheKey);
+
+      if (!cachedData) {
+        this.logger.warn(
+          `[CHANNEL-CALLING] No cached profile found for ${userDehiveId}`,
+        );
+        return null;
+      }
+
+      const profile = JSON.parse(cachedData);
+
+      // Validate that we have all required fields
+      if (!profile.username || !profile.display_name) {
+        this.logger.warn(
+          `[CHANNEL-CALLING] Cached profile incomplete for ${userDehiveId}`,
+        );
+        return null;
+      }
+
+      this.logger.log(
+        `[CHANNEL-CALLING] Retrieved cached profile for ${userDehiveId}`,
+      );
+
+      return {
+        _id:
+          (profile as { user_dehive_id?: string }).user_dehive_id ||
+          userDehiveId,
+        username: profile.username,
+        display_name: profile.display_name,
+        avatar_ipfs_hash:
+          profile.avatar_ipfs_hash ||
+          (profile as { avatar?: string }).avatar ||
+          "",
+      };
+    } catch (error) {
+      this.logger.error(
+        `[CHANNEL-CALLING] Error getting cached profile for ${userDehiveId}:`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Cache user profile to Redis (called by HTTP API)
+   * TTL: 1 hour
+   */
+  async cacheUserProfile(
+    userDehiveId: string,
+    sessionId: string,
+    fingerprintHash: string,
+  ): Promise<boolean> {
+    try {
+      // Fetch from Decode API
+      const profile = await this.getUserProfile(
+        sessionId,
+        fingerprintHash,
+        userDehiveId,
+      );
+
+      if (!profile) {
+        this.logger.warn(
+          `[CHANNEL-CALLING] Cannot cache - profile not found for ${userDehiveId}`,
+        );
+        return false;
+      }
+
+      const cacheKey = `user_profile:${userDehiveId}`;
+      const cacheData = {
+        user_dehive_id: userDehiveId,
+        username: profile.username,
+        display_name: profile.display_name,
+        avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
+      };
+
+      await this.redis.set(
+        cacheKey,
+        JSON.stringify(cacheData),
+        "EX",
+        3600, // 1 hour
+      );
+
+      this.logger.log(
+        `[CHANNEL-CALLING] Cached profile for ${userDehiveId} (1 hour TTL)`,
+      );
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `[CHANNEL-CALLING] Error caching profile for ${userDehiveId}:`,
+        error,
+      );
+      return false;
+    }
+  }
+
   private async getAccessTokenFromSession(
     sessionId: string,
   ): Promise<string | null> {

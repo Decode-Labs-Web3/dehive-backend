@@ -23,6 +23,7 @@ import {
   ChannelParticipant,
   ChannelParticipantDocument,
 } from "../schemas/channel-participant.schema";
+import { DecodeApiClient } from "../clients/decode-api.client";
 
 type SocketMeta = {
   userDehiveId?: string;
@@ -30,7 +31,7 @@ type SocketMeta = {
 };
 
 @WebSocketGateway({
-  namespace: "/channel-rtc",
+  namespace: "/",
   cors: { origin: "*" },
 })
 export class ChannelCallGateway
@@ -49,6 +50,7 @@ export class ChannelCallGateway
     private readonly channelCallModel: Model<ChannelCallDocument>,
     @InjectModel(ChannelParticipant.name)
     private readonly participantModel: Model<ChannelParticipantDocument>,
+    private readonly decodeApiClient: DecodeApiClient,
   ) {
     // Initialize meta Map
     this.meta = new Map<Socket, SocketMeta>();
@@ -72,11 +74,65 @@ export class ChannelCallGateway
       "[CHANNEL-RTC-WS] participantModel available:",
       !!this.participantModel,
     );
+    console.log(
+      "[CHANNEL-RTC-WS] decodeApiClient available:",
+      !!this.decodeApiClient,
+    );
   }
 
   private send(client: Socket, event: string, data: unknown) {
     const serializedData = JSON.parse(JSON.stringify(data));
     client.emit(event, serializedData);
+  }
+
+  /**
+   * Get user profile - tries cache first, returns fallback if not found
+   * This matches the behavior of messaging services
+   * Returns minimal user data needed for call events (only 4 fields)
+   */
+  private async getUserProfile(userDehiveId: string): Promise<{
+    _id: string;
+    username: string;
+    display_name: string;
+    avatar_ipfs_hash: string;
+  }> {
+    try {
+      const profile =
+        await this.decodeApiClient.getCachedUserProfile(userDehiveId);
+
+      if (profile) {
+        console.log(
+          `[CHANNEL-RTC-WS] Retrieved cached profile for ${userDehiveId}`,
+        );
+        return {
+          _id: userDehiveId,
+          username: profile.username || `User_${userDehiveId}`,
+          display_name:
+            profile.display_name || profile.username || `User_${userDehiveId}`,
+          avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
+        };
+      }
+
+      // Fallback: return basic profile (same as messaging services)
+      console.log(
+        `[CHANNEL-RTC-WS] No cached profile found for ${userDehiveId}, using fallback`,
+      );
+      return {
+        _id: userDehiveId,
+        username: `User_${userDehiveId}`,
+        display_name: `User_${userDehiveId}`,
+        avatar_ipfs_hash: "",
+      };
+    } catch (error) {
+      console.error(`[CHANNEL-RTC-WS] Error getting user profile:`, error);
+      // Return fallback on error
+      return {
+        _id: userDehiveId,
+        username: `User_${userDehiveId}`,
+        display_name: `User_${userDehiveId}`,
+        avatar_ipfs_hash: "",
+      };
+    }
   }
 
   handleConnection(client: Socket) {
@@ -119,46 +175,27 @@ export class ChannelCallGateway
     @MessageBody() data: string | { userDehiveId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    console.log(`[CHANNEL-RTC-WS] Identity request received:`, data);
-    console.log(`[CHANNEL-RTC-WS] Data type:`, typeof data);
-    console.log(`[CHANNEL-RTC-WS] Is object:`, typeof data === "object");
-
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
 
     let userDehiveId: string;
 
-    console.log(`[CHANNEL-RTC-WS] Parsing data...`);
-
+    // Parse data - handle string (plain or JSON) or object format
     if (typeof data === "string") {
-      console.log(
-        `[CHANNEL-RTC-WS] String format detected, trying to parse as JSON`,
-      );
       try {
-        const parsedData = JSON.parse(data);
+        const parsedData = JSON.parse(data) as { userDehiveId: string };
         if (parsedData.userDehiveId) {
-          console.log(`[CHANNEL-RTC-WS] Successfully parsed JSON string`);
           userDehiveId = parsedData.userDehiveId;
         } else {
-          console.log(
-            `[CHANNEL-RTC-WS] Parsed JSON but no userDehiveId found, treating as plain string`,
-          );
           userDehiveId = data;
         }
       } catch {
-        console.log(
-          `[CHANNEL-RTC-WS] Failed to parse JSON, treating as plain string`,
-        );
         userDehiveId = data;
       }
     } else if (typeof data === "object" && data?.userDehiveId) {
-      console.log(`[CHANNEL-RTC-WS] Object format detected:`, data);
       userDehiveId = data.userDehiveId;
-      console.log(`[CHANNEL-RTC-WS] Extracted userDehiveId:`, userDehiveId);
     } else {
-      console.log(`[CHANNEL-RTC-WS] Invalid format, returning error`);
       return this.send(client, "error", {
         message:
           "Invalid identity format. Send userDehiveId as string or {userDehiveId: string}",
@@ -167,9 +204,7 @@ export class ChannelCallGateway
       });
     }
 
-    console.log(`[CHANNEL-RTC-WS] Validating userDehiveId:`, userDehiveId);
     if (!userDehiveId || !Types.ObjectId.isValid(userDehiveId)) {
-      console.log(`[CHANNEL-RTC-WS] Invalid userDehiveId, returning error`);
       return this.send(client, "error", {
         message: "Invalid userDehiveId",
         code: "INVALID_USER_ID",
@@ -178,16 +213,11 @@ export class ChannelCallGateway
     }
 
     // Validate user exists in database
-    console.log(`[CHANNEL-RTC-WS] Checking if user exists: ${userDehiveId}`);
     const exists = await this.userDehiveModel.exists({
       _id: new Types.ObjectId(userDehiveId),
     });
 
-    console.log(`[CHANNEL-RTC-WS] User exists result: ${exists}`);
     if (!exists) {
-      console.log(
-        `[CHANNEL-RTC-WS] User not found in database: ${userDehiveId}`,
-      );
       return this.send(client, "error", {
         message: "User not found",
         code: "USER_NOT_FOUND",
@@ -195,18 +225,11 @@ export class ChannelCallGateway
       });
     }
 
-    console.log(
-      `[CHANNEL-RTC-WS] Accepting identity for user: ${userDehiveId}`,
-    );
-
-    console.log(`[CHANNEL-RTC-WS] Getting meta for client:`, client.id);
     const meta = this.meta.get(client);
-    console.log(`[CHANNEL-RTC-WS] Meta found:`, !!meta);
-
     if (meta) {
       meta.userDehiveId = userDehiveId;
       void client.join(`user:${userDehiveId}`);
-      console.log(`[CHANNEL-RTC-WS] User identified as ${userDehiveId}`);
+
       this.send(client, "identityConfirmed", {
         userDehiveId,
         status: "success",
@@ -311,17 +334,20 @@ export class ChannelCallGateway
         timestamp: new Date().toISOString(),
       });
 
-      // Notify other participants in channel
+      // Get user profile for userJoinedChannel event
+      const userProfile = await this.getUserProfile(userId);
+
+      // Always emit (profile is guaranteed to exist, fallback if needed)
       this.server
         .to(`channel:${parsedData.channel_id}`)
         .emit("userJoinedChannel", {
           channel_id: parsedData.channel_id,
           user_id: userId,
           user_info: {
-            _id: userId,
-            username: "user_" + userId.substring(0, 8),
-            display_name: "User " + userId.substring(0, 8),
-            avatar_ipfs_hash: "",
+            _id: userProfile._id,
+            username: userProfile.username,
+            display_name: userProfile.display_name,
+            avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
           },
           timestamp: new Date().toISOString(),
         });
