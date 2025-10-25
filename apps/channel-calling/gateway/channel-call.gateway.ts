@@ -273,9 +273,14 @@ export class ChannelCallGateway
 
       await client.join(`server:${serverId}`);
 
+      // Get all channels in server with their active participants
+      const serverChannelsData =
+        await this.service.getServerChannelsWithParticipants(serverId);
+
       this.send(client, "serverJoined", {
         server_id: serverId,
         status: "success",
+        channels: serverChannelsData.channels,
       });
     } catch (error) {
       this.send(client, "error", {

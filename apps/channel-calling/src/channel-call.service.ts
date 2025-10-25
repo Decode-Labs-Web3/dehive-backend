@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
-import { Model } from "mongoose";
+import { Model, Types } from "mongoose";
 import { ConfigService } from "@nestjs/config";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
@@ -12,6 +12,11 @@ import {
   ChannelParticipant,
   ChannelParticipantDocument,
 } from "../schemas/channel-participant.schema";
+import {
+  Category,
+  CategoryDocument,
+} from "../../server/schemas/category.schema";
+import { Channel, ChannelDocument } from "../../server/schemas/channel.schema";
 import { CallStatus, CallEndReason } from "../enum/enum";
 import { Participant } from "../interfaces/participant.interface";
 import { ParticipantsResponse } from "../interfaces/participants-response.interface";
@@ -26,6 +31,10 @@ export class ChannelCallService {
     private channelCallModel: Model<ChannelCallDocument>,
     @InjectModel(ChannelParticipant.name)
     private channelParticipantModel: Model<ChannelParticipantDocument>,
+    @InjectModel(Category.name)
+    private categoryModel: Model<CategoryDocument>,
+    @InjectModel(Channel.name)
+    private channelModel: Model<ChannelDocument>,
     private configService: ConfigService,
     private decodeApiClient: DecodeApiClient,
     @InjectRedis() private readonly redis: Redis,
@@ -466,6 +475,119 @@ export class ChannelCallService {
         error,
       );
       return { participants: [] };
+    }
+  }
+
+  async getServerChannelsWithParticipants(serverId: string): Promise<{
+    server_id: string;
+    channels: Array<{
+      channel_id: string;
+      participants: Array<{
+        _id: string;
+        username: string;
+        display_name: string;
+        avatar_ipfs_hash: string;
+      }>;
+    }>;
+  }> {
+    this.logger.log(
+      `Getting all channels with participants for server ${serverId}`,
+    );
+
+    try {
+      // Get all categories in the server
+      const categories = await this.categoryModel
+        .aggregate([
+          { $match: { server_id: new Types.ObjectId(serverId) } },
+          {
+            $lookup: {
+              from: "channel",
+              localField: "_id",
+              foreignField: "category_id",
+              as: "channels",
+            },
+          },
+        ])
+        .exec();
+
+      // Flatten all channels from all categories
+      const allChannels: Array<{ _id: Types.ObjectId; name: string }> = [];
+      categories.forEach((category) => {
+        if (category.channels && Array.isArray(category.channels)) {
+          allChannels.push(...category.channels);
+        }
+      });
+
+      // For each channel, get participants
+      const channelsWithParticipants = await Promise.all(
+        allChannels.map(async (channel) => {
+          const channelId = channel._id.toString();
+
+          // Get all participants in this channel
+          const participants = await this.channelParticipantModel
+            .find({ channel_id: channelId })
+            .exec();
+
+          if (participants.length === 0) {
+            return {
+              channel_id: channelId,
+              participants: [],
+            };
+          }
+
+          const userIds = participants.map((p) => p.user_id.toString());
+
+          try {
+            // Fetch each user profile in parallel
+            const userProfiles = await Promise.all(
+              userIds.map((id) =>
+                this.decodeApiClient.getUserProfilePublic(id),
+              ),
+            );
+
+            // Filter out null results
+            const validProfiles = userProfiles
+              .filter(
+                (profile): profile is NonNullable<typeof profile> =>
+                  profile !== null,
+              )
+              .map((profile) => ({
+                _id: profile._id,
+                username: profile.username,
+                display_name: profile.display_name,
+                avatar_ipfs_hash: profile.avatar_ipfs_hash,
+              }));
+
+            return {
+              channel_id: channelId,
+              participants: validProfiles,
+            };
+          } catch (error) {
+            this.logger.error(
+              `Error fetching participants for channel ${channelId}:`,
+              error,
+            );
+            return {
+              channel_id: channelId,
+              participants: [],
+            };
+          }
+        }),
+      );
+
+      return {
+        server_id: serverId,
+        channels: channelsWithParticipants,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting server channels with participants:`,
+        error,
+      );
+      return {
+        server_id: serverId,
+        channels: [],
+      };
     }
   }
 }

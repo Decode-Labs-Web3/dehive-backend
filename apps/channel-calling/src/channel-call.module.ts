@@ -17,6 +17,8 @@ import {
   UserDehive,
   UserDehiveSchema,
 } from "../../user-dehive-server/schemas/user-dehive.schema";
+import { Category, CategorySchema } from "../../server/schemas/category.schema";
+import { Channel, ChannelSchema } from "../../server/schemas/channel.schema";
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import {
       { name: ChannelCall.name, schema: ChannelCallSchema },
       { name: ChannelParticipant.name, schema: ChannelParticipantSchema },
       { name: UserDehive.name, schema: UserDehiveSchema },
+      { name: Category.name, schema: CategorySchema },
+      { name: Channel.name, schema: ChannelSchema },
     ]),
     HttpModule.registerAsync({
       imports: [ConfigModule],
