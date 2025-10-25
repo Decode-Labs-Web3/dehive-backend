@@ -20,6 +20,7 @@ import {
   DirectConversationDocument,
 } from "../schemas/direct-conversation.schema";
 import { DecodeApiClient } from "../clients/decode-api.client";
+import { CallStatus } from "../enum/enum";
 
 type SocketMeta = {
   userDehiveId?: string;
@@ -53,20 +54,20 @@ export class DirectCallGateway
 
   private send(client: Socket, event: string, data: unknown) {
     // Production: emit object (default for frontend)
-    // client.emit(event, data);
+    client.emit(event, data);
 
     // Debug (Insomnia): emit pretty JSON string
-    const serializedData = JSON.stringify(data, null, 2);
-    client.emit(event, serializedData);
+    // const serializedData = JSON.stringify(data, null, 2);
+    // client.emit(event, serializedData);
   }
 
   private broadcast(room: string, event: string, data: unknown) {
     // Production: emit object (default for frontend)
-    // this.server.to(room).emit(event, data);
+    this.server.to(room).emit(event, data);
 
     // Debug (Insomnia): emit pretty JSON string
-    const serializedData = JSON.stringify(data, null, 2);
-    this.server.to(room).emit(event, serializedData);
+    // const serializedData = JSON.stringify(data, null, 2);
+    // this.server.to(room).emit(event, serializedData);
   }
 
   private findSocketByUserId(userId: string): Socket | null {
@@ -78,10 +79,6 @@ export class DirectCallGateway
     return null;
   }
 
-  /**
-   * Get user profile from public API (for WebSocket responses)
-   * Fetches profile in real-time from public endpoint
-   */
   private async getUserProfile(userDehiveId: string): Promise<{
     _id: string;
     username: string;
@@ -108,10 +105,6 @@ export class DirectCallGateway
     }
   }
 
-  /**
-   * Find or create a DirectConversation between two users
-   * Returns fixed conversation_id for all calls between same 2 users
-   */
   private async findOrCreateConversation(
     userIdA: string,
     userIdB: string,
@@ -136,6 +129,46 @@ export class DirectCallGateway
     }
 
     return conversation._id as Types.ObjectId;
+  }
+
+  private async findOrCreateCall(
+    callerId: string,
+    calleeId: string,
+  ): Promise<DmCallDocument> {
+    // Get or create fixed conversation first
+    const conversationId = await this.findOrCreateConversation(
+      callerId,
+      calleeId,
+    );
+
+    // Try to find existing call document for this conversation
+    let call = await this.dmCallModel.findOne({
+      conversation_id: conversationId,
+    });
+
+    // If not found, create new one
+    if (!call) {
+      call = new this.dmCallModel({
+        conversation_id: conversationId,
+        caller_id: new Types.ObjectId(callerId),
+        callee_id: new Types.ObjectId(calleeId),
+        status: "calling",
+      });
+      await call.save();
+    } else {
+      // If found, reset/update for new call
+      call.status = CallStatus.CALLING;
+      call.started_at = undefined;
+      call.ended_at = undefined;
+      call.duration_seconds = undefined;
+      call.end_reason = undefined;
+      // Update caller/callee in case roles switched
+      call.caller_id = new Types.ObjectId(callerId);
+      call.callee_id = new Types.ObjectId(calleeId);
+      await call.save();
+    }
+
+    return call;
   }
 
   handleConnection(client: Socket) {
@@ -306,21 +339,12 @@ export class DirectCallGateway
         });
       }
 
-      // Find or create fixed conversation between 2 users
-      const conversationId = await this.findOrCreateConversation(
+      // Find or create FIXED call between 2 users (same call_id for all calls)
+      const call = await this.findOrCreateCall(
         callerId,
         parsedData.target_user_id,
       );
 
-      // Create call document with fixed conversation_id
-      const call = new this.dmCallModel({
-        conversation_id: conversationId,
-        caller_id: new Types.ObjectId(callerId),
-        callee_id: new Types.ObjectId(parsedData.target_user_id),
-        status: "calling",
-      });
-
-      await call.save();
       meta.callId = String(call._id);
 
       // Set timeout for call (60 seconds)
