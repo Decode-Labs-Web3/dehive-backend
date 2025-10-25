@@ -15,6 +15,10 @@ import {
   UserDehiveDocument,
 } from "../../user-dehive-server/schemas/user-dehive.schema";
 import { DmCall, DmCallDocument } from "../schemas/dm-call.schema";
+import {
+  DirectConversation,
+  DirectConversationDocument,
+} from "../schemas/direct-conversation.schema";
 import { DecodeApiClient } from "../clients/decode-api.client";
 
 type SocketMeta = {
@@ -40,6 +44,8 @@ export class DirectCallGateway
     private readonly userDehiveModel: Model<UserDehiveDocument>,
     @InjectModel(DmCall.name)
     private readonly dmCallModel: Model<DmCallDocument>,
+    @InjectModel(DirectConversation.name)
+    private readonly directConversationModel: Model<DirectConversationDocument>,
     private readonly decodeApiClient: DecodeApiClient,
   ) {
     this.meta = new Map<Socket, SocketMeta>();
@@ -100,6 +106,36 @@ export class DirectCallGateway
       console.error(`[Direct-Calling] Error getting user profile:`, error);
       return null;
     }
+  }
+
+  /**
+   * Find or create a DirectConversation between two users
+   * Returns fixed conversation_id for all calls between same 2 users
+   */
+  private async findOrCreateConversation(
+    userIdA: string,
+    userIdB: string,
+  ): Promise<Types.ObjectId> {
+    // Sort userIds to ensure consistent lookup (schema pre-save hook does this too)
+    const [sortedUserA, sortedUserB] =
+      userIdA < userIdB ? [userIdA, userIdB] : [userIdB, userIdA];
+
+    // Try to find existing conversation
+    let conversation = await this.directConversationModel.findOne({
+      userA: new Types.ObjectId(sortedUserA),
+      userB: new Types.ObjectId(sortedUserB),
+    });
+
+    // If not found, create new one
+    if (!conversation) {
+      conversation = new this.directConversationModel({
+        userA: new Types.ObjectId(sortedUserA),
+        userB: new Types.ObjectId(sortedUserB),
+      });
+      await conversation.save();
+    }
+
+    return conversation._id as Types.ObjectId;
   }
 
   handleConnection(client: Socket) {
@@ -270,9 +306,15 @@ export class DirectCallGateway
         });
       }
 
-      // Create call document
+      // Find or create fixed conversation between 2 users
+      const conversationId = await this.findOrCreateConversation(
+        callerId,
+        parsedData.target_user_id,
+      );
+
+      // Create call document with fixed conversation_id
       const call = new this.dmCallModel({
-        conversation_id: new Types.ObjectId(),
+        conversation_id: conversationId,
         caller_id: new Types.ObjectId(callerId),
         callee_id: new Types.ObjectId(parsedData.target_user_id),
         status: "calling",

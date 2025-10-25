@@ -107,7 +107,11 @@ export class ChannelCallGateway
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
-    this.meta.set(client, {});
+    this.meta.set(client, {
+      userDehiveId: undefined,
+      serverId: undefined,
+      channelId: undefined,
+    });
   }
 
   handleDisconnect(client: Socket) {
@@ -156,7 +160,6 @@ export class ChannelCallGateway
         message:
           "Invalid identity format. Send userDehiveId as string or {userDehiveId: string}",
         code: "INVALID_FORMAT",
-        timestamp: new Date().toISOString(),
       });
     }
 
@@ -164,7 +167,6 @@ export class ChannelCallGateway
       return this.send(client, "error", {
         message: "Invalid userDehiveId",
         code: "INVALID_USER_ID",
-        timestamp: new Date().toISOString(),
       });
     }
 
@@ -177,7 +179,6 @@ export class ChannelCallGateway
       return this.send(client, "error", {
         message: "User not found",
         code: "USER_NOT_FOUND",
-        timestamp: new Date().toISOString(),
       });
     }
 
@@ -189,7 +190,6 @@ export class ChannelCallGateway
       this.send(client, "identityConfirmed", {
         userDehiveId,
         status: "success",
-        timestamp: new Date().toISOString(),
       });
     } else {
       this.meta.set(client, {
@@ -201,7 +201,6 @@ export class ChannelCallGateway
       this.send(client, "identityConfirmed", {
         userDehiveId,
         status: "success",
-        timestamp: new Date().toISOString(),
       });
     }
   }
@@ -226,7 +225,8 @@ export class ChannelCallGateway
 
     // Parse data if it's a string
     let parsedData: {
-      server_id: string;
+      server_id?: string;
+      serverId?: string;
     };
 
     if (typeof data === "string") {
@@ -236,37 +236,51 @@ export class ChannelCallGateway
         return this.send(client, "error", {
           message: "Invalid JSON format",
           code: "INVALID_FORMAT",
-          timestamp: new Date().toISOString(),
         });
       }
     } else {
       parsedData = data;
     }
 
+    // Support both server_id and serverId
+    const serverId = parsedData.server_id || parsedData.serverId;
+
+    if (!serverId) {
+      return this.send(client, "error", {
+        message: "server_id is required",
+        code: "INVALID_REQUEST",
+      });
+    }
+
     if (!userId) {
       return this.send(client, "error", {
         message: "Please identify first",
         code: "AUTHENTICATION_REQUIRED",
-        timestamp: new Date().toISOString(),
       });
     }
 
     try {
-      meta.serverId = parsedData.server_id;
-      this.meta.set(client, meta);
+      if (meta) {
+        meta.serverId = serverId;
+        this.meta.set(client, meta);
+      } else {
+        this.meta.set(client, {
+          userDehiveId: userId,
+          serverId: serverId,
+          channelId: undefined,
+        });
+      }
 
-      await client.join(`server:${parsedData.server_id}`);
+      await client.join(`server:${serverId}`);
 
       this.send(client, "serverJoined", {
-        server_id: parsedData.server_id,
+        server_id: serverId,
         status: "success",
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       this.send(client, "error", {
         message: "Failed to join server",
         details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
       });
     }
   }
@@ -290,7 +304,8 @@ export class ChannelCallGateway
     const userId = meta?.userDehiveId;
 
     let parsedData: {
-      channel_id: string;
+      channel_id?: string;
+      channelId?: string;
     };
 
     if (typeof data === "string") {
@@ -300,71 +315,76 @@ export class ChannelCallGateway
         return this.send(client, "error", {
           message: "Invalid JSON format",
           code: "INVALID_FORMAT",
-          timestamp: new Date().toISOString(),
         });
       }
     } else {
       parsedData = data;
     }
 
+    // Support both channel_id and channelId
+    const channelId = parsedData.channel_id || parsedData.channelId;
+
+    if (!channelId) {
+      return this.send(client, "error", {
+        message: "channel_id is required",
+        code: "INVALID_REQUEST",
+      });
+    }
+
     if (!userId) {
       return this.send(client, "error", {
         message: "Please identify first",
         code: "AUTHENTICATION_REQUIRED",
-        timestamp: new Date().toISOString(),
       });
     }
 
-    if (!meta.serverId) {
+    if (!meta || !meta.serverId) {
       return this.send(client, "error", {
         message: "Please join a server first before joining a channel",
         code: "SERVER_NOT_JOINED",
-        timestamp: new Date().toISOString(),
       });
     }
 
     try {
-      const result = await this.service.joinChannel(
-        userId,
-        parsedData.channel_id,
-      );
+      const result = await this.service.joinChannel(userId, channelId);
 
-      meta.channelId = parsedData.channel_id;
-      this.meta.set(client, meta);
+      if (meta) {
+        meta.channelId = channelId;
+        this.meta.set(client, meta);
+      } else {
+        this.meta.set(client, {
+          userDehiveId: userId,
+          serverId: undefined,
+          channelId: channelId,
+        });
+      }
 
-      await client.join(`channel:${parsedData.channel_id}`);
+      await client.join(`channel:${channelId}`);
 
       this.send(client, "channelJoined", {
-        channel_id: parsedData.channel_id,
+        channel_id: channelId,
         status: result.call.status,
         participants: result.otherParticipants,
-        timestamp: new Date().toISOString(),
       });
 
       const userProfile = await this.getUserProfile(userId);
 
       if (userProfile) {
-        this.broadcast(
-          `channel:${parsedData.channel_id}`,
-          "userJoinedChannel",
-          {
-            channel_id: parsedData.channel_id,
-            user_id: userId,
-            user_info: {
-              _id: userProfile._id,
-              username: userProfile.username,
-              display_name: userProfile.display_name,
-              avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
-            },
-            timestamp: new Date().toISOString(),
+        this.broadcast(`channel:${channelId}`, "userJoinedChannel", {
+          channel_id: channelId,
+          user_id: userId,
+          user_info: {
+            _id: userProfile._id,
+            username: userProfile.username,
+            display_name: userProfile.display_name,
+            avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
           },
-        );
+        });
       }
     } catch (error) {
       this.send(client, "error", {
         message: "Failed to join channel",
         details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
       });
     }
   }
@@ -384,7 +404,7 @@ export class ChannelCallGateway
     const userId = meta?.userDehiveId;
 
     // Parse data if it's a string
-    let parsedData: { channel_id: string };
+    let parsedData: { channel_id?: string; channelId?: string };
 
     if (typeof data === "string") {
       try {
@@ -393,43 +413,62 @@ export class ChannelCallGateway
         return this.send(client, "error", {
           message: "Invalid JSON format",
           code: "INVALID_FORMAT",
-          timestamp: new Date().toISOString(),
         });
       }
     } else {
       parsedData = data;
     }
 
+    // Support both channel_id and channelId
+    const channelId = parsedData.channel_id || parsedData.channelId;
+
+    if (!channelId) {
+      return this.send(client, "error", {
+        message: "channel_id is required",
+        code: "INVALID_REQUEST",
+      });
+    }
+
     if (!userId) {
       return this.send(client, "error", {
         message: "Please identify first",
         code: "AUTHENTICATION_REQUIRED",
-        timestamp: new Date().toISOString(),
       });
     }
 
     try {
-      const result = await this.service.leaveCall(
-        userId,
-        parsedData.channel_id,
-      );
+      const result = await this.service.leaveCall(userId, channelId);
 
-      meta.channelId = undefined;
-      this.meta.set(client, meta);
+      if (meta) {
+        meta.channelId = undefined;
+        this.meta.set(client, meta);
+      }
 
-      await client.leave(`channel:${parsedData.channel_id}`);
-
-      this.send(client, "channelLeft", {
-        channel_id: parsedData.channel_id,
-        status: result.call.status,
-        timestamp: new Date().toISOString(),
-      });
+      await client.leave(`channel:${channelId}`);
 
       const userProfile = await this.getUserProfile(userId);
 
       if (userProfile) {
-        this.broadcast(`channel:${parsedData.channel_id}`, "userLeftChannel", {
-          channel_id: parsedData.channel_id,
+        this.send(client, "channelLeft", {
+          channel_id: channelId,
+          status: result.call.status,
+          user_info: {
+            _id: userProfile._id,
+            username: userProfile.username,
+            display_name: userProfile.display_name,
+            avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
+          },
+        });
+      } else {
+        this.send(client, "channelLeft", {
+          channel_id: channelId,
+          status: result.call.status,
+        });
+      }
+
+      if (userProfile) {
+        this.broadcast(`channel:${channelId}`, "userLeftChannel", {
+          channel_id: channelId,
           user_id: userId,
           user_info: {
             _id: userProfile._id,
@@ -437,20 +476,17 @@ export class ChannelCallGateway
             display_name: userProfile.display_name,
             avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
           },
-          timestamp: new Date().toISOString(),
         });
       } else {
-        this.broadcast(`channel:${parsedData.channel_id}`, "userLeftChannel", {
-          channel_id: parsedData.channel_id,
+        this.broadcast(`channel:${channelId}`, "userLeftChannel", {
+          channel_id: channelId,
           user_id: userId,
-          timestamp: new Date().toISOString(),
         });
       }
     } catch (error) {
       this.send(client, "error", {
         message: "Failed to leave channel",
         details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
       });
     }
   }
