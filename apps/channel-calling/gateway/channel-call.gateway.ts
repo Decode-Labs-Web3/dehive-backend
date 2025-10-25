@@ -53,37 +53,25 @@ export class ChannelCallGateway
     private readonly participantModel: Model<ChannelParticipantDocument>,
     private readonly decodeApiClient: DecodeApiClient,
   ) {
-    // Initialize meta Map
     this.meta = new Map<Socket, SocketMeta>();
-
-    // Debug logging
-    console.log("[CHANNEL-RTC-WS] Gateway constructor called");
-    console.log("[CHANNEL-RTC-WS] Service injected:", {
-      hasService: !!this.service,
-      serviceType: typeof this.service,
-      serviceName: this.service?.constructor?.name,
-    });
-    console.log(
-      "[CHANNEL-RTC-WS] userDehiveModel available:",
-      !!this.userDehiveModel,
-    );
-    console.log(
-      "[CHANNEL-RTC-WS] channelCallModel available:",
-      !!this.channelCallModel,
-    );
-    console.log(
-      "[CHANNEL-RTC-WS] participantModel available:",
-      !!this.participantModel,
-    );
-    console.log(
-      "[CHANNEL-RTC-WS] decodeApiClient available:",
-      !!this.decodeApiClient,
-    );
   }
 
   private send(client: Socket, event: string, data: unknown) {
-    const serializedData = JSON.parse(JSON.stringify(data));
+    // Production: emit object (default for frontend)
+    // client.emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string
+    const serializedData = JSON.stringify(data, null, 2);
     client.emit(event, serializedData);
+  }
+
+  private broadcast(room: string, event: string, data: unknown) {
+    // Production: emit object (default for frontend)
+    // this.server.to(room).emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string
+    const serializedData = JSON.stringify(data, null, 2);
+    this.server.to(room).emit(event, serializedData);
   }
 
   /**
@@ -110,25 +98,15 @@ export class ChannelCallGateway
       }
 
       return null;
-    } catch (error) {
-      console.error(`[CHANNEL-RTC-WS] Error getting user profile:`, error);
+    } catch {
       return null;
     }
   }
 
   handleConnection(client: Socket) {
-    console.log("[CHANNEL-RTC-WS] ========================================");
-    console.log(
-      "[CHANNEL-RTC-WS] Client connected to /channel-rtc namespace. Awaiting identity.",
-    );
-    console.log(`[CHANNEL-RTC-WS] Socket ID: ${client.id}`);
-    console.log("[CHANNEL-RTC-WS] ========================================");
-
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
-
     this.meta.set(client, {});
   }
 
@@ -139,13 +117,10 @@ export class ChannelCallGateway
 
     const meta = this.meta.get(client);
     if (meta?.userDehiveId) {
-      console.log(
-        `[CHANNEL-RTC-WS] User ${meta.userDehiveId} disconnected from /channel-rtc`,
-      );
       try {
         this.service.handleUserDisconnect(meta.userDehiveId, meta.channelId);
-      } catch (error) {
-        console.error("[CHANNEL-RTC-WS] Error in handleUserDisconnect:", error);
+      } catch {
+        // Silent fail
       }
     }
     this.meta.delete(client);
@@ -217,16 +192,12 @@ export class ChannelCallGateway
         timestamp: new Date().toISOString(),
       });
     } else {
-      console.log(
-        `[CHANNEL-RTC-WS] No meta found for client, creating new one`,
-      );
       this.meta.set(client, {
         userDehiveId,
         serverId: undefined,
         channelId: undefined,
       });
       void client.join(`user:${userDehiveId}`);
-      console.log(`[CHANNEL-RTC-WS] User identified as ${userDehiveId}`);
       this.send(client, "identityConfirmed", {
         userDehiveId,
         status: "success",
@@ -272,13 +243,6 @@ export class ChannelCallGateway
       parsedData = data;
     }
 
-    console.log("[CHANNEL-RTC-WS] ========================================");
-    console.log("[CHANNEL-RTC-WS] joinServer event received");
-    console.log("[CHANNEL-RTC-WS] Parsed data:", parsedData);
-    console.log("[CHANNEL-RTC-WS] server_id:", parsedData?.server_id);
-    console.log("[CHANNEL-RTC-WS] User ID:", userId);
-    console.log("[CHANNEL-RTC-WS] ========================================");
-
     if (!userId) {
       return this.send(client, "error", {
         message: "Please identify first",
@@ -288,25 +252,17 @@ export class ChannelCallGateway
     }
 
     try {
-      // Store server info in meta
       meta.serverId = parsedData.server_id;
       this.meta.set(client, meta);
 
-      // Join socket to server room
       await client.join(`server:${parsedData.server_id}`);
 
-      console.log(
-        `[CHANNEL-RTC-WS] User ${userId} joined server ${parsedData.server_id}`,
-      );
-
-      // Notify user
       this.send(client, "serverJoined", {
         server_id: parsedData.server_id,
         status: "success",
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      console.error("[CHANNEL-RTC-WS] Error joining server:", error);
       this.send(client, "error", {
         message: "Failed to join server",
         details: error instanceof Error ? error.message : String(error),
@@ -333,12 +289,6 @@ export class ChannelCallGateway
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
-    console.log("[CHANNEL-RTC-WS] Meta debug:", {
-      hasMeta: !!meta,
-      userId: userId,
-    });
-
-    // Parse data if it's a string
     let parsedData: {
       channel_id: string;
     };
@@ -357,13 +307,6 @@ export class ChannelCallGateway
       parsedData = data;
     }
 
-    console.log("[CHANNEL-RTC-WS] ========================================");
-    console.log("[CHANNEL-RTC-WS] joinChannel event received");
-    console.log("[CHANNEL-RTC-WS] Parsed data:", parsedData);
-    console.log("[CHANNEL-RTC-WS] channel_id:", parsedData?.channel_id);
-    console.log("[CHANNEL-RTC-WS] User ID:", userId);
-    console.log("[CHANNEL-RTC-WS] ========================================");
-
     if (!userId) {
       return this.send(client, "error", {
         message: "Please identify first",
@@ -372,7 +315,6 @@ export class ChannelCallGateway
       });
     }
 
-    // Check if user has joined a server first
     if (!meta.serverId) {
       return this.send(client, "error", {
         message: "Please join a server first before joining a channel",
@@ -382,22 +324,16 @@ export class ChannelCallGateway
     }
 
     try {
-      console.log("[CHANNEL-RTC-WS] Using service for join channel");
-
-      // Join channel using service
       const result = await this.service.joinChannel(
         userId,
         parsedData.channel_id,
       );
 
-      // Store channel info in meta (store logical channel id only)
       meta.channelId = parsedData.channel_id;
       this.meta.set(client, meta);
 
-      // Join socket to channel room
       await client.join(`channel:${parsedData.channel_id}`);
 
-      // Notify user
       this.send(client, "channelJoined", {
         channel_id: parsedData.channel_id,
         status: result.call.status,
@@ -405,14 +341,13 @@ export class ChannelCallGateway
         timestamp: new Date().toISOString(),
       });
 
-      // Get user profile for userJoinedChannel event
       const userProfile = await this.getUserProfile(userId);
 
-      // Only emit if profile was successfully fetched
       if (userProfile) {
-        this.server
-          .to(`channel:${parsedData.channel_id}`)
-          .emit("userJoinedChannel", {
+        this.broadcast(
+          `channel:${parsedData.channel_id}`,
+          "userJoinedChannel",
+          {
             channel_id: parsedData.channel_id,
             user_id: userId,
             user_info: {
@@ -422,14 +357,10 @@ export class ChannelCallGateway
               avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
             },
             timestamp: new Date().toISOString(),
-          });
-      } else {
-        console.warn(
-          `[CHANNEL-RTC-WS] Could not fetch profile for ${userId}, skipping userJoinedChannel event`,
+          },
         );
       }
     } catch (error) {
-      console.error("[CHANNEL-RTC-WS] Error joining channel:", error);
       this.send(client, "error", {
         message: "Failed to join channel",
         details: error instanceof Error ? error.message : String(error),
@@ -478,134 +409,49 @@ export class ChannelCallGateway
     }
 
     try {
-      console.log("[CHANNEL-RTC-WS] Using service for leave channel");
-
-      // Leave channel using service
       const result = await this.service.leaveCall(
         userId,
         parsedData.channel_id,
       );
 
-      // Clear meta info
       meta.channelId = undefined;
       this.meta.set(client, meta);
 
-      // Leave socket from channel room
       await client.leave(`channel:${parsedData.channel_id}`);
 
-      // Notify user
       this.send(client, "channelLeft", {
         channel_id: parsedData.channel_id,
         status: result.call.status,
         timestamp: new Date().toISOString(),
       });
 
-      // Notify other participants in channel
-      this.server
-        .to(`channel:${parsedData.channel_id}`)
-        .emit("userLeftChannel", {
+      const userProfile = await this.getUserProfile(userId);
+
+      if (userProfile) {
+        this.broadcast(`channel:${parsedData.channel_id}`, "userLeftChannel", {
+          channel_id: parsedData.channel_id,
+          user_id: userId,
+          user_info: {
+            _id: userProfile._id,
+            username: userProfile.username,
+            display_name: userProfile.display_name,
+            avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
+          },
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        this.broadcast(`channel:${parsedData.channel_id}`, "userLeftChannel", {
           channel_id: parsedData.channel_id,
           user_id: userId,
           timestamp: new Date().toISOString(),
         });
+      }
     } catch (error) {
-      console.error("[CHANNEL-RTC-WS] Error leaving channel:", error);
       this.send(client, "error", {
         message: "Failed to leave channel",
         details: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       });
     }
-  }
-
-  @SubscribeMessage("leaveServer")
-  async handleLeaveServer(
-    @MessageBody()
-    data:
-      | {
-          server_id: string;
-        }
-      | string,
-    @ConnectedSocket() client: Socket,
-  ) {
-    // Ensure meta Map is initialized
-    if (!this.meta) {
-      this.meta = new Map<Socket, SocketMeta>();
-    }
-
-    const meta = this.meta.get(client);
-    const userId = meta?.userDehiveId;
-
-    // Parse data if it's a string
-    let parsedData: {
-      server_id: string;
-    };
-
-    if (typeof data === "string") {
-      try {
-        parsedData = JSON.parse(data);
-      } catch {
-        return this.send(client, "error", {
-          message: "Invalid JSON format",
-          code: "INVALID_FORMAT",
-          timestamp: new Date().toISOString(),
-        });
-      }
-    } else {
-      parsedData = data;
-    }
-
-    if (!userId) {
-      return this.send(client, "error", {
-        message: "Please identify first",
-        code: "AUTHENTICATION_REQUIRED",
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    try {
-      // If user is in a channel, they must leave channel first
-      if (meta.channelId) {
-        return this.send(client, "error", {
-          message: "Please leave the voice channel before leaving the server",
-          code: "CHANNEL_ACTIVE",
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Clear server info in meta
-      meta.serverId = undefined;
-      this.meta.set(client, meta);
-
-      // Leave socket from server room
-      await client.leave(`server:${parsedData.server_id}`);
-
-      console.log(
-        `[CHANNEL-RTC-WS] User ${userId} left server ${parsedData.server_id}`,
-      );
-
-      // Notify user
-      this.send(client, "serverLeft", {
-        server_id: parsedData.server_id,
-        status: "success",
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error("[CHANNEL-RTC-WS] Error leaving server:", error);
-      this.send(client, "error", {
-        message: "Failed to leave server",
-        details: error instanceof Error ? error.message : String(error),
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-
-  @SubscribeMessage("ping")
-  handlePing(@ConnectedSocket() client: Socket) {
-    console.log(`[CHANNEL-RTC-WS] Ping received from ${client.id}`);
-    this.send(client, "pong", {
-      timestamp: new Date().toISOString(),
-      message: "pong",
-    });
   }
 }

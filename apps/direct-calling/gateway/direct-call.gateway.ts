@@ -256,9 +256,8 @@ export class DirectCallGateway
       );
       if (!calleeProfile) {
         return this.send(client, "error", {
-          message:
-            "Target user profile not found in cache. Please call GET /cache-profile first.",
-          code: "PROFILE_NOT_CACHED",
+          message: "Target user not found",
+          code: "USER_NOT_FOUND",
         });
       }
 
@@ -266,9 +265,8 @@ export class DirectCallGateway
       const callerProfile = await this.getUserProfile(callerId);
       if (!callerProfile) {
         return this.send(client, "error", {
-          message:
-            "Caller profile not found in cache. Please call GET /cache-profile first.",
-          code: "PROFILE_NOT_CACHED",
+          message: "Caller not found",
+          code: "USER_NOT_FOUND",
         });
       }
 
@@ -425,8 +423,8 @@ export class DirectCallGateway
 
       if (!calleeProfile || !callerProfile) {
         return this.send(client, "error", {
-          message: "User profiles not found in cache",
-          code: "PROFILE_NOT_CACHED",
+          message: "User not found",
+          code: "USER_NOT_FOUND",
         });
       }
 
@@ -546,8 +544,8 @@ export class DirectCallGateway
 
       if (!calleeProfile || !callerProfile) {
         return this.send(client, "error", {
-          message: "User profiles not found in cache",
-          code: "PROFILE_NOT_CACHED",
+          message: "User not found",
+          code: "USER_NOT_FOUND",
         });
       }
 
@@ -678,8 +676,8 @@ export class DirectCallGateway
 
       if (!currentUserProfile || !otherUserProfile) {
         return this.send(client, "error", {
-          message: "User profiles not found in cache",
-          code: "PROFILE_NOT_CACHED",
+          message: "User not found",
+          code: "USER_NOT_FOUND",
         });
       }
 
