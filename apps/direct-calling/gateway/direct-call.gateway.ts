@@ -21,6 +21,7 @@ import {
 } from "../schemas/direct-conversation.schema";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import { CallStatus } from "../enum/enum";
+import { CallEndReason } from "../enum/enum";
 
 type SocketMeta = {
   userDehiveId?: string;
@@ -183,22 +184,99 @@ export class DirectCallGateway
   }
 
   handleConnection(client: Socket) {
+    console.log(`[Direct-Calling] ✅ Client CONNECTED: ${client.id}`);
+
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
     this.meta.set(client, {});
+
+    console.log(`[Direct-Calling] Total connected clients: ${this.meta.size}`);
   }
 
-  handleDisconnect(client: Socket) {
+  async handleDisconnect(client: Socket) {
+    console.log(`[Direct-Calling] ❌ Client DISCONNECTING: ${client.id}`);
+
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
 
     const meta = this.meta.get(client);
+
     if (meta?.userDehiveId) {
-      this.handleUserDisconnect(meta.userDehiveId, meta.callId);
+      const userId = meta.userDehiveId;
+      console.log(`[Direct-Calling] 👤 User DISCONNECTED: ${userId}`);
+
+      // Clear timeout if exists
+      if (meta.callTimeout) {
+        clearTimeout(meta.callTimeout);
+        console.log(
+          `[Direct-Calling] 🧹 Cleared call timeout for user: ${userId}`,
+        );
+      }
+
+      // Check if user has active call
+      const activeCall = await this.dmCallModel.findOne({
+        $or: [
+          { caller_id: new Types.ObjectId(userId) },
+          { callee_id: new Types.ObjectId(userId) },
+        ],
+        status: { $in: [CallStatus.CALLING, CallStatus.CONNECTED] },
+      });
+
+      if (activeCall) {
+        console.log(
+          `[Direct-Calling] ⚠️ User ${userId} disconnected during ACTIVE CALL (${activeCall.status})`,
+        );
+
+        // Auto-end the call
+        activeCall.status = CallStatus.ENDED;
+        activeCall.ended_at = new Date();
+        activeCall.end_reason = CallEndReason.CONNECTION_ERROR;
+        await activeCall.save();
+
+        console.log(
+          `[Direct-Calling] 📞 Call ${activeCall._id} auto-ended due to disconnect`,
+        );
+
+        // Notify the other user
+        const otherUserId =
+          activeCall.caller_id.toString() === userId
+            ? activeCall.callee_id.toString()
+            : activeCall.caller_id.toString();
+
+        const otherUserProfile = await this.getUserProfile(otherUserId);
+        if (otherUserProfile) {
+          this.broadcast(`user:${otherUserId}`, "callEnded", {
+            conversation_id: String(activeCall.conversation_id),
+            status: "ended",
+            reason: "peer_disconnected",
+            user_info: {
+              _id: userId,
+              username: "Disconnected User",
+              display_name: "Disconnected User",
+              avatar_ipfs_hash: "",
+            },
+          });
+          console.log(
+            `[Direct-Calling] 📢 Notified user ${otherUserId} about peer disconnect`,
+          );
+        }
+      } else {
+        console.log(
+          `[Direct-Calling] ℹ️ User ${userId} disconnected (no active call)`,
+        );
+      }
+
+      await this.handleUserDisconnect(userId, meta.callId);
+    } else {
+      console.log(
+        `[Direct-Calling] ❌ Anonymous client disconnected: ${client.id}`,
+      );
     }
+
     this.meta.delete(client);
+    console.log(`[Direct-Calling] Total connected clients: ${this.meta.size}`);
   }
 
   private async handleUserDisconnect(userId: string, callId?: string) {

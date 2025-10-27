@@ -109,15 +109,22 @@ export class DmGateway
   }
 
   handleConnection(client: Socket) {
-    console.log("[DM-WS] Client connected. Awaiting identity.");
+    console.log("[DM-WS] ✅ Client CONNECTED:", client.id);
+    console.log("[DM-WS] Awaiting identity confirmation...");
     this.meta.set(client, {});
   }
 
   handleDisconnect(client: Socket) {
+    console.log("[DM-WS] ❌ Client DISCONNECTING:", client.id);
+
     const meta = this.meta.get(client);
     if (meta?.userDehiveId) {
-      console.log(`[DM-WS] User ${meta.userDehiveId} disconnected.`);
+      console.log(`[DM-WS] 👤 User DISCONNECTED: ${meta.userDehiveId}`);
+      console.log(`[DM-WS] User ${meta.userDehiveId} left the DM gateway`);
+    } else {
+      console.log(`[DM-WS] ❌ Anonymous client disconnected: ${client.id}`);
     }
+
     this.meta.delete(client);
   }
 
