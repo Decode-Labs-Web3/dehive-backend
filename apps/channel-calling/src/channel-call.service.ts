@@ -17,7 +17,7 @@ import {
   CategoryDocument,
 } from "../../server/schemas/category.schema";
 import { Channel, ChannelDocument } from "../../server/schemas/channel.schema";
-import { CallStatus, CallEndReason } from "../enum/enum";
+import { CallStatus } from "../enum/enum";
 import { Participant } from "../interfaces/participant.interface";
 import { ParticipantsResponse } from "../interfaces/participants-response.interface";
 import { DecodeApiClient } from "../clients/decode-api.client";
@@ -155,61 +155,6 @@ export class ChannelCallService {
       .exec();
 
     if (!call) {
-      throw new NotFoundException(
-        "No active voice call found for this channel",
-      );
-    }
-
-    // Find participant
-    const participant = await this.channelParticipantModel
-      .findOne({ channel_id: channelId, user_id: userId })
-      .exec();
-
-    if (!participant) {
-      throw new NotFoundException(
-        "Participant not found in this voice channel",
-      );
-    }
-
-    // Remove participant
-    await this.channelParticipantModel
-      .findByIdAndDelete(participant._id)
-      .exec();
-
-    // Update call participant count
-    const updatedCall = await this.channelCallModel
-      .findByIdAndUpdate(
-        call._id,
-        { $inc: { current_participants: -1 } },
-        { new: true },
-      )
-      .exec();
-
-    this.logger.log(
-      `User ${userId} left voice channel ${channelId}. Participants: ${updatedCall?.current_participants}`,
-    );
-
-    if (!updatedCall) {
-      throw new NotFoundException("Call not found after update");
-    }
-
-    return { call: updatedCall };
-  }
-
-  async leaveCall(
-    userId: string,
-    channelId: string,
-  ): Promise<{
-    call: ChannelCallDocument;
-  }> {
-    this.logger.log(`User ${userId} leaving voice channel ${channelId}`);
-
-    // Find the call for this channel
-    const call = await this.channelCallModel
-      .findOne({ channel_id: channelId, status: CallStatus.CONNECTED })
-      .exec();
-
-    if (!call) {
       throw new NotFoundException("Call not found");
     }
 
@@ -240,17 +185,6 @@ export class ChannelCallService {
 
     if (!updatedCall) {
       throw new NotFoundException("Call not found after update");
-    }
-
-    // If no participants left, end the call
-    if (updatedCall.current_participants <= 0) {
-      await this.channelCallModel
-        .findByIdAndUpdate(call._id, {
-          status: CallStatus.ENDED,
-          ended_at: new Date(),
-          end_reason: CallEndReason.ALL_PARTICIPANTS_LEFT,
-        })
-        .exec();
     }
 
     this.logger.log(
@@ -375,17 +309,6 @@ export class ChannelCallService {
                 { new: true },
               )
               .exec();
-
-            // If no participants left, end the call
-            if (call.current_participants <= 1) {
-              await this.channelCallModel
-                .findByIdAndUpdate(call._id, {
-                  status: CallStatus.ENDED,
-                  ended_at: new Date(),
-                  end_reason: CallEndReason.ALL_PARTICIPANTS_LEFT,
-                })
-                .exec();
-            }
           }
         }
       } else {
@@ -418,17 +341,6 @@ export class ChannelCallService {
                 { new: true },
               )
               .exec();
-
-            // If no participants left, end the call
-            if (call.current_participants <= 1) {
-              await this.channelCallModel
-                .findByIdAndUpdate(call._id, {
-                  status: CallStatus.ENDED,
-                  ended_at: new Date(),
-                  end_reason: CallEndReason.ALL_PARTICIPANTS_LEFT,
-                })
-                .exec();
-            }
           }
         }
       }

@@ -16,10 +16,6 @@ import {
   UserDehiveDocument,
 } from "../../user-dehive-server/schemas/user-dehive.schema";
 import {
-  ChannelCall,
-  ChannelCallDocument,
-} from "../schemas/channel-call.schema";
-import {
   ChannelParticipant,
   ChannelParticipantDocument,
 } from "../schemas/channel-participant.schema";
@@ -47,8 +43,6 @@ export class ChannelCallGateway
     private readonly service: ChannelCallService,
     @InjectModel(UserDehive.name)
     private readonly userDehiveModel: Model<UserDehiveDocument>,
-    @InjectModel(ChannelCall.name)
-    private readonly channelCallModel: Model<ChannelCallDocument>,
     @InjectModel(ChannelParticipant.name)
     private readonly participantModel: Model<ChannelParticipantDocument>,
     private readonly decodeApiClient: DecodeApiClient,
@@ -72,20 +66,6 @@ export class ChannelCallGateway
     // Debug (Insomnia): emit pretty JSON string
     // const serializedData = JSON.stringify(data, null, 2);
     // this.server.to(room).emit(event, serializedData);
-  }
-
-  private broadcastExcludeSender(
-    client: Socket,
-    room: string,
-    event: string,
-    data: unknown,
-  ) {
-    // Production: emit object (default for frontend)
-    // client.to(room).emit(event, data);
-
-    // Debug (Insomnia): emit pretty JSON string
-    const serializedData = JSON.stringify(data, null, 2);
-    client.to(room).emit(event, serializedData);
   }
 
   private async getUserProfile(
@@ -475,7 +455,7 @@ export class ChannelCallGateway
       // Get user profile with status BEFORE leaving
       const userProfile = await this.getUserProfile(userId, channelId);
 
-      const result = await this.service.leaveCall(userId, channelId);
+      const result = await this.service.leaveChannel(userId, channelId);
 
       if (meta) {
         meta.channelId = undefined;
@@ -540,8 +520,6 @@ export class ChannelCallGateway
     @MessageBody()
     data:
       | {
-          channel_id?: string;
-          channelId?: string;
           isCamera?: boolean;
           isMic?: boolean;
           isHeadphone?: boolean;
@@ -557,11 +535,24 @@ export class ChannelCallGateway
 
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
+    const channelId = meta?.channelId;
+
+    if (!userId) {
+      return this.send(client, "error", {
+        message: "Please identify first",
+        code: "AUTHENTICATION_REQUIRED",
+      });
+    }
+
+    if (!channelId) {
+      return this.send(client, "error", {
+        message: "Please join a channel first",
+        code: "CHANNEL_NOT_JOINED",
+      });
+    }
 
     // Parse data if it's a string
     let parsedData: {
-      channel_id?: string;
-      channelId?: string;
       isCamera?: boolean;
       isMic?: boolean;
       isHeadphone?: boolean;
@@ -581,31 +572,7 @@ export class ChannelCallGateway
       parsedData = data;
     }
 
-    // Support both channel_id and channelId
-    const channelId = parsedData.channel_id || parsedData.channelId;
-
-    if (!channelId) {
-      return this.send(client, "error", {
-        message: "channel_id is required",
-        code: "INVALID_REQUEST",
-      });
-    }
-
-    if (!userId) {
-      return this.send(client, "error", {
-        message: "Please identify first",
-        code: "AUTHENTICATION_REQUIRED",
-      });
-    }
-
     try {
-      console.log(
-        "🔵 [DEBUG] Starting updateUserStatus for user:",
-        userId,
-        "channel:",
-        channelId,
-      );
-
       // Update user status
       const result = await this.service.updateUserStatus(userId, channelId, {
         isCamera: parsedData.isCamera,
@@ -614,13 +581,7 @@ export class ChannelCallGateway
         isLive: parsedData.isLive,
       });
 
-      console.log(
-        "🔵 [DEBUG] Service result:",
-        JSON.stringify(result, null, 2),
-      );
-
       if (!result.success || !result.participant) {
-        console.log("🔴 [DEBUG] Update failed, sending error");
         return this.send(client, "error", {
           message: "Failed to update user status",
           code: "UPDATE_FAILED",
@@ -641,22 +602,9 @@ export class ChannelCallGateway
         },
       };
 
-      console.log(
-        "🟢 [DEBUG] Broadcasting to channel:",
-        `channel:${channelId}`,
-      );
-      console.log(
-        "🟢 [DEBUG] Event data:",
-        JSON.stringify(statusData, null, 2),
-      );
-
       // Broadcast to ALL users in the channel (including the sender)
       this.broadcast(`channel:${channelId}`, "userStatusChanged", statusData);
-
-      console.log("✅ [DEBUG] Broadcast completed");
     } catch (error) {
-      console.log("🔴 [DEBUG] Exception caught:", error);
-
       this.send(client, "error", {
         message: "Failed to update user status",
         details: error instanceof Error ? error.message : String(error),
