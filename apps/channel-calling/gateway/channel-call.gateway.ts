@@ -58,20 +58,20 @@ export class ChannelCallGateway
 
   private send(client: Socket, event: string, data: unknown) {
     // Production: emit object (default for frontend)
-    // client.emit(event, data);
+    client.emit(event, data);
 
     // Debug (Insomnia): emit pretty JSON string
-    const serializedData = JSON.stringify(data, null, 2);
-    client.emit(event, serializedData);
+    // const serializedData = JSON.stringify(data, null, 2);
+    // client.emit(event, serializedData);
   }
 
   private broadcast(room: string, event: string, data: unknown) {
     // Production: emit object (default for frontend)
-    // this.server.to(room).emit(event, data);
+    this.server.to(room).emit(event, data);
 
     // Debug (Insomnia): emit pretty JSON string
-    const serializedData = JSON.stringify(data, null, 2);
-    this.server.to(room).emit(event, serializedData);
+    // const serializedData = JSON.stringify(data, null, 2);
+    // this.server.to(room).emit(event, serializedData);
   }
 
   private broadcastExcludeSender(

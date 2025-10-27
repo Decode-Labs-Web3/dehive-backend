@@ -99,10 +99,14 @@ export class ChannelCallService {
 
     // Create new participant
     // Store logical channel id on participant (not the call document id)
+    // Default status: isHeadphone = true, all others = false
     const participant = new this.channelParticipantModel({
       channel_id: channelId,
       user_id: userId,
-      is_muted: false,
+      isCamera: false,
+      isMic: false,
+      isHeadphone: true,
+      isLive: false,
       joined_at: new Date(),
     });
     await participant.save();
