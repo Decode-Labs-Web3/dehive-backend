@@ -141,6 +141,17 @@ export class DirectCallGateway
       calleeId,
     );
 
+    // Check if there's already an ACTIVE call (CALLING or CONNECTED)
+    const activeCall = await this.dmCallModel.findOne({
+      conversation_id: conversationId,
+      status: { $in: [CallStatus.CALLING, CallStatus.CONNECTED] },
+    });
+
+    if (activeCall) {
+      // There's already an active call, return error or handle accordingly
+      throw new Error("There is already an active call for this conversation");
+    }
+
     // Try to find existing call document for this conversation
     let call = await this.dmCallModel.findOne({
       conversation_id: conversationId,
@@ -152,7 +163,7 @@ export class DirectCallGateway
         conversation_id: conversationId,
         caller_id: new Types.ObjectId(callerId),
         callee_id: new Types.ObjectId(calleeId),
-        status: "calling",
+        status: CallStatus.CALLING,
       });
       await call.save();
     } else {
@@ -347,6 +358,10 @@ export class DirectCallGateway
 
       meta.callId = String(call._id);
 
+      console.log(
+        `[Direct-Calling] New call created: ${call._id}, conversation: ${call.conversation_id}, status: ${call.status}`,
+      );
+
       // Set timeout for call (60 seconds)
       const callTimeoutMs = 60000;
       const timeoutId = setTimeout(async () => {
@@ -354,15 +369,16 @@ export class DirectCallGateway
           const currentCall = await this.dmCallModel.findById(call._id);
           if (
             currentCall &&
-            (currentCall.status === "calling" ||
-              currentCall.status === "ringing")
+            (currentCall.status === CallStatus.CALLING ||
+              currentCall.status === CallStatus.RINGING)
           ) {
-            // Update call status to ended
+            // Update call status to timeout
             await this.dmCallModel.findByIdAndUpdate(
               call._id,
               {
-                status: "ended",
+                status: CallStatus.TIMEOUT,
                 ended_at: new Date(),
+                end_reason: "timeout",
               },
               { new: true },
             );
@@ -472,10 +488,10 @@ export class DirectCallGateway
     }
 
     try {
-      // Get call info first
+      // Get call info first - find call with CALLING status
       const existingCall = await this.dmCallModel.findOne({
         conversation_id: new Types.ObjectId(parsedData.conversation_id),
-        status: CallStatus.RINGING,
+        status: CallStatus.CALLING,
       });
       if (!existingCall) {
         return this.send(client, "error", {
@@ -511,7 +527,7 @@ export class DirectCallGateway
       const call = await this.dmCallModel.findByIdAndUpdate(
         existingCall._id,
         {
-          status: "connected",
+          status: CallStatus.CONNECTED,
           started_at: new Date(),
         },
         { new: true },
@@ -596,10 +612,10 @@ export class DirectCallGateway
     }
 
     try {
-      // Get call info first
+      // Get call info first - find call with CALLING status
       const existingCall = await this.dmCallModel.findOne({
         conversation_id: new Types.ObjectId(parsedData.conversation_id),
-        status: CallStatus.RINGING,
+        status: CallStatus.CALLING,
       });
       if (!existingCall) {
         return this.send(client, "error", {
@@ -635,7 +651,7 @@ export class DirectCallGateway
       const call = await this.dmCallModel.findByIdAndUpdate(
         existingCall._id,
         {
-          status: "declined",
+          status: CallStatus.DECLINED,
           ended_at: new Date(),
         },
         { new: true },
@@ -760,7 +776,7 @@ export class DirectCallGateway
       const call = await this.dmCallModel.findByIdAndUpdate(
         existingCall._id,
         {
-          status: "ended",
+          status: CallStatus.ENDED,
           ended_at: new Date(),
         },
         { new: true },
