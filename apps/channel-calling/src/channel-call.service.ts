@@ -51,6 +51,10 @@ export class ChannelCallService {
       username: string;
       display_name: string;
       avatar_ipfs_hash: string;
+      isCamera: boolean;
+      isMic: boolean;
+      isHeadphone: boolean;
+      isLive: boolean;
     }>;
   }> {
     this.logger.log(`User ${userId} joining voice channel ${channelId}`);
@@ -261,6 +265,10 @@ export class ChannelCallService {
       username: string;
       display_name: string;
       avatar_ipfs_hash: string;
+      isCamera: boolean;
+      isMic: boolean;
+      isHeadphone: boolean;
+      isLive: boolean;
     }>
   > {
     const participants = await this.channelParticipantModel
@@ -279,17 +287,24 @@ export class ChannelCallService {
         userIds.map((id) => this.decodeApiClient.getUserProfilePublic(id)),
       );
 
-      // Filter out null results and return only 4 essential fields
+      // Filter out null results and return with status fields
       return userProfiles
         .filter(
           (profile): profile is NonNullable<typeof profile> => profile !== null,
         )
-        .map((profile) => ({
-          _id: profile._id,
-          username: profile.username,
-          display_name: profile.display_name,
-          avatar_ipfs_hash: profile.avatar_ipfs_hash,
-        }));
+        .map((profile, index) => {
+          const participant = participants[index];
+          return {
+            _id: profile._id,
+            username: profile.username,
+            display_name: profile.display_name,
+            avatar_ipfs_hash: profile.avatar_ipfs_hash,
+            isCamera: participant.isCamera || false,
+            isMic: participant.isMic || false,
+            isHeadphone: participant.isHeadphone || false,
+            isLive: participant.isLive || false,
+          };
+        });
     } catch (error) {
       this.logger.error("Error fetching other participants:", error);
       return [];
@@ -487,6 +502,10 @@ export class ChannelCallService {
         username: string;
         display_name: string;
         avatar_ipfs_hash: string;
+        isCamera: boolean;
+        isMic: boolean;
+        isHeadphone: boolean;
+        isLive: boolean;
       }>;
     }>;
   }> {
@@ -545,18 +564,25 @@ export class ChannelCallService {
               ),
             );
 
-            // Filter out null results
+            // Filter out null results and map with status fields
             const validProfiles = userProfiles
               .filter(
                 (profile): profile is NonNullable<typeof profile> =>
                   profile !== null,
               )
-              .map((profile) => ({
-                _id: profile._id,
-                username: profile.username,
-                display_name: profile.display_name,
-                avatar_ipfs_hash: profile.avatar_ipfs_hash,
-              }));
+              .map((profile, index) => {
+                const participant = participants[index];
+                return {
+                  _id: profile._id,
+                  username: profile.username,
+                  display_name: profile.display_name,
+                  avatar_ipfs_hash: profile.avatar_ipfs_hash,
+                  isCamera: participant.isCamera || false,
+                  isMic: participant.isMic || false,
+                  isHeadphone: participant.isHeadphone || false,
+                  isLive: participant.isLive || false,
+                };
+              });
 
             return {
               channel_id: channelId,
@@ -587,6 +613,99 @@ export class ChannelCallService {
       return {
         server_id: serverId,
         channels: [],
+      };
+    }
+  }
+
+  async updateUserStatus(
+    userId: string,
+    channelId: string,
+    status: {
+      isCamera?: boolean;
+      isMic?: boolean;
+      isHeadphone?: boolean;
+      isLive?: boolean;
+    },
+  ): Promise<{
+    success: boolean;
+    participant: {
+      _id: string;
+      username: string;
+      display_name: string;
+      avatar_ipfs_hash: string;
+      isCamera: boolean;
+      isMic: boolean;
+      isHeadphone: boolean;
+      isLive: boolean;
+    } | null;
+  }> {
+    this.logger.log(
+      `Updating user status for user ${userId} in channel ${channelId}`,
+    );
+
+    try {
+      // Find participant
+      const participant = await this.channelParticipantModel
+        .findOne({ channel_id: channelId, user_id: userId })
+        .exec();
+
+      if (!participant) {
+        this.logger.warn(
+          `Participant not found for user ${userId} in channel ${channelId}`,
+        );
+        return {
+          success: false,
+          participant: null,
+        };
+      }
+
+      // Update status fields (only update fields that are provided)
+      if (status.isCamera !== undefined) {
+        participant.isCamera = status.isCamera;
+      }
+      if (status.isMic !== undefined) {
+        participant.isMic = status.isMic;
+      }
+      if (status.isHeadphone !== undefined) {
+        participant.isHeadphone = status.isHeadphone;
+      }
+      if (status.isLive !== undefined) {
+        participant.isLive = status.isLive;
+      }
+
+      await participant.save();
+
+      // Get user profile
+      const userProfile = await this.getUserProfile(userId);
+
+      if (!userProfile) {
+        return {
+          success: true,
+          participant: null,
+        };
+      }
+
+      return {
+        success: true,
+        participant: {
+          _id: userProfile._id,
+          username: userProfile.username,
+          display_name: userProfile.display_name,
+          avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
+          isCamera: participant.isCamera,
+          isMic: participant.isMic,
+          isHeadphone: participant.isHeadphone,
+          isLive: participant.isLive,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error updating user status for user ${userId}:`,
+        error,
+      );
+      return {
+        success: false,
+        participant: null,
       };
     }
   }

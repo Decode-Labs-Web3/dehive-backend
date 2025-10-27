@@ -58,46 +58,72 @@ export class ChannelCallGateway
 
   private send(client: Socket, event: string, data: unknown) {
     // Production: emit object (default for frontend)
-    client.emit(event, data);
+    // client.emit(event, data);
 
     // Debug (Insomnia): emit pretty JSON string
-    // const serializedData = JSON.stringify(data, null, 2);
-    // client.emit(event, serializedData);
+    const serializedData = JSON.stringify(data, null, 2);
+    client.emit(event, serializedData);
   }
 
   private broadcast(room: string, event: string, data: unknown) {
     // Production: emit object (default for frontend)
-    this.server.to(room).emit(event, data);
+    // this.server.to(room).emit(event, data);
 
     // Debug (Insomnia): emit pretty JSON string
-    // const serializedData = JSON.stringify(data, null, 2);
-    // this.server.to(room).emit(event, serializedData);
+    const serializedData = JSON.stringify(data, null, 2);
+    this.server.to(room).emit(event, serializedData);
   }
 
-  /**
-   * Get user profile from public API (for WebSocket responses)
-   * Fetches profile in real-time from public endpoint
-   */
-  private async getUserProfile(userDehiveId: string): Promise<{
+  private broadcastExcludeSender(
+    client: Socket,
+    room: string,
+    event: string,
+    data: unknown,
+  ) {
+    // Production: emit object (default for frontend)
+    // client.to(room).emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string
+    const serializedData = JSON.stringify(data, null, 2);
+    client.to(room).emit(event, serializedData);
+  }
+
+  private async getUserProfile(
+    userDehiveId: string,
+    channelId: string,
+  ): Promise<{
     _id: string;
     username: string;
     display_name: string;
     avatar_ipfs_hash: string;
+    isCamera: boolean;
+    isMic: boolean;
+    isHeadphone: boolean;
+    isLive: boolean;
   } | null> {
     try {
       const profile =
         await this.decodeApiClient.getUserProfilePublic(userDehiveId);
 
-      if (profile) {
-        return {
-          _id: userDehiveId,
-          username: profile.username,
-          display_name: profile.display_name,
-          avatar_ipfs_hash: profile.avatar_ipfs_hash,
-        };
+      if (!profile) {
+        return null;
       }
 
-      return null;
+      // Get participant status
+      const participant = await this.participantModel
+        .findOne({ channel_id: channelId, user_id: userDehiveId })
+        .exec();
+
+      return {
+        _id: userDehiveId,
+        username: profile.username,
+        display_name: profile.display_name,
+        avatar_ipfs_hash: profile.avatar_ipfs_hash,
+        isCamera: participant?.isCamera || false,
+        isMic: participant?.isMic || false,
+        isHeadphone: participant?.isHeadphone || false,
+        isLive: participant?.isLive || false,
+      };
     } catch {
       return null;
     }
@@ -372,7 +398,7 @@ export class ChannelCallGateway
         participants: result.otherParticipants,
       });
 
-      const userProfile = await this.getUserProfile(userId);
+      const userProfile = await this.getUserProfile(userId, channelId);
 
       if (userProfile) {
         this.broadcast(`channel:${channelId}`, "userJoinedChannel", {
@@ -383,6 +409,10 @@ export class ChannelCallGateway
             username: userProfile.username,
             display_name: userProfile.display_name,
             avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
+            isCamera: userProfile.isCamera,
+            isMic: userProfile.isMic,
+            isHeadphone: userProfile.isHeadphone,
+            isLive: userProfile.isLive,
           },
         });
       }
@@ -442,6 +472,9 @@ export class ChannelCallGateway
     }
 
     try {
+      // Get user profile with status BEFORE leaving
+      const userProfile = await this.getUserProfile(userId, channelId);
+
       const result = await this.service.leaveCall(userId, channelId);
 
       if (meta) {
@@ -450,8 +483,6 @@ export class ChannelCallGateway
       }
 
       await client.leave(`channel:${channelId}`);
-
-      const userProfile = await this.getUserProfile(userId);
 
       if (userProfile) {
         this.send(client, "channelLeft", {
@@ -462,6 +493,10 @@ export class ChannelCallGateway
             username: userProfile.username,
             display_name: userProfile.display_name,
             avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
+            isCamera: userProfile.isCamera,
+            isMic: userProfile.isMic,
+            isHeadphone: userProfile.isHeadphone,
+            isLive: userProfile.isLive,
           },
         });
       } else {
@@ -480,6 +515,10 @@ export class ChannelCallGateway
             username: userProfile.username,
             display_name: userProfile.display_name,
             avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
+            isCamera: userProfile.isCamera,
+            isMic: userProfile.isMic,
+            isHeadphone: userProfile.isHeadphone,
+            isLive: userProfile.isLive,
           },
         });
       } else {
@@ -491,6 +530,135 @@ export class ChannelCallGateway
     } catch (error) {
       this.send(client, "error", {
         message: "Failed to leave channel",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  @SubscribeMessage("updateUserStatus")
+  async handleUpdateUserStatus(
+    @MessageBody()
+    data:
+      | {
+          channel_id?: string;
+          channelId?: string;
+          isCamera?: boolean;
+          isMic?: boolean;
+          isHeadphone?: boolean;
+          isLive?: boolean;
+        }
+      | string,
+    @ConnectedSocket() client: Socket,
+  ) {
+    // Ensure meta Map is initialized
+    if (!this.meta) {
+      this.meta = new Map<Socket, SocketMeta>();
+    }
+
+    const meta = this.meta.get(client);
+    const userId = meta?.userDehiveId;
+
+    // Parse data if it's a string
+    let parsedData: {
+      channel_id?: string;
+      channelId?: string;
+      isCamera?: boolean;
+      isMic?: boolean;
+      isHeadphone?: boolean;
+      isLive?: boolean;
+    };
+
+    if (typeof data === "string") {
+      try {
+        parsedData = JSON.parse(data);
+      } catch {
+        return this.send(client, "error", {
+          message: "Invalid JSON format",
+          code: "INVALID_FORMAT",
+        });
+      }
+    } else {
+      parsedData = data;
+    }
+
+    // Support both channel_id and channelId
+    const channelId = parsedData.channel_id || parsedData.channelId;
+
+    if (!channelId) {
+      return this.send(client, "error", {
+        message: "channel_id is required",
+        code: "INVALID_REQUEST",
+      });
+    }
+
+    if (!userId) {
+      return this.send(client, "error", {
+        message: "Please identify first",
+        code: "AUTHENTICATION_REQUIRED",
+      });
+    }
+
+    try {
+      console.log(
+        "🔵 [DEBUG] Starting updateUserStatus for user:",
+        userId,
+        "channel:",
+        channelId,
+      );
+
+      // Update user status
+      const result = await this.service.updateUserStatus(userId, channelId, {
+        isCamera: parsedData.isCamera,
+        isMic: parsedData.isMic,
+        isHeadphone: parsedData.isHeadphone,
+        isLive: parsedData.isLive,
+      });
+
+      console.log(
+        "🔵 [DEBUG] Service result:",
+        JSON.stringify(result, null, 2),
+      );
+
+      if (!result.success || !result.participant) {
+        console.log("🔴 [DEBUG] Update failed, sending error");
+        return this.send(client, "error", {
+          message: "Failed to update user status",
+          code: "UPDATE_FAILED",
+        });
+      }
+
+      const statusData = {
+        channel_id: channelId,
+        user_info: {
+          _id: result.participant._id,
+          username: result.participant.username,
+          display_name: result.participant.display_name,
+          avatar_ipfs_hash: result.participant.avatar_ipfs_hash,
+          isCamera: result.participant.isCamera,
+          isMic: result.participant.isMic,
+          isHeadphone: result.participant.isHeadphone,
+          isLive: result.participant.isLive,
+        },
+      };
+
+      console.log(
+        "🟢 [DEBUG] Broadcasting to channel:",
+        `channel:${channelId}`,
+      );
+      console.log(
+        "🟢 [DEBUG] Event data:",
+        JSON.stringify(statusData, null, 2),
+      );
+
+      // Broadcast to ALL users in the channel (including the sender)
+      this.broadcast(`channel:${channelId}`, "userStatusChanged", statusData);
+
+      console.log("✅ [DEBUG] Broadcast completed");
+    } catch (error) {
+      console.log("🔴 [DEBUG] Exception caught:", error);
+
+      this.send(client, "error", {
+        message: "Failed to update user status",
         details: error instanceof Error ? error.message : String(error),
       });
     }

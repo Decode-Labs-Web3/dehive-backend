@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "build:all": "nest build auth && nest build user-dehive-server && nest build server && nest build channel-messaging && nest build direct-messaging && nest build direct-calling && nest build channel-calling",
+    "build:all": "nest build auth && nest build user-dehive-server && nest build server && nest build channel-messaging && nest build direct-messaging && nest build direct-calling && nest build channel-calling && nest build user-status",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -18,6 +18,7 @@
     "start:dev:direct-messaging": "nest start --watch direct-messaging",
     "start:dev:direct-calling": "nest start --watch direct-calling",
     "start:dev:channel-calling": "nest start --watch channel-calling",
+    "start:dev:user-status": "nest start --watch user-status",
     "start:dev:api-gateway": "nest start --watch api-gateway",
     "start:dev:all": "npm run start:dev:auth & npm run start:dev:user-dehive-server & npm run start:dev:server & npm run start:dev:channel-messaging & npm run start:dev:direct-messaging & npm run start:dev:direct-calling & npm run start:dev:channel-calling",
     "start:all": "concurrently \"npm run start:dev:auth\" \"npm run start:dev:user-dehive-server\" \"npm run start:dev:server\" \"npm run start:dev:channel-messaging\" \"npm run start:dev:direct-messaging\" \"npm run start:dev:direct-calling\" \"npm run start:dev:channel-calling\"",

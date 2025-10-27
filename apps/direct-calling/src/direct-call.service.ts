@@ -148,17 +148,30 @@ export class DirectCallService {
   /**
    * Accept call without needing to pass calleeId - gets it from context
    */
-  async acceptCallForCurrentUser(callId: string): Promise<DmCallDocument> {
+  async acceptCallForCurrentUser(
+    conversationId: string,
+  ): Promise<DmCallDocument> {
     const calleeId = this.getCurrentUserId();
-    return this.acceptCall(calleeId, callId);
+    return this.acceptCall(calleeId, conversationId);
   }
 
-  async acceptCall(calleeId: string, callId: string): Promise<DmCallDocument> {
-    this.logger.log(`Accepting call ${callId} by ${calleeId}`);
+  async acceptCall(
+    calleeId: string,
+    conversationId: string,
+  ): Promise<DmCallDocument> {
+    this.logger.log(
+      `Accepting call for conversation ${conversationId} by ${calleeId}`,
+    );
 
-    const call = await this.dmCallModel.findById(callId);
+    const call = await this.dmCallModel.findOne({
+      conversation_id: new Types.ObjectId(conversationId),
+      status: CallStatus.RINGING,
+    });
+
     if (!call) {
-      throw new NotFoundException("Call not found");
+      throw new NotFoundException(
+        "Active call not found for this conversation",
+      );
     }
 
     if (String(call.callee_id) !== calleeId) {
@@ -177,7 +190,7 @@ export class DirectCallService {
 
     // Update cache
     await this.redis.setex(
-      `call:${callId}`,
+      `call:${call._id}`,
       300,
       JSON.stringify({
         caller_id: String(call.caller_id),
@@ -186,24 +199,39 @@ export class DirectCallService {
       }),
     );
 
-    this.logger.log(`Call ${callId} accepted successfully`);
+    this.logger.log(
+      `Call for conversation ${conversationId} accepted successfully`,
+    );
     return call;
   }
 
   /**
    * Decline call without needing to pass calleeId - gets it from context
    */
-  async declineCallForCurrentUser(callId: string): Promise<DmCallDocument> {
+  async declineCallForCurrentUser(
+    conversationId: string,
+  ): Promise<DmCallDocument> {
     const calleeId = this.getCurrentUserId();
-    return this.declineCall(calleeId, callId);
+    return this.declineCall(calleeId, conversationId);
   }
 
-  async declineCall(calleeId: string, callId: string): Promise<DmCallDocument> {
-    this.logger.log(`Declining call ${callId} by ${calleeId}`);
+  async declineCall(
+    calleeId: string,
+    conversationId: string,
+  ): Promise<DmCallDocument> {
+    this.logger.log(
+      `Declining call for conversation ${conversationId} by ${calleeId}`,
+    );
 
-    const call = await this.dmCallModel.findById(callId);
+    const call = await this.dmCallModel.findOne({
+      conversation_id: new Types.ObjectId(conversationId),
+      status: CallStatus.RINGING,
+    });
+
     if (!call) {
-      throw new NotFoundException("Call not found");
+      throw new NotFoundException(
+        "Active call not found for this conversation",
+      );
     }
 
     if (String(call.callee_id) !== calleeId) {
@@ -224,9 +252,11 @@ export class DirectCallService {
     await this.createCallSystemMessage(call, callerId, calleeId);
 
     // Clean up cache
-    await this.redis.del(`call:${callId}`);
+    await this.redis.del(`call:${call._id}`);
 
-    this.logger.log(`Call ${callId} declined successfully`);
+    this.logger.log(
+      `Call for conversation ${conversationId} declined successfully`,
+    );
     return call;
   }
 
@@ -234,11 +264,11 @@ export class DirectCallService {
    * End call without needing to pass userId - gets it from context
    */
   async endCallForCurrentUser(
-    callId: string,
+    conversationId: string,
     reason: string = CallEndReason.USER_HANGUP,
   ): Promise<DmCallDocument> {
     const userId = this.getCurrentUserId();
-    return this.endCall(userId, callId, reason);
+    return this.endCall(userId, conversationId, reason);
   }
 
   /**
@@ -262,14 +292,22 @@ export class DirectCallService {
 
   async endCall(
     userId: string,
-    callId: string,
+    conversationId: string,
     reason: string = CallEndReason.USER_HANGUP,
   ): Promise<DmCallDocument> {
-    this.logger.log(`Ending call ${callId} by ${userId}`);
+    this.logger.log(
+      `Ending call for conversation ${conversationId} by user ${userId}`,
+    );
 
-    const call = await this.dmCallModel.findById(callId);
+    const call = await this.dmCallModel.findOne({
+      conversation_id: new Types.ObjectId(conversationId),
+      status: CallStatus.CONNECTED,
+    });
+
     if (!call) {
-      throw new NotFoundException("Call not found");
+      throw new NotFoundException(
+        "Active call not found for this conversation",
+      );
     }
 
     if (
@@ -299,20 +337,29 @@ export class DirectCallService {
     await this.createCallSystemMessage(call, callerId, calleeId);
 
     // Clean up cache
-    await this.redis.del(`call:${callId}`);
+    await this.redis.del(`call:${call._id}`);
 
-    this.logger.log(`Call ${callId} ended successfully`);
+    this.logger.log(
+      `Call for conversation ${conversationId} ended successfully`,
+    );
     return call;
   }
 
-  async handleUserDisconnect(userId: string, callId?: string): Promise<void> {
-    if (callId) {
+  async handleUserDisconnect(
+    userId: string,
+    conversationId?: string,
+  ): Promise<void> {
+    if (conversationId) {
       // End the specific call
       try {
-        await this.endCall(userId, callId, CallEndReason.CONNECTION_ERROR);
+        await this.endCall(
+          userId,
+          conversationId,
+          CallEndReason.CONNECTION_ERROR,
+        );
       } catch (error) {
         this.logger.error(
-          `Error ending call ${callId} for user ${userId}:`,
+          `Error ending call for conversation ${conversationId} for user ${userId}:`,
           error,
         );
       }
@@ -649,7 +696,7 @@ export class DirectCallService {
    */
   async getActiveCalls(): Promise<
     {
-      call_id: string;
+      conversation_id: string;
       status: string;
       caller_id: {
         dehive_id: string;
@@ -697,7 +744,7 @@ export class DirectCallService {
           }
 
           return {
-            call_id: String(call._id),
+            conversation_id: String(call.conversation_id),
             status: call.status,
             caller_id: callerDetails,
             callee_id: calleeDetails,

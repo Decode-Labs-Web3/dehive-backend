@@ -57,7 +57,7 @@ export class DirectCallController {
         statusCode: 200,
         message: "Call started successfully",
         data: {
-          call_id: call._id,
+          conversation_id: call.conversation_id,
           status: call.status,
           target_user_id: startCallDto.target_user_id,
           created_at: (call as unknown as Record<string, unknown>).createdAt,
@@ -85,11 +85,13 @@ export class DirectCallController {
     @Body() acceptCallDto: AcceptCallDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<Response> {
-    this.logger.log(`Accepting call ${acceptCallDto.call_id} by ${user._id}`);
+    this.logger.log(
+      `Accepting call ${acceptCallDto.conversation_id} by ${user._id}`,
+    );
 
     try {
       const call = await this.directCallService.acceptCallForCurrentUser(
-        acceptCallDto.call_id,
+        acceptCallDto.conversation_id,
       );
 
       return {
@@ -97,7 +99,7 @@ export class DirectCallController {
         statusCode: 200,
         message: "Call accepted successfully",
         data: {
-          call_id: call._id,
+          conversation_id: call.conversation_id,
           status: call.status,
           started_at: call.started_at,
         },
@@ -121,14 +123,14 @@ export class DirectCallController {
   @ApiResponse({ status: 404, description: "Call not found" })
   @ApiBearerAuth()
   async declineCall(
-    @Body() data: { call_id: string },
+    @Body() data: { conversation_id: string },
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<Response> {
-    this.logger.log(`Declining call ${data.call_id} by ${user._id}`);
+    this.logger.log(`Declining call ${data.conversation_id} by ${user._id}`);
 
     try {
       const call = await this.directCallService.declineCallForCurrentUser(
-        data.call_id,
+        data.conversation_id,
       );
 
       return {
@@ -136,7 +138,7 @@ export class DirectCallController {
         statusCode: 200,
         message: "Call declined successfully",
         data: {
-          call_id: call._id,
+          conversation_id: call.conversation_id,
           status: call.status,
           end_reason: call.end_reason,
           ended_at: call.ended_at,
@@ -164,11 +166,11 @@ export class DirectCallController {
     @Body() endCallDto: EndCallDto,
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<Response> {
-    this.logger.log(`Ending call ${endCallDto.call_id} by ${user._id}`);
+    this.logger.log(`Ending call ${endCallDto.conversation_id} by ${user._id}`);
 
     try {
       const call = await this.directCallService.endCallForCurrentUser(
-        endCallDto.call_id,
+        endCallDto.conversation_id,
       );
 
       return {
@@ -176,7 +178,7 @@ export class DirectCallController {
         statusCode: 200,
         message: "Call ended successfully",
         data: {
-          call_id: call._id,
+          conversation_id: call.conversation_id,
           status: call.status,
           end_reason: call.end_reason,
           duration_seconds: call.duration_seconds,

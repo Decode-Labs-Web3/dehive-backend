@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "outDir": "../../dist/apps/user-status"
+  },
+  "include": ["src/**/*", "gateway/**/*", "schemas/**/*", "clients/**/*", "common/**/*", "dto/**/*", "enum/**/*", "interfaces/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
+}

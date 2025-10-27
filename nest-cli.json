@@ -113,6 +113,15 @@
         "tsConfigPath": "apps/channel-calling/tsconfig.app.json",
         "plugins": ["@nestjs/swagger"]
       }
+    },
+    "user-status": {
+      "type": "application",
+      "root": "apps/user-status",
+      "entryFile": "main",
+      "sourceRoot": "apps/user-status/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/user-status/tsconfig.app.json"
+      }
     }
   }
 }

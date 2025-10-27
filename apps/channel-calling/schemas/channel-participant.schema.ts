@@ -31,6 +31,18 @@ export class ChannelParticipant {
   @Prop({ type: String, required: false })
   socket_id?: string;
 
+  @Prop({ type: Boolean, default: false })
+  isCamera: boolean;
+
+  @Prop({ type: Boolean, default: false })
+  isMic: boolean;
+
+  @Prop({ type: Boolean, default: false })
+  isHeadphone: boolean;
+
+  @Prop({ type: Boolean, default: false })
+  isLive: boolean;
+
   @Prop({
     type: Object,
     required: false,

@@ -3,10 +3,10 @@ import { ApiProperty } from "@nestjs/swagger";
 
 export class AcceptCallDto {
   @ApiProperty({
-    description: "ID of the call to accept",
+    description: "ID of the conversation to accept call",
     example: "507f1f77bcf86cd799439011",
   })
   @IsString()
   @IsNotEmpty()
-  call_id: string;
+  conversation_id: string;
 }
