@@ -36,7 +36,8 @@ export class DecodeApiClient {
     // User-dehive-server service for server members
     const serverHost =
       this.configService.get<string>("CLOUD_HOST") || "localhost";
-    const serverPort = this.configService.get<number>("SERVER_PORT") || 4002;
+    const serverPort =
+      this.configService.get<number>("USER_DEHIVE_SERVER_PORT") || 4001;
     this.userDehiveServerUrl = `http://${serverHost}:${serverPort}`;
   }
 
@@ -192,7 +193,7 @@ export class DecodeApiClient {
       const response = await firstValueFrom(
         this.httpService.get<{
           success: boolean;
-          data: Array<{ user_id: string }>;
+          data: Array<{ _id: string }>;
         }>(
           `${this.userDehiveServerUrl}/api/memberships/server/${serverId}/members`,
           {
@@ -201,13 +202,19 @@ export class DecodeApiClient {
         ),
       );
 
+      this.logger.log(
+        `Raw response from user-dehive-server:`,
+        JSON.stringify(response.data, null, 2),
+      );
+
       if (!response.data.success || !response.data.data) {
         this.logger.warn(`Members list not found for server ${serverId}`);
         return [];
       }
 
-      const memberIds = response.data.data.map((member) => member.user_id);
+      const memberIds = response.data.data.map((member) => member._id);
 
+      this.logger.log(`Extracted memberIds: [${memberIds.join(", ")}]`);
       this.logger.log(
         `Found ${memberIds.length} members in server ${serverId}`,
       );

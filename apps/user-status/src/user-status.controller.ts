@@ -13,6 +13,7 @@ import { Request } from "express";
 import { UserStatusService } from "./user-status.service";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import { ApiResponse } from "../dto/response.dto";
 
 @Controller("status")
 @UseGuards(AuthGuard)
@@ -33,12 +34,17 @@ export class UserStatusController {
       throw new BadRequestException("User not authenticated");
     }
 
-    return this.service.getFollowingUsersStatus(
+    const result = await this.service.getFollowingUsersStatus(
       user._id,
       user.session_id,
       user.fingerprint_hash,
       page,
       limit,
+    );
+
+    return ApiResponse.ok(
+      result,
+      "Successfully fetched following users status",
     );
   }
 
@@ -56,13 +62,15 @@ export class UserStatusController {
       throw new BadRequestException("User not authenticated");
     }
 
-    return this.service.getOnlineFollowingUsers(
+    const result = await this.service.getOnlineFollowingUsers(
       user._id,
       user.session_id,
       user.fingerprint_hash,
       page,
       limit,
     );
+
+    return ApiResponse.ok(result, "Successfully fetched online users");
   }
 
   /**
@@ -84,12 +92,14 @@ export class UserStatusController {
       throw new BadRequestException("serverId is required");
     }
 
-    return this.service.getOnlineServerMembers(
+    const result = await this.service.getOnlineServerMembers(
       serverId,
       user.session_id,
       user.fingerprint_hash,
       page,
       limit,
     );
+
+    return ApiResponse.ok(result, "Successfully fetched online server members");
   }
 }

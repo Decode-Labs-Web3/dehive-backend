@@ -317,6 +317,10 @@ export class UserStatusService {
         fingerprintHash,
       );
 
+      this.logger.log(
+        `Server ${serverId} has ${memberIds.length} members: [${memberIds.join(", ")}]`,
+      );
+
       if (memberIds.length === 0) {
         return {
           online_users: [],
@@ -332,14 +336,26 @@ export class UserStatusService {
       // Convert to ObjectIds
       const memberObjectIds = memberIds.map((id) => new Types.ObjectId(id));
 
+      this.logger.log(
+        `Searching for online members in MongoDB with user_ids: [${memberObjectIds.join(", ")}]`,
+      );
+
       // Get online members only
       const onlineMembers = await this.userStatusModel
         .find({
           user_id: { $in: memberObjectIds },
           status: UserStatus.ONLINE,
         })
-        .select("user_id")
+        .select("user_id status")
         .exec();
+
+      this.logger.log(
+        `Found ${onlineMembers.length} online members in MongoDB:`,
+        onlineMembers.map((m) => ({
+          user_id: m.user_id.toString(),
+          status: m.status,
+        })),
+      );
 
       const onlineMemberIds = onlineMembers.map((u) => u.user_id.toString());
 

@@ -83,6 +83,18 @@ module.exports = {
         CHANNEL_CALLING_PORT: 4007,
         CLOUD_HOST: '0.0.0.0'
       }
+    },
+    {
+      name: 'user-status',
+      script: 'dist/apps/user-status/main.js',
+      instances: 1,
+      exec_mode: 'fork',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 4008,
+        USER_STATUS_PORT: 4008,
+        CLOUD_HOST: '0.0.0.0'
+      }
     }
   ]
 };
