@@ -8,7 +8,6 @@ import {
 import { UserStatus } from "../enum/enum";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import {
-  UserStatusResponse,
   BulkStatusResponse,
   OnlineUsersResponse,
 } from "../interfaces/user-status.interface";
@@ -77,68 +76,171 @@ export class UserStatusService {
   }
 
   /**
-   * Set user away (idle)
+   * Get status of all users that the current user is following
+   * Uses pagination (lazy loading)
    */
-  async setUserAway(userId: string): Promise<{ success: boolean }> {
-    this.logger.log(`Setting user ${userId} away`);
-
+  async getFollowingUsersStatus(
+    currentUserId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+    page: number = 0,
+    limit: number = 20,
+  ): Promise<BulkStatusResponse> {
     try {
-      await this.userStatusModel.findOneAndUpdate(
-        { user_id: new Types.ObjectId(userId) },
-        {
-          status: UserStatus.AWAY,
-          updated_at: new Date(),
-        },
+      // Get following list from direct-message service
+      const followingIds = await this.decodeApiClient.getUserFollowing(
+        currentUserId,
+        sessionId,
+        fingerprintHash,
       );
 
-      return { success: true };
+      if (followingIds.length === 0) {
+        return {
+          users: [],
+          metadata: {
+            page,
+            limit,
+            total: 0,
+            is_last_page: true,
+          },
+        };
+      }
+
+      // Apply pagination (0-based: page 0, 1, 2...)
+      const skip = page * limit;
+      const paginatedIds = followingIds.slice(skip, skip + limit);
+
+      // Check if this is the last page
+      const is_last_page = skip + paginatedIds.length >= followingIds.length;
+
+      // Get status + profile of paginated following users
+      const result = await this.getBulkUserStatus(paginatedIds, true);
+
+      return {
+        ...result,
+        metadata: {
+          page,
+          limit,
+          total: paginatedIds.length, // Total in current page, not total of all
+          is_last_page,
+        },
+      };
     } catch (error) {
-      this.logger.error(`Error setting user ${userId} away:`, error);
+      this.logger.error(
+        `Error getting following users status for ${currentUserId}:`,
+        error,
+      );
       throw error;
     }
   }
 
   /**
-   * Get user status with profile
+   * Get all online users from current user's following list only
    */
-  async getUserStatus(
-    userId: string,
-    includeProfile = false,
-  ): Promise<UserStatusResponse | null> {
+  async getOnlineFollowingUsers(
+    currentUserId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+    page: number = 0,
+    limit: number = 20,
+  ): Promise<OnlineUsersResponse> {
     try {
-      const userStatus = await this.userStatusModel
-        .findOne({ user_id: new Types.ObjectId(userId) })
-        .exec();
+      // Get following list from direct-message service
+      const followingIds = await this.decodeApiClient.getUserFollowing(
+        currentUserId,
+        sessionId,
+        fingerprintHash,
+      );
 
-      const status = userStatus?.status || UserStatus.OFFLINE;
-      const lastSeen = userStatus?.last_seen || new Date();
-
-      const response: UserStatusResponse = {
-        user_id: userId,
-        status: status as "online" | "offline" | "away",
-        last_seen: lastSeen,
-      };
-
-      if (includeProfile) {
-        const profile = await this.decodeApiClient.getUserProfilePublic(userId);
-        if (profile) {
-          response.user_profile = {
-            username: profile.username,
-            display_name: profile.display_name,
-            avatar_ipfs_hash: profile.avatar_ipfs_hash,
-          };
-        }
+      if (followingIds.length === 0) {
+        return {
+          online_users: [],
+          metadata: {
+            page,
+            limit,
+            total: 0,
+            is_last_page: true,
+          },
+        };
       }
 
-      return response;
+      // Convert to ObjectIds
+      const followingObjectIds = followingIds.map(
+        (id) => new Types.ObjectId(id),
+      );
+
+      // Get online users from following list only
+      const onlineUsers = await this.userStatusModel
+        .find({
+          user_id: { $in: followingObjectIds },
+          status: UserStatus.ONLINE,
+        })
+        .select("user_id")
+        .exec();
+
+      const onlineUserIds = onlineUsers.map((u) => u.user_id.toString());
+
+      if (onlineUserIds.length === 0) {
+        return {
+          online_users: [],
+          metadata: {
+            page,
+            limit,
+            total: 0,
+            is_last_page: true,
+          },
+        };
+      }
+
+      // Apply pagination (0-based: page 0, 1, 2...)
+      const skip = page * limit;
+      const paginatedOnlineIds = onlineUserIds.slice(skip, skip + limit);
+
+      // Check if this is the last page
+      const is_last_page =
+        skip + paginatedOnlineIds.length >= onlineUserIds.length;
+
+      // Get profiles for online users
+      const profileMap =
+        await this.decodeApiClient.getBulkUserProfiles(paginatedOnlineIds);
+
+      const online_users = paginatedOnlineIds
+        .map((userId) => {
+          const profile = profileMap.get(userId);
+          if (!profile) return null;
+
+          return {
+            user_id: userId,
+            user_profile: {
+              username: profile.username,
+              display_name: profile.display_name,
+              avatar_ipfs_hash: profile.avatar_ipfs_hash,
+            },
+          };
+        })
+        .filter((user) => user !== null) as OnlineUsersResponse["online_users"];
+
+      return {
+        online_users,
+        metadata: {
+          page,
+          limit,
+          total: online_users.length, // Total in current page
+          is_last_page,
+        },
+      };
     } catch (error) {
-      this.logger.error(`Error getting status for user ${userId}:`, error);
-      return null;
+      this.logger.error(
+        `Error getting online following users for ${currentUserId}:`,
+        error,
+      );
+      throw error;
     }
   }
 
   /**
    * Get multiple users status (bulk)
+   * Used by WebSocket checkStatus event
    */
   async getBulkUserStatus(
     userIds: string[],
@@ -198,20 +300,74 @@ export class UserStatusService {
   }
 
   /**
-   * Get all online users with profiles
+   * Get online members in a specific server
    */
-  async getOnlineUsers(): Promise<OnlineUsersResponse> {
+  async getOnlineServerMembers(
+    serverId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+    page: number = 0,
+    limit: number = 20,
+  ): Promise<OnlineUsersResponse> {
     try {
-      const onlineUsers = await this.userStatusModel
-        .find({ status: UserStatus.ONLINE })
+      // Get all members in the server from user-dehive-server service
+      const memberIds = await this.decodeApiClient.getServerMembers(
+        serverId,
+        sessionId,
+        fingerprintHash,
+      );
+
+      if (memberIds.length === 0) {
+        return {
+          online_users: [],
+          metadata: {
+            page,
+            limit,
+            total: 0,
+            is_last_page: true,
+          },
+        };
+      }
+
+      // Convert to ObjectIds
+      const memberObjectIds = memberIds.map((id) => new Types.ObjectId(id));
+
+      // Get online members only
+      const onlineMembers = await this.userStatusModel
+        .find({
+          user_id: { $in: memberObjectIds },
+          status: UserStatus.ONLINE,
+        })
         .select("user_id")
         .exec();
 
-      const userIds = onlineUsers.map((u) => u.user_id.toString());
-      const profileMap =
-        await this.decodeApiClient.getBulkUserProfiles(userIds);
+      const onlineMemberIds = onlineMembers.map((u) => u.user_id.toString());
 
-      const online_users = userIds
+      if (onlineMemberIds.length === 0) {
+        return {
+          online_users: [],
+          metadata: {
+            page,
+            limit,
+            total: 0,
+            is_last_page: true,
+          },
+        };
+      }
+
+      // Apply pagination (0-based: page 0, 1, 2...)
+      const skip = page * limit;
+      const paginatedMemberIds = onlineMemberIds.slice(skip, skip + limit);
+
+      // Check if this is the last page
+      const is_last_page =
+        skip + paginatedMemberIds.length >= onlineMemberIds.length;
+
+      // Get profiles for online members
+      const profileMap =
+        await this.decodeApiClient.getBulkUserProfiles(paginatedMemberIds);
+
+      const online_users = paginatedMemberIds
         .map((userId) => {
           const profile = profileMap.get(userId);
           if (!profile) return null;
@@ -227,9 +383,20 @@ export class UserStatusService {
         })
         .filter((user) => user !== null) as OnlineUsersResponse["online_users"];
 
-      return { online_users };
+      return {
+        online_users,
+        metadata: {
+          page,
+          limit,
+          total: online_users.length, // Total in current page
+          is_last_page,
+        },
+      };
     } catch (error) {
-      this.logger.error("Error getting online users:", error);
+      this.logger.error(
+        `Error getting online members for server ${serverId}:`,
+        error,
+      );
       throw error;
     }
   }

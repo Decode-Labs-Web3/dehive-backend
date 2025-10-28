@@ -8,6 +8,8 @@ import { UserProfile } from "../interfaces/user-profile.interface";
 export class DecodeApiClient {
   private readonly logger = new Logger(DecodeApiClient.name);
   private readonly decodeApiUrl: string;
+  private readonly directMessageUrl: string;
+  private readonly userDehiveServerUrl: string;
 
   constructor(
     private readonly httpService: HttpService,
@@ -21,6 +23,21 @@ export class DecodeApiClient {
       );
     }
     this.decodeApiUrl = `http://${host}:${port}`;
+
+    // Direct message service for following list
+    const dmHost = this.configService.get<string>("CLOUD_HOST") || "localhost";
+    const dmPort =
+      this.configService.get<number>("DIRECT_MESSAGE_PORT") || 4004;
+    this.directMessageUrl = `http://${dmHost}:${dmPort}`;
+    this.logger.log(
+      `Direct-messaging service URL configured: ${this.directMessageUrl}`,
+    );
+
+    // User-dehive-server service for server members
+    const serverHost =
+      this.configService.get<string>("CLOUD_HOST") || "localhost";
+    const serverPort = this.configService.get<number>("SERVER_PORT") || 4002;
+    this.userDehiveServerUrl = `http://${serverHost}:${serverPort}`;
   }
 
   async getUserProfilePublic(
@@ -74,5 +91,134 @@ export class DecodeApiClient {
     );
 
     return profileMap;
+  }
+
+  /**
+   * Get following users for a specific user
+   * Calls direct-messaging service
+   * Returns empty array if cannot fetch (e.g., no auth credentials)
+   */
+  async getUserFollowing(
+    userId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<string[]> {
+    // If no auth credentials, cannot fetch following list
+    if (!sessionId || !fingerprintHash) {
+      this.logger.warn(
+        `No auth credentials provided for getUserFollowing(${userId}). Cannot fetch following list without authentication.`,
+      );
+      return [];
+    }
+
+    try {
+      this.logger.log(
+        `Fetching following list for user ${userId} from direct-messaging service`,
+      );
+
+      const url = `${this.directMessageUrl}/api/dm/following`;
+      this.logger.log(`Calling: GET ${url}`);
+      this.logger.log(
+        `Headers: x-session-id=${sessionId}, x-fingerprint-hashed=${fingerprintHash}`,
+      );
+
+      const response = await firstValueFrom(
+        this.httpService.get<{
+          success: boolean;
+          data: {
+            items: Array<{ user_id: string }>;
+          };
+        }>(url, {
+          headers: {
+            "x-session-id": sessionId,
+            "x-fingerprint-hashed": fingerprintHash,
+          },
+          params: {
+            page: 0,
+            limit: 100,
+          },
+        }),
+      );
+
+      if (!response.data?.success || !response.data?.data?.items) {
+        this.logger.warn(
+          `Failed to fetch following list for user ${userId}: Invalid response structure`,
+        );
+        return [];
+      }
+
+      const followingIds = response.data.data.items.map((user) => user.user_id);
+      this.logger.log(
+        `Successfully fetched ${followingIds.length} following users for ${userId}`,
+      );
+      return followingIds;
+    } catch (error) {
+      // Check if it's a token expiry error
+      if (error.response?.status === 401) {
+        this.logger.warn(
+          `Authentication failed for user ${userId}: Token expired or invalid. User needs to re-login. Skipping broadcast.`,
+        );
+      } else {
+        this.logger.error(
+          `Error fetching following list for user ${userId}:`,
+          error.message,
+        );
+      }
+      return [];
+    }
+  }
+
+  /**
+   * Get all members in a server from user-dehive-server service
+   */
+  async getServerMembers(
+    serverId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<string[]> {
+    try {
+      this.logger.log(
+        `Getting members list for server ${serverId} from user-dehive-server service`,
+      );
+
+      const headers: Record<string, string> = {};
+      if (sessionId) {
+        headers["x-session-id"] = sessionId;
+      }
+      if (fingerprintHash) {
+        headers["x-fingerprint-hashed"] = fingerprintHash;
+      }
+
+      const response = await firstValueFrom(
+        this.httpService.get<{
+          success: boolean;
+          data: Array<{ user_id: string }>;
+        }>(
+          `${this.userDehiveServerUrl}/api/memberships/server/${serverId}/members`,
+          {
+            headers,
+          },
+        ),
+      );
+
+      if (!response.data.success || !response.data.data) {
+        this.logger.warn(`Members list not found for server ${serverId}`);
+        return [];
+      }
+
+      const memberIds = response.data.data.map((member) => member.user_id);
+
+      this.logger.log(
+        `Found ${memberIds.length} members in server ${serverId}`,
+      );
+
+      return memberIds;
+    } catch (error) {
+      this.logger.error(
+        `Error fetching members for server ${serverId}:`,
+        error instanceof Error ? error.message : error,
+      );
+      return [];
+    }
   }
 }

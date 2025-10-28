@@ -2,9 +2,11 @@ import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { HttpModule } from "@nestjs/axios";
+import { RedisModule } from "@nestjs-modules/ioredis";
 import { UserStatusService } from "./user-status.service";
 import { UserStatusController } from "./user-status.controller";
 import { UserStatusGateway } from "../gateway/user-status.gateway";
+import { AuthGuard } from "../common/guards/auth.guard";
 import {
   UserStatusSchema,
   UserStatusModel,
@@ -31,8 +33,26 @@ import { DecodeApiClient } from "../clients/decode-api.client";
       timeout: 5000,
       maxRedirects: 5,
     }),
+    RedisModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        type: "single",
+        url: configService.get<string>("REDIS_URI") || "redis://localhost:6379",
+        options: {
+          retryDelayOnFailover: 100,
+          enableReadyCheck: false,
+          maxRetriesPerRequest: null,
+        },
+      }),
+      inject: [ConfigService],
+    }),
   ],
   controllers: [UserStatusController],
-  providers: [UserStatusService, UserStatusGateway, DecodeApiClient],
+  providers: [
+    UserStatusService,
+    UserStatusGateway,
+    AuthGuard,
+    DecodeApiClient,
+  ],
 })
 export class UserStatusModule {}

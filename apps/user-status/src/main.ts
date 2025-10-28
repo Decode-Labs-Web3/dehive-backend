@@ -4,7 +4,7 @@ import { Logger, ValidationPipe } from "@nestjs/common";
 
 async function bootstrap() {
   const app = await NestFactory.create(UserStatusModule);
-  const port = process.env.PORT || 4008;
+  const port = 4008;
 
   app.enableCors({
     origin: "*",

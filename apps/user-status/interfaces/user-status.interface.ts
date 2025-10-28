@@ -1,14 +1,3 @@
-export interface UserStatusResponse {
-  user_id: string;
-  status: "online" | "offline" | "away";
-  last_seen: Date;
-  user_profile?: {
-    username: string;
-    display_name: string;
-    avatar_ipfs_hash: string;
-  };
-}
-
 export interface BulkStatusResponse {
   users: {
     user_id: string;
@@ -20,6 +9,12 @@ export interface BulkStatusResponse {
       avatar_ipfs_hash: string;
     };
   }[];
+  metadata?: {
+    page: number;
+    limit: number;
+    total: number;
+    is_last_page: boolean;
+  };
 }
 
 export interface OnlineUsersResponse {
@@ -31,4 +26,10 @@ export interface OnlineUsersResponse {
       avatar_ipfs_hash: string;
     };
   }[];
+  metadata?: {
+    page: number;
+    limit: number;
+    total: number;
+    is_last_page: boolean;
+  };
 }

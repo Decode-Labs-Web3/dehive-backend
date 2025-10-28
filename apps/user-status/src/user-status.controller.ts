@@ -1,59 +1,95 @@
 import {
   Controller,
   Get,
+  Param,
   Query,
-  ParseBoolPipe,
   BadRequestException,
+  UseGuards,
+  Req,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from "@nestjs/common";
+import { Request } from "express";
 import { UserStatusService } from "./user-status.service";
+import { AuthGuard } from "../common/guards/auth.guard";
+import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 
 @Controller("status")
+@UseGuards(AuthGuard)
 export class UserStatusController {
   constructor(private readonly service: UserStatusService) {}
 
+  /**
+   * Get status + profile of all following users with pagination
+   */
   @Get("user")
   async getUserStatus(
-    @Query("user_id") userId: string,
-    @Query("include_profile", new ParseBoolPipe({ optional: true }))
-    includeProfile?: boolean,
+    @Req() request: Request,
+    @Query("page", new DefaultValuePipe(0), ParseIntPipe) page: number,
+    @Query("limit", new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
-    if (!userId) {
-      throw new BadRequestException("user_id query parameter is required");
+    const user = request["user"] as AuthenticatedUser;
+    if (!user || !user._id) {
+      throw new BadRequestException("User not authenticated");
     }
 
-    const result = await this.service.getUserStatus(
-      userId,
-      includeProfile || false,
+    return this.service.getFollowingUsersStatus(
+      user._id,
+      user.session_id,
+      user.fingerprint_hash,
+      page,
+      limit,
     );
-
-    if (!result) {
-      throw new BadRequestException(`User status not found for ${userId}`);
-    }
-
-    return result;
   }
 
-  @Get("bulk")
-  async getBulkStatus(
-    @Query("user_ids") userIds: string,
-    @Query("include_profile", new ParseBoolPipe({ optional: true }))
-    includeProfile?: boolean,
-  ) {
-    if (!userIds) {
-      throw new BadRequestException("user_ids query parameter is required");
-    }
-
-    const ids = userIds.split(",").filter((id) => id.trim());
-
-    if (ids.length === 0) {
-      throw new BadRequestException("user_ids must contain at least one ID");
-    }
-
-    return this.service.getBulkUserStatus(ids, includeProfile || false);
-  }
-
+  /**
+   * Get online users from current user's following list with pagination
+   */
   @Get("online")
-  async getOnlineUsers() {
-    return this.service.getOnlineUsers();
+  async getOnlineUsers(
+    @Req() request: Request,
+    @Query("page", new DefaultValuePipe(0), ParseIntPipe) page: number,
+    @Query("limit", new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    const user = request["user"] as AuthenticatedUser;
+    if (!user || !user._id) {
+      throw new BadRequestException("User not authenticated");
+    }
+
+    return this.service.getOnlineFollowingUsers(
+      user._id,
+      user.session_id,
+      user.fingerprint_hash,
+      page,
+      limit,
+    );
+  }
+
+  /**
+   * Get online members in a specific server with pagination
+   */
+  @Get("server/:serverId")
+  async getOnlineServerMembers(
+    @Param("serverId") serverId: string,
+    @Req() request: Request,
+    @Query("page", new DefaultValuePipe(0), ParseIntPipe) page: number,
+    @Query("limit", new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    const user = request["user"] as AuthenticatedUser;
+    if (!user || !user._id) {
+      throw new BadRequestException("User not authenticated");
+    }
+
+    if (!serverId) {
+      throw new BadRequestException("serverId is required");
+    }
+
+    return this.service.getOnlineServerMembers(
+      serverId,
+      user.session_id,
+      user.fingerprint_hash,
+      page,
+      limit,
+    );
   }
 }
