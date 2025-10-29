@@ -15,12 +15,20 @@ import {
 @Injectable()
 export class UserStatusService {
   private readonly logger = new Logger(UserStatusService.name);
+  private gateway: { getConnectedUserIds: () => Set<string> } | null = null;
 
   constructor(
     @InjectModel(UserStatusSchema.name)
     private readonly userStatusModel: Model<UserStatusDocument>,
     private readonly decodeApiClient: DecodeApiClient,
   ) {}
+
+  /**
+   * Set gateway reference (called from gateway after initialization)
+   */
+  setGateway(gateway: { getConnectedUserIds: () => Set<string> }): void {
+    this.gateway = gateway;
+  }
 
   /**
    * Set user online
@@ -445,6 +453,141 @@ export class UserStatusService {
     } catch (error) {
       this.logger.error(
         `Error getting online members for server ${serverId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get all members in a specific server (both online and offline)
+   */
+  async getAllServerMembers(
+    serverId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+    page: number = 0,
+    limit: number = 20,
+  ): Promise<OnlineUsersResponse> {
+    try {
+      // Get all members in the server from user-dehive-server service
+      const memberIds = await this.decodeApiClient.getServerMembers(
+        serverId,
+        sessionId,
+        fingerprintHash,
+      );
+
+      this.logger.log(
+        `Server ${serverId} has ${memberIds.length} total members: [${memberIds.join(", ")}]`,
+      );
+
+      if (memberIds.length === 0) {
+        return {
+          users: [],
+          metadata: {
+            page,
+            limit,
+            total: 0,
+            is_last_page: true,
+          },
+        };
+      }
+
+      // Apply pagination first (to limit the number of profiles we fetch)
+      const skip = page * limit;
+      const paginatedMemberIds = memberIds.slice(skip, skip + limit);
+
+      // Check if this is the last page
+      const is_last_page = skip + paginatedMemberIds.length >= memberIds.length;
+
+      // Convert to ObjectIds for database query
+      const paginatedMemberObjectIds = paginatedMemberIds.map(
+        (id) => new Types.ObjectId(id),
+      );
+
+      // Get status data for these users (if they have status records)
+      const statusRecords = await this.userStatusModel
+        .find({
+          user_id: { $in: paginatedMemberObjectIds },
+        })
+        .select("user_id status last_seen")
+        .exec();
+
+      this.logger.log(
+        `Found ${statusRecords.length} status records out of ${paginatedMemberIds.length} members:`,
+        statusRecords.map((s) => ({
+          user_id: s.user_id.toString(),
+          status: s.status,
+        })),
+      );
+
+      // Create a map of user_id to status
+      const statusMap = new Map(
+        statusRecords.map((s) => [s.user_id.toString(), s]),
+      );
+
+      // Get profiles for all paginated members
+      const profileMap =
+        await this.decodeApiClient.getBulkUserProfiles(paginatedMemberIds);
+
+      // Get currently connected users from gateway
+      const connectedUserIds =
+        this.gateway?.getConnectedUserIds() || new Set<string>();
+      this.logger.log(
+        `Currently connected users: ${connectedUserIds.size} - [${Array.from(connectedUserIds).join(", ")}]`,
+      );
+
+      const users = paginatedMemberIds
+        .map((userId) => {
+          const profile = profileMap.get(userId);
+          if (!profile) return null;
+
+          const statusRecord = statusMap.get(userId);
+
+          // Determine user status based on actual socket connection
+          // Priority: connected to WebSocket > database status
+          let userStatus: "online" | "offline" = "offline";
+
+          if (connectedUserIds.has(userId)) {
+            // User is actually connected via WebSocket
+            userStatus = "online";
+          } else if (
+            statusRecord &&
+            statusRecord.status === UserStatus.ONLINE
+          ) {
+            // Database says online but not connected = stale data, treat as offline
+            userStatus = "offline";
+            this.logger.warn(
+              `User ${userId} has online status in DB but not connected - treating as offline`,
+            );
+          }
+
+          return {
+            user_id: userId,
+            status: userStatus,
+            conversationid: "", // Server members don't have conversationid
+            displayname: profile.display_name,
+            username: profile.username,
+            avatar_ipfs_hash: profile.avatar_ipfs_hash,
+            isCall: false, // Server members are not in call
+            last_seen: statusRecord?.last_seen || new Date(),
+            lastMessageAt: undefined, // Server members don't have lastMessageAt
+          };
+        })
+        .filter((user) => user !== null) as OnlineUsersResponse["users"];
+
+      return {
+        users,
+        metadata: {
+          page,
+          limit,
+          total: users.length, // Total in current page
+          is_last_page,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting all members for server ${serverId}:`,
         error,
       );
       throw error;

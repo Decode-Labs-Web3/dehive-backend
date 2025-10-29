@@ -61,15 +61,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly meta = new WeakMap<Socket, SocketMeta>();
 
   private send(client: Socket, event: string, data: unknown) {
+    // Production: emit object (default for frontend)
     client.emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string
+    // const serializedData = JSON.stringify(data, null, 2);
+    // client.emit(event, serializedData);
   }
 
-  // Helper to emit a pretty-printed JSON string for debugging (Insomnia)
-  // Use this only when you need to inspect the payload in a socket.io client that
-  // displays raw strings (e.g., Insomnia). Keep calls commented-out in normal flow.
-  private sendDebug(client: Socket, event: string, data: unknown) {
-    const jsonString = JSON.stringify(data, null, 2);
-    client.emit(event, jsonString);
+  private broadcast(room: string, event: string, data: unknown) {
+    // Production: emit object (default for frontend)
+    this.server.to(room).emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string
+    // const serializedData = JSON.stringify(data, null, 2);
+    // this.server.to(room).emit(event, serializedData);
   }
 
   private async getUserProfile(userDehiveId: string): Promise<{
@@ -209,17 +215,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     meta.isAuthenticated = true;
 
     try {
-      // Production: emit object (default behavior)
       this.send(client, "identityConfirmed", {
         message: `You are now identified as ${userDehiveId}`,
         userDehiveId: userDehiveId,
       });
-
-      // Debug (Insomnia): uncomment below to emit pretty JSON string
-      // this.sendDebug(client, "identityConfirmed", {
-      //   message: `You are now identified as ${userDehiveId}`,
-      //   userDehiveId: userDehiveId,
-      // });
 
       console.log(`[WebSocket] identityConfirmed sent successfully`);
     } catch (error) {
@@ -340,19 +339,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       console.log(`[WebSocket] ✅ SERVER ID: ${serverId}`);
       console.log(`[WebSocket] ✅ ROOM JOINED: server:${serverId}`);
 
-      // Production: emit object (default behavior)
       this.send(client, "joinedServer", {
         serverId,
         message:
           "Joined server room successfully. You will receive all messages from all channels in this server.",
       });
-
-      // Debug (Insomnia): uncomment below to emit pretty JSON string
-      // this.sendDebug(client, "joinedServer", {
-      //   serverId,
-      //   message:
-      //     "Joined server room successfully. You will receive all messages from all channels in this server.",
-      // });
     } catch (error) {
       console.error("[WebSocket] Error handling joinServer:", error);
       this.send(client, "error", {
@@ -498,15 +489,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         JSON.stringify(messageToBroadcast, null, 2),
       );
 
-      // Production: emit object (default behavior)
-      // Broadcast to all users in the server (not just the channel)
-      this.server
-        .to(`server:${serverId}`)
-        .emit("newMessage", messageToBroadcast);
-
-      // Debug (Insomnia): uncomment below to emit pretty JSON string
-      // const jsonMessage = JSON.stringify(messageToBroadcast, null, 2);
-      // this.server.to(`server:${serverId}`).emit("newMessage", jsonMessage);
+      this.broadcast(`server:${serverId}`, "newMessage", messageToBroadcast);
     } catch (error: unknown) {
       console.error("[WebSocket] Error handling message:", error);
       this.send(client, "error", {
@@ -575,13 +558,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         updatedAt: (updated as { updatedAt?: Date }).updatedAt,
       });
 
-      // Production: emit object (default behavior)
-      // Broadcast to all users in the server
-      this.server.to(`server:${serverId}`).emit("messageEdited", payload);
-
-      // Debug (Insomnia): uncomment below to emit pretty JSON string
-      // const jsonPayload = JSON.stringify(payload, null, 2);
-      // this.server.to(`server:${serverId}`).emit("messageEdited", jsonPayload);
+      this.broadcast(`server:${serverId}`, "messageEdited", payload);
     } catch (error: unknown) {
       this.send(client, "error", {
         message: "Failed to edit message.",
@@ -648,13 +625,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         updatedAt: (updated as { updatedAt?: Date }).updatedAt,
       });
 
-      // Production: emit object (default behavior)
-      // Broadcast to all users in the server
-      this.server.to(`server:${serverId}`).emit("messageDeleted", payload);
-
-      // Debug (Insomnia): uncomment below to emit pretty JSON string
-      // const jsonPayload = JSON.stringify(payload, null, 2);
-      // this.server.to(`server:${serverId}`).emit("messageDeleted", jsonPayload);
+      this.broadcast(`server:${serverId}`, "messageDeleted", payload);
     } catch (error: unknown) {
       this.send(client, "error", {
         message: "Failed to delete message.",

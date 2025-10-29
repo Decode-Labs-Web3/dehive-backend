@@ -37,7 +37,25 @@ export class UserStatusGateway
     @InjectRedis() private readonly redis: Redis,
     private readonly userStatusService: UserStatusService,
     private readonly decodeApiClient: DecodeApiClient,
-  ) {}
+  ) {
+    // Set gateway reference in service
+    this.userStatusService.setGateway(this);
+  }
+
+  /**
+   * Get list of currently connected user IDs
+   */
+  getConnectedUserIds(): Set<string> {
+    const connectedUserIds = new Set<string>();
+    if (this.meta) {
+      for (const meta of this.meta.values()) {
+        if (meta.userDehiveId) {
+          connectedUserIds.add(meta.userDehiveId);
+        }
+      }
+    }
+    return connectedUserIds;
+  }
 
   private async findUserSessionFromRedis(
     userId: string,

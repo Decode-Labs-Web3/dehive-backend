@@ -96,4 +96,34 @@ export class UserStatusController {
 
     return ApiResponse.ok(result, "Successfully fetched online server members");
   }
+
+  /**
+   * Get all members (online + offline) in a server with pagination
+   */
+  @Get("server/:serverId/all")
+  async getAllServerMembers(
+    @Param("serverId") serverId: string,
+    @Req() request: Request,
+    @Query("page", new DefaultValuePipe(0), ParseIntPipe) page: number,
+    @Query("limit", new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    const user = request["user"] as AuthenticatedUser;
+    if (!user || !user._id) {
+      throw new BadRequestException("User not authenticated");
+    }
+
+    if (!serverId) {
+      throw new BadRequestException("serverId is required");
+    }
+
+    const result = await this.service.getAllServerMembers(
+      serverId,
+      user.session_id,
+      user.fingerprint_hash,
+      page,
+      limit,
+    );
+
+    return ApiResponse.ok(result, "Successfully fetched all server members");
+  }
 }
