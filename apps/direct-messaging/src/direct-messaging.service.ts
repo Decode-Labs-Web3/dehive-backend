@@ -71,6 +71,80 @@ export class DirectMessagingService {
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
+  /**
+   * Get user status from Redis cache (set by user-status service)
+   */
+  private async getUserStatusFromRedis(
+    userId: string,
+  ): Promise<"online" | "offline"> {
+    try {
+      const statusKey = `user:status:${userId}`;
+      const statusData = await this.redis.get(statusKey);
+
+      if (!statusData) {
+        return "offline"; // No cache = offline
+      }
+
+      const parsed = JSON.parse(statusData);
+      return parsed.status === "online" ? "online" : "offline";
+    } catch (error) {
+      this.logger.warn(
+        `Failed to get status from Redis for user ${userId}: ${error.message}`,
+      );
+      return "offline"; // Default to offline on error
+    }
+  }
+
+  /**
+   * Get batch user status from Redis
+   */
+  private async getBatchUserStatusFromRedis(
+    userIds: string[],
+  ): Promise<Map<string, "online" | "offline">> {
+    const statusMap = new Map<string, "online" | "offline">();
+
+    try {
+      // Use pipeline for better performance
+      const pipeline = this.redis.pipeline();
+      userIds.forEach((userId) => {
+        pipeline.get(`user:status:${userId}`);
+      });
+
+      const results = await pipeline.exec();
+
+      if (!results) {
+        // If pipeline fails, set all to offline
+        userIds.forEach((userId) => statusMap.set(userId, "offline"));
+        return statusMap;
+      }
+
+      results.forEach((result, index) => {
+        const userId = userIds[index];
+        if (result && result[1]) {
+          try {
+            const parsed = JSON.parse(result[1] as string);
+            statusMap.set(
+              userId,
+              parsed.status === "online" ? "online" : "offline",
+            );
+          } catch {
+            statusMap.set(userId, "offline");
+          }
+        } else {
+          statusMap.set(userId, "offline");
+        }
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to get batch status from Redis: ${error.message}`,
+      );
+      // Set all to offline on error
+      userIds.forEach((userId) => statusMap.set(userId, "offline"));
+    }
+
+    return statusMap;
+  }
+
   private detectAttachmentType(mime: string): AttachmentType {
     if (mime.startsWith("image/")) return AttachmentType.IMAGE;
     if (mime.startsWith("video/")) return AttachmentType.VIDEO;
@@ -800,6 +874,16 @@ export class DirectMessagingService {
       this.logger.log(`User ${userId} -> Conversation ${convId}`);
     });
 
+    // Get user IDs to check status
+    const userIdsToCheck = followingUsers.map((user) => user.user_id);
+
+    // Get status for all users from Redis cache
+    const userStatusMap =
+      await this.getBatchUserStatusFromRedis(userIdsToCheck);
+    this.logger.log(
+      `Retrieved status for ${userStatusMap.size} users from Redis`,
+    );
+
     // Process following users and add conversation info
     const followingWithMessages: FollowingMessageUser[] = [];
 
@@ -809,7 +893,8 @@ export class DirectMessagingService {
       const conversationId = userToConversationMap.get(userId);
 
       let lastMessageAt: Date | undefined;
-      let status: "online" | "offline" = "offline";
+      const status: "online" | "offline" =
+        userStatusMap.get(userId) || "offline";
       const isCall = false;
 
       if (conversationId) {
@@ -817,13 +902,6 @@ export class DirectMessagingService {
           conversationToLastMessageMap.get(conversationId);
         if (lastMessageInfo) {
           lastMessageAt = lastMessageInfo.lastMessageAt;
-          // Check if user is active (has sent a message recently - within last 5 minutes)
-          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-          status = lastMessageAt > fiveMinutesAgo ? "online" : "offline";
-
-          // this.logger.log(
-          //   `User ${userId} last message at: ${lastMessageAt}, status: ${status}`,
-          // );
         }
       }
 
@@ -1138,12 +1216,16 @@ export class DirectMessagingService {
       fingerprintHash,
     );
 
+    // Get user status from Redis cache (set by user-status service)
+    const userStatus = await this.getUserStatusFromRedis(otherUserId);
+
     // Return only the other user's information
     const otherUser: ConversationUser = {
       id: otherUserId,
       displayname: otherUserProfile.display_name || `User_${otherUserId}`,
       username: otherUserProfile.username || `User_${otherUserId}`,
       avatar_ipfs_hash: otherUserProfile.avatar_ipfs_hash || undefined,
+      status: userStatus,
     };
 
     return {

@@ -11,6 +11,8 @@ import {
   BulkStatusResponse,
   OnlineUsersResponse,
 } from "../interfaces/user-status.interface";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import { Redis } from "ioredis";
 
 @Injectable()
 export class UserStatusService {
@@ -21,6 +23,7 @@ export class UserStatusService {
     @InjectModel(UserStatusSchema.name)
     private readonly userStatusModel: Model<UserStatusDocument>,
     private readonly decodeApiClient: DecodeApiClient,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   /**
@@ -51,6 +54,19 @@ export class UserStatusService {
         { upsert: true, new: true },
       );
 
+      // Cache status in Redis for fast access from other services
+      const statusKey = `user:status:${userId}`;
+      await this.redis.set(
+        statusKey,
+        JSON.stringify({
+          status: UserStatus.ONLINE,
+          last_seen: new Date().toISOString(),
+          socket_id: socketId,
+        }),
+        "EX",
+        3600, // Expire after 1 hour
+      );
+
       return { success: true, status: UserStatus.ONLINE };
     } catch (error) {
       this.logger.error(`Error setting user ${userId} online:`, error);
@@ -74,6 +90,19 @@ export class UserStatusService {
           updated_at: new Date(),
         },
         { upsert: true },
+      );
+
+      // Update status in Redis
+      const statusKey = `user:status:${userId}`;
+      await this.redis.set(
+        statusKey,
+        JSON.stringify({
+          status: UserStatus.OFFLINE,
+          last_seen: new Date().toISOString(),
+          socket_id: null,
+        }),
+        "EX",
+        3600, // Expire after 1 hour
       );
 
       return { success: true };

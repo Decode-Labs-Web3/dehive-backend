@@ -3,6 +3,7 @@ export interface ConversationUser {
   displayname: string;
   username: string;
   avatar_ipfs_hash?: string; // avatar ipfs hash
+  status: "online" | "offline"; // user online status
 }
 
 export interface ConversationUsersResponse {
