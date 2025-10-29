@@ -140,20 +140,16 @@ Cả 2 services đã implement đúng MongoDB Atlas Search với các tính năn
 ### Phase 2: Direct Messaging Search Tests
 
 #### Test 2.1: Search trong 1 conversation
-**Endpoint:** `GET /api/dm/search/conversation/{conversationId}`
+**Endpoint:** `GET /api/dm/conversations/{conversationId}/search`
 
 **Test Cases:**
 
 **Case A: Exact Match (Tìm chính xác)**
 ```http
-GET http://localhost:4004/api/dm/search/conversation/68e8b59f806fb5c06c6551a3
+GET http://localhost:4004/api/dm/conversations/68e8b59f806fb5c06c6551a3/search?search=hello&page=0&limit=20
 Headers:
   x-session-id: {session_id}
-  x-fingerprint-hashed: {fingerprint}
-Query params:
-  search=hello
-  page=0
-  limit=20
+  x-fingerprint-hash: {fingerprint}
 ```
 **Expected:** Tìm messages có từ "hello" (chính xác)
 
@@ -161,11 +157,10 @@ Query params:
 
 **Case B: Partial Match (Tìm một phần)**
 ```http
-GET http://localhost:4004/api/dm/search/conversation/68e8b59f806fb5c06c6551a3
-Query params:
-  search=hel
-  page=0
-  limit=20
+GET http://localhost:4004/api/dm/conversations/68e8b59f806fb5c06c6551a3/search?search=hel&page=0&limit=20
+Headers:
+  x-session-id: {session_id}
+  x-fingerprint-hash: {fingerprint}
 ```
 **Expected:** Tìm "hello", "help", "helicopter", etc.
 
@@ -173,23 +168,22 @@ Query params:
 
 **Case C: Fuzzy Match (Lỗi chính tả)**
 ```http
-GET http://localhost:4004/api/dm/search/conversation/68e8b59f806fb5c06c6551a3
-Query params:
-  search=helo  (thiếu 1 chữ 'l')
-  page=0
-  limit=20
+GET http://localhost:4004/api/dm/conversations/68e8b59f806fb5c06c6551a3/search?search=helo&page=0&limit=20
+Headers:
+  x-session-id: {session_id}
+  x-fingerprint-hash: {fingerprint}
 ```
+**Note:** `search=helo` (thiếu 1 chữ 'l')
 **Expected:** Vẫn tìm thấy "hello" (dung sai 1 ký tự)
 
 ---
 
 **Case D: Wildcard (Tìm trong cụm)**
 ```http
-GET http://localhost:4004/api/dm/search/conversation/68e8b59f806fb5c06c6551a3
-Query params:
-  search=world
-  page=0
-  limit=20
+GET http://localhost:4004/api/dm/conversations/68e8b59f806fb5c06c6551a3/search?search=world&page=0&limit=20
+Headers:
+  x-session-id: {session_id}
+  x-fingerprint-hash: {fingerprint}
 ```
 **Expected:** Tìm "hello world", "world cup", "new world", etc.
 
@@ -197,15 +191,17 @@ Query params:
 
 **Case E: Pagination**
 ```http
-GET http://localhost:4004/api/dm/search/conversation/68e8b59f806fb5c06c6551a3
-Query params:
-  search=test
-  page=0
-  limit=5
+# Page 0:
+GET http://localhost:4004/api/dm/conversations/68e8b59f806fb5c06c6551a3/search?search=test&page=0&limit=5
+Headers:
+  x-session-id: {session_id}
+  x-fingerprint-hash: {fingerprint}
 
-# Then page 1:
-  page=1
-  limit=5
+# Page 1:
+GET http://localhost:4004/api/dm/conversations/68e8b59f806fb5c06c6551a3/search?search=test&page=1&limit=5
+Headers:
+  x-session-id: {session_id}
+  x-fingerprint-hash: {fingerprint}
 ```
 **Expected:**
 - Page 0: 5 kết quả đầu tiên
@@ -215,17 +211,13 @@ Query params:
 ---
 
 #### Test 2.2: Search tất cả conversations của user
-**Endpoint:** `GET /api/dm/search/all`
+**Endpoint:** `GET /api/dm/search`
 
 ```http
-GET http://localhost:4004/api/dm/search/all
+GET http://localhost:4004/api/dm/search?search=test&page=0&limit=20
 Headers:
   x-session-id: {session_id}
-  x-fingerprint-hashed: {fingerprint}
-Query params:
-  search=test
-  page=0
-  limit=20
+  x-fingerprint-hash: {fingerprint}
 ```
 **Expected:** Tìm trong TẤT CẢ conversations mà user là participant
 
@@ -234,29 +226,26 @@ Query params:
 ### Phase 3: Channel Messaging Search Tests
 
 #### Test 3.1: Search trong 1 channel
-**Endpoint:** `GET /api/messages/search/channel/{channelId}`
+**Endpoint:** `GET /api/messages/channels/{channelId}/search`
 
 **Test Cases:**
 
 **Case A: Exact Match**
 ```http
-GET http://localhost:4003/api/messages/search/channel/67088ce1b7bdd19476e23cdc
+GET http://localhost:4003/api/messages/channels/67088ce1b7bdd19476e23cdc/search?search=meeting&page=0&limit=20
 Headers:
   x-session-id: {session_id}
-  x-fingerprint-hashed: {fingerprint}
-Query params:
-  search=meeting
-  page=0
-  limit=20
+  x-fingerprint-hash: {fingerprint}
 ```
 
 ---
 
 **Case B: Autocomplete (Gõ dần)**
 ```http
-GET http://localhost:4003/api/messages/search/channel/67088ce1b7bdd19476e23cdc
-Query params:
-  search=me
+GET http://localhost:4003/api/messages/channels/67088ce1b7bdd19476e23cdc/search?search=me&page=0&limit=20
+Headers:
+  x-session-id: {session_id}
+  x-fingerprint-hash: {fingerprint}
 ```
 **Expected:** Tìm "meeting", "message", "me", etc.
 
@@ -264,26 +253,24 @@ Query params:
 
 **Case C: Phrase Match (Cụm từ)**
 ```http
-GET http://localhost:4003/api/messages/search/channel/67088ce1b7bdd19476e23cdc
-Query params:
-  search=project update
+GET http://localhost:4003/api/messages/channels/67088ce1b7bdd19476e23cdc/search?search=project%20update&page=0&limit=20
+Headers:
+  x-session-id: {session_id}
+  x-fingerprint-hash: {fingerprint}
 ```
+**Note:** `%20` = space character in URL encoding
 **Expected:** Ưu tiên "project update" (cả cụm) > "project" hoặc "update" riêng lẻ
 
 ---
 
 #### Test 3.2: Search trong entire server
-**Endpoint:** `GET /api/messages/search/server/{serverId}`
+**Endpoint:** `GET /api/messages/servers/{serverId}/search`
 
 ```http
-GET http://localhost:4003/api/messages/search/server/68e09f0f8f924bd8b03d957a
+GET http://localhost:4003/api/messages/servers/68e09f0f8f924bd8b03d957a/search?search=important&page=0&limit=20
 Headers:
   x-session-id: {session_id}
-  x-fingerprint-hashed: {fingerprint}
-Query params:
-  search=important
-  page=0
-  limit=20
+  x-fingerprint-hash: {fingerprint}
 ```
 **Expected:** Tìm trong TẤT CẢ channels của server
 
@@ -462,13 +449,13 @@ POST http://localhost:4004/api/dm/send
 
 ### Verify index can find them:
 ```http
-GET /api/dm/search/all?search=hello
+GET http://localhost:4004/api/dm/search?search=hello&page=0&limit=20
 # Should return 2 results
 
-GET /api/dm/search/all?search=meeting
+GET http://localhost:4004/api/dm/search?search=meeting&page=0&limit=20
 # Should return 1 result
 
-GET /api/dm/search/all?search=project
+GET http://localhost:4004/api/dm/search?search=project&page=0&limit=20
 # Should return 1 result
 ```
 

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from "@nestjs/common";
+import { Injectable, BadRequestException, Logger } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import {
@@ -11,6 +11,7 @@ import { DecodeApiClient } from "../clients/decode-api.client";
 
 @Injectable()
 export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
   constructor(
     @InjectModel(ChannelMessage.name)
     private readonly channelMessageModel: Model<ChannelMessageDocument>,
@@ -24,6 +25,10 @@ export class SearchService {
     fingerprintHash?: string,
   ): Promise<SearchResultResponse> {
     const { search, page = 0, limit = 20 } = searchDto;
+
+    this.logger.log(
+      `searchInChannel called: channelId=${channelId} search="${search}" page=${page} limit=${limit}`,
+    );
 
     if (!search || search.trim().length === 0) {
       throw new BadRequestException("Search query is required");
@@ -116,6 +121,9 @@ export class SearchService {
       .aggregate(countPipeline)
       .exec();
     const totalResults = countResult[0]?.total || 0;
+    this.logger.log(
+      `[CHANNEL-MESSAGING-SEARCH] countResult=${JSON.stringify(countResult)} totalResults=${totalResults}`,
+    );
 
     // Add pagination
     const paginatedPipeline = [
@@ -140,6 +148,9 @@ export class SearchService {
     const messages = await this.channelMessageModel
       .aggregate(paginatedPipeline)
       .exec();
+    this.logger.log(
+      `[CHANNEL-MESSAGING-SEARCH] messages.length=${messages?.length}`,
+    );
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(totalResults / limit);
@@ -165,13 +176,25 @@ export class SearchService {
       .map((m) => m.senderId?.toString())
       .filter((id): id is string => Boolean(id));
 
-    console.log("[CHANNEL-MESSAGING-SEARCH] Fetching profiles for:", userIds);
-
-    const profiles = await this.decodeClient.batchGetProfiles(
-      userIds,
-      sessionId,
-      fingerprintHash,
+    this.logger.log(
+      `[CHANNEL-MESSAGING-SEARCH] Fetching profiles for: ${JSON.stringify(userIds)}`,
     );
+
+    let profiles: Record<string, Partial<any>> = {};
+    try {
+      profiles = await this.decodeClient.batchGetProfiles(
+        userIds,
+        sessionId,
+        fingerprintHash,
+      );
+      this.logger.log(
+        `[CHANNEL-MESSAGING-SEARCH] fetched profiles count=${Object.keys(profiles).length}`,
+      );
+    } catch (err) {
+      this.logger.error("Error fetching profiles:", err?.stack || err);
+      // continue with empty profiles fallback
+      profiles = {};
+    }
 
     // Map results with user profiles
     const items = messages.map((msg) => ({
