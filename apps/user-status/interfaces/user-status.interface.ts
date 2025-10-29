@@ -1,4 +1,3 @@
-// Chuẩn hóa response cho tất cả user status endpoints
 export interface UserStatusItem {
   user_id: string;
   status: "online" | "offline" | "away";
@@ -21,7 +20,7 @@ export interface BulkStatusResponse {
 }
 
 export interface OnlineUsersResponse {
-  users: UserStatusItem[]; // Đổi từ online_users → users để đồng nhất
+  users: UserStatusItem[];
   metadata?: {
     page: number;
     limit: number;
