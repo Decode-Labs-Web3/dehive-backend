@@ -89,7 +89,6 @@ export class ChannelCallGateway
         return null;
       }
 
-      // Get participant status
       const participant = await this.participantModel
         .findOne({ channel_id: channelId, user_id: userDehiveId })
         .exec();
@@ -221,7 +220,6 @@ export class ChannelCallGateway
       | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
@@ -229,7 +227,6 @@ export class ChannelCallGateway
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
-    // Parse data if it's a string
     let parsedData: {
       server_id?: string;
       serverId?: string;
@@ -248,7 +245,6 @@ export class ChannelCallGateway
       parsedData = data;
     }
 
-    // Support both server_id and serverId
     const serverId = parsedData.server_id || parsedData.serverId;
 
     if (!serverId) {
@@ -279,7 +275,6 @@ export class ChannelCallGateway
 
       await client.join(`server:${serverId}`);
 
-      // Get all channels in server with their active participants
       const serverChannelsData =
         await this.service.getServerChannelsWithParticipants(serverId);
 
@@ -306,7 +301,6 @@ export class ChannelCallGateway
       | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
@@ -332,7 +326,6 @@ export class ChannelCallGateway
       parsedData = data;
     }
 
-    // Support both channel_id and channelId
     const channelId = parsedData.channel_id || parsedData.channelId;
 
     if (!channelId) {
@@ -370,8 +363,6 @@ export class ChannelCallGateway
         });
       }
 
-      await client.join(`channel:${channelId}`);
-
       this.send(client, "channelJoined", {
         channel_id: channelId,
         status: result.call.status,
@@ -381,7 +372,7 @@ export class ChannelCallGateway
       const userProfile = await this.getUserProfile(userId, channelId);
 
       if (userProfile) {
-        this.broadcast(`channel:${channelId}`, "userJoinedChannel", {
+        this.broadcast(`server:${meta.serverId}`, "userJoinedChannel", {
           channel_id: channelId,
           user_id: userId,
           user_info: {
@@ -410,15 +401,14 @@ export class ChannelCallGateway
     data: { channel_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
 
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
+    const serverId = meta?.serverId;
 
-    // Parse data if it's a string
     let parsedData: { channel_id?: string; channelId?: string };
 
     if (typeof data === "string") {
@@ -434,7 +424,6 @@ export class ChannelCallGateway
       parsedData = data;
     }
 
-    // Support both channel_id and channelId
     const channelId = parsedData.channel_id || parsedData.channelId;
 
     if (!channelId) {
@@ -452,7 +441,6 @@ export class ChannelCallGateway
     }
 
     try {
-      // Get user profile with status BEFORE leaving
       const userProfile = await this.getUserProfile(userId, channelId);
 
       const result = await this.service.leaveChannel(userId, channelId);
@@ -461,8 +449,6 @@ export class ChannelCallGateway
         meta.channelId = undefined;
         this.meta.set(client, meta);
       }
-
-      await client.leave(`channel:${channelId}`);
 
       if (userProfile) {
         this.send(client, "channelLeft", {
@@ -486,8 +472,9 @@ export class ChannelCallGateway
         });
       }
 
-      if (userProfile) {
-        this.broadcast(`channel:${channelId}`, "userLeftChannel", {
+      if (userProfile && serverId) {
+        // Broadcast to server room instead of channel room
+        this.broadcast(`server:${serverId}`, "userLeftChannel", {
           channel_id: channelId,
           user_id: userId,
           user_info: {
@@ -501,8 +488,8 @@ export class ChannelCallGateway
             isLive: userProfile.isLive,
           },
         });
-      } else {
-        this.broadcast(`channel:${channelId}`, "userLeftChannel", {
+      } else if (serverId) {
+        this.broadcast(`server:${serverId}`, "userLeftChannel", {
           channel_id: channelId,
           user_id: userId,
         });
@@ -528,7 +515,6 @@ export class ChannelCallGateway
       | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
@@ -536,6 +522,7 @@ export class ChannelCallGateway
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
     const channelId = meta?.channelId;
+    const serverId = meta?.serverId;
 
     if (!userId) {
       return this.send(client, "error", {
@@ -551,7 +538,13 @@ export class ChannelCallGateway
       });
     }
 
-    // Parse data if it's a string
+    if (!serverId) {
+      return this.send(client, "error", {
+        message: "Please join a server first",
+        code: "SERVER_NOT_JOINED",
+      });
+    }
+
     let parsedData: {
       isCamera?: boolean;
       isMic?: boolean;
@@ -573,7 +566,6 @@ export class ChannelCallGateway
     }
 
     try {
-      // Update user status
       const result = await this.service.updateUserStatus(userId, channelId, {
         isCamera: parsedData.isCamera,
         isMic: parsedData.isMic,
@@ -602,8 +594,7 @@ export class ChannelCallGateway
         },
       };
 
-      // Broadcast to ALL users in the channel (including the sender)
-      this.broadcast(`channel:${channelId}`, "userStatusChanged", statusData);
+      this.broadcast(`server:${serverId}`, "userStatusChanged", statusData);
     } catch (error) {
       this.send(client, "error", {
         message: "Failed to update user status",

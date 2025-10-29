@@ -104,11 +104,6 @@ export class UserStatusGateway
     }
   }
 
-  /**
-   * Get user's fingerprintHash from Redis
-   * @param userId - User's Dehive ID
-   * @returns fingerprintHash if found, null otherwise
-   */
   private async getFingerprintFromRedis(
     userId: string,
   ): Promise<string | null> {
@@ -123,16 +118,13 @@ export class UserStatusGateway
 
   private send(client: Socket, event: string, data: unknown) {
     // Production: emit object (default for frontend)
-    // client.emit(event, data);
+    client.emit(event, data);
 
     // Debug (Insomnia): uncomment below to emit pretty JSON string
-    const serializedData = JSON.stringify(data, null, 2);
-    client.emit(event, serializedData);
+    // const serializedData = JSON.stringify(data, null, 2);
+    // client.emit(event, serializedData);
   }
 
-  /**
-   * Broadcast to specific users who are online
-   */
   private broadcastToUsers(event: string, data: unknown, userIds: string[]) {
     if (!this.server || !this.server.sockets) {
       this.logger.warn("Server or sockets not available for broadcast");
@@ -143,7 +135,6 @@ export class UserStatusGateway
 
     sockets.forEach((socket) => {
       const meta = this.meta.get(socket);
-      // Only send to users in the userIds list who have identified
       if (meta?.userDehiveId && userIds.includes(meta.userDehiveId)) {
         this.send(socket, event, data);
       }
@@ -170,19 +161,16 @@ export class UserStatusGateway
       try {
         const userDehiveId = meta.userDehiveId;
 
-        // Set user offline
         await this.userStatusService.setUserOffline(userDehiveId);
 
         this.logger.log(`User ${userDehiveId} is now offline.`);
 
-        // Broadcast offline status to following users
         const fingerprintHash =
           await this.getFingerprintFromRedis(userDehiveId);
         const sessionId = await this.findUserSessionFromRedis(userDehiveId);
 
         if (sessionId && fingerprintHash) {
           try {
-            // Get user's following list
             const followingUsers = await this.decodeApiClient.getUserFollowing(
               userDehiveId,
               sessionId,
@@ -194,9 +182,7 @@ export class UserStatusGateway
                 `Broadcasting offline status to ${followingUsers.length} following users`,
               );
 
-              // Broadcast to each following user
               for (const followingUserId of followingUsers) {
-                // Find all connected clients for this following user
                 for (const [socket, socketMeta] of this.meta.entries()) {
                   if (socketMeta.userDehiveId === followingUserId) {
                     this.send(socket, "userStatusChanged", {
@@ -282,10 +268,8 @@ export class UserStatusGateway
         this.meta.set(client, { userDehiveId, fingerprintHash });
       }
 
-      // Save fingerprintHash to Redis for later use
       await this.saveFingerprintToRedis(userDehiveId, fingerprintHash);
 
-      // Find user's sessionId from Redis
       const sessionId = await this.findUserSessionFromRedis(userDehiveId);
 
       if (!sessionId) {
@@ -308,10 +292,8 @@ export class UserStatusGateway
 
       this.logger.log(`User ${userDehiveId} identified and set online.`);
 
-      // Broadcast to following users if we have session credentials
       if (sessionId && fingerprintHash) {
         try {
-          // Get user's following list
           const followingUsers = await this.decodeApiClient.getUserFollowing(
             userDehiveId,
             sessionId,

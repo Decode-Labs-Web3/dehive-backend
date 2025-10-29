@@ -95,39 +95,45 @@ export class DecodeApiClient {
   }
 
   /**
-   * Get following users for a specific user
-   * Calls direct-messaging service
-   * Returns empty array if cannot fetch (e.g., no auth credentials)
+   * Get following users with conversation details (conversationId, isCall)
+   * Calls direct-messaging service /api/dm/following-messages endpoint
+   * Returns array of objects with user_id, conversation_id, and isCall
    */
   async getUserFollowing(
     userId: string,
     sessionId?: string,
     fingerprintHash?: string,
-  ): Promise<string[]> {
+  ): Promise<
+    Array<{ user_id: string; conversation_id: string; isCall: boolean }>
+  > {
     // If no auth credentials, cannot fetch following list
     if (!sessionId || !fingerprintHash) {
       this.logger.warn(
-        `No auth credentials provided for getUserFollowing(${userId}). Cannot fetch following list without authentication.`,
+        `No auth credentials provided for getUserFollowing(${userId}). Cannot fetch without authentication.`,
       );
       return [];
     }
 
     try {
       this.logger.log(
-        `Fetching following list for user ${userId} from direct-messaging service`,
+        `Fetching following list with conversations for user ${userId}`,
       );
 
-      const url = `${this.directMessageUrl}/api/dm/following`;
+      const url = `${this.directMessageUrl}/api/dm/following-messages`;
       this.logger.log(`Calling: GET ${url}`);
       this.logger.log(
-        `Headers: x-session-id=${sessionId}, x-fingerprint-hashed=${fingerprintHash}`,
+        `Headers: x-session-id=${sessionId.substring(0, 8)}..., x-fingerprint-hashed=${fingerprintHash.substring(0, 20)}...`,
       );
 
       const response = await firstValueFrom(
         this.httpService.get<{
           success: boolean;
           data: {
-            items: Array<{ user_id: string }>;
+            items: Array<{
+              id: string; // user id
+              conversationid: string; // conversation id
+              isCall: boolean;
+            }>;
           };
         }>(url, {
           headers: {
@@ -143,25 +149,55 @@ export class DecodeApiClient {
 
       if (!response.data?.success || !response.data?.data?.items) {
         this.logger.warn(
-          `Failed to fetch following list for user ${userId}: Invalid response structure`,
+          `Failed to fetch following list with conversations for user ${userId}: Invalid response structure`,
         );
         return [];
       }
 
-      const followingIds = response.data.data.items.map((user) => user.user_id);
-      this.logger.log(
-        `Successfully fetched ${followingIds.length} following users for ${userId}`,
+      // DEBUG: Log raw response to verify field names
+      this.logger.debug(
+        `Raw response from /api/dm/following-messages:`,
+        JSON.stringify(response.data.data.items.slice(0, 2)), // Log first 2 items
       );
-      return followingIds;
+
+      // Map response fields (id → user_id, conversationid → conversation_id)
+      const followingWithConversations = response.data.data.items.map(
+        (item) => ({
+          user_id: item.id, // Map 'id' to 'user_id'
+          conversation_id: item.conversationid, // Map 'conversationid' to 'conversation_id'
+          isCall: item.isCall,
+        }),
+      );
+
+      // DEBUG: Log mapped result
+      this.logger.debug(
+        `Mapped result (first 2):`,
+        JSON.stringify(followingWithConversations.slice(0, 2)),
+      );
+
+      this.logger.log(
+        `Successfully fetched ${followingWithConversations.length} following users with conversation details for ${userId}`,
+      );
+
+      return followingWithConversations;
     } catch (error) {
       // Check if it's a token expiry error
       if (error.response?.status === 401) {
         this.logger.warn(
-          `Authentication failed for user ${userId}: Token expired or invalid. User needs to re-login. Skipping broadcast.`,
+          `Authentication failed for user ${userId}: Token expired or invalid. User needs to re-login.`,
+        );
+      } else if (error.response) {
+        this.logger.error(
+          `Error fetching following list with conversations for user ${userId}:`,
+          error.message,
+        );
+        this.logger.error(
+          `Response status: ${error.response.status}, data:`,
+          JSON.stringify(error.response.data),
         );
       } else {
         this.logger.error(
-          `Error fetching following list for user ${userId}:`,
+          `Error fetching following list with conversations for user ${userId}:`,
           error.message,
         );
       }

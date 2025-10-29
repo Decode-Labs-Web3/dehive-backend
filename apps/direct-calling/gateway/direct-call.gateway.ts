@@ -110,17 +110,14 @@ export class DirectCallGateway
     userIdA: string,
     userIdB: string,
   ): Promise<Types.ObjectId> {
-    // Sort userIds to ensure consistent lookup (schema pre-save hook does this too)
     const [sortedUserA, sortedUserB] =
       userIdA < userIdB ? [userIdA, userIdB] : [userIdB, userIdA];
 
-    // Try to find existing conversation
     let conversation = await this.directConversationModel.findOne({
       userA: new Types.ObjectId(sortedUserA),
       userB: new Types.ObjectId(sortedUserB),
     });
 
-    // If not found, create new one
     if (!conversation) {
       conversation = new this.directConversationModel({
         userA: new Types.ObjectId(sortedUserA),
@@ -136,29 +133,24 @@ export class DirectCallGateway
     callerId: string,
     calleeId: string,
   ): Promise<DmCallDocument> {
-    // Get or create fixed conversation first
     const conversationId = await this.findOrCreateConversation(
       callerId,
       calleeId,
     );
 
-    // Check if there's already an ACTIVE call (CALLING or CONNECTED)
     const activeCall = await this.dmCallModel.findOne({
       conversation_id: conversationId,
       status: { $in: [CallStatus.CALLING, CallStatus.CONNECTED] },
     });
 
     if (activeCall) {
-      // There's already an active call, return error or handle accordingly
       throw new Error("There is already an active call for this conversation");
     }
 
-    // Try to find existing call document for this conversation
     let call = await this.dmCallModel.findOne({
       conversation_id: conversationId,
     });
 
-    // If not found, create new one
     if (!call) {
       call = new this.dmCallModel({
         conversation_id: conversationId,
@@ -168,13 +160,11 @@ export class DirectCallGateway
       });
       await call.save();
     } else {
-      // If found, reset/update for new call
       call.status = CallStatus.CALLING;
       call.started_at = undefined;
       call.ended_at = undefined;
       call.duration_seconds = undefined;
       call.end_reason = undefined;
-      // Update caller/callee in case roles switched
       call.caller_id = new Types.ObjectId(callerId);
       call.callee_id = new Types.ObjectId(calleeId);
       await call.save();
@@ -207,7 +197,6 @@ export class DirectCallGateway
       const userId = meta.userDehiveId;
       console.log(`[Direct-Calling] 👤 User DISCONNECTED: ${userId}`);
 
-      // Clear timeout if exists
       if (meta.callTimeout) {
         clearTimeout(meta.callTimeout);
         console.log(
@@ -215,7 +204,6 @@ export class DirectCallGateway
         );
       }
 
-      // Check if user has active call
       const activeCall = await this.dmCallModel.findOne({
         $or: [
           { caller_id: new Types.ObjectId(userId) },
@@ -229,7 +217,6 @@ export class DirectCallGateway
           `[Direct-Calling] ⚠️ User ${userId} disconnected during ACTIVE CALL (${activeCall.status})`,
         );
 
-        // Auto-end the call
         activeCall.status = CallStatus.ENDED;
         activeCall.ended_at = new Date();
         activeCall.end_reason = CallEndReason.CONNECTION_ERROR;
@@ -239,7 +226,6 @@ export class DirectCallGateway
           `[Direct-Calling] 📞 Call ${activeCall._id} auto-ended due to disconnect`,
         );
 
-        // Notify the other user
         const otherUserId =
           activeCall.caller_id.toString() === userId
             ? activeCall.callee_id.toString()
@@ -303,7 +289,6 @@ export class DirectCallGateway
 
     let userDehiveId: string;
 
-    // Parse data - handle string (plain or JSON) or object format
     if (typeof data === "string") {
       try {
         const parsedData = JSON.parse(data) as { userDehiveId: string };
@@ -334,7 +319,6 @@ export class DirectCallGateway
       });
     }
 
-    // Validate user exists in database
     const exists = await this.userDehiveModel.exists({
       _id: new Types.ObjectId(userDehiveId),
     });
@@ -357,6 +341,42 @@ export class DirectCallGateway
         status: "success",
         timestamp: new Date().toISOString(),
       });
+
+      console.log(
+        `[Direct-Calling] Checking pending calls for user ${userDehiveId}`,
+      );
+
+      const pendingCall = await this.dmCallModel.findOne({
+        callee_id: new Types.ObjectId(userDehiveId),
+        status: CallStatus.CALLING,
+      });
+
+      if (pendingCall) {
+        console.log(
+          `[Direct-Calling] Found pending call ${pendingCall._id} for user ${userDehiveId}`,
+        );
+
+        const callerProfile = await this.getUserProfile(
+          String(pendingCall.caller_id),
+        );
+
+        if (callerProfile) {
+          this.send(client, "incomingCall", {
+            conversation_id: String(pendingCall.conversation_id),
+            status: "ringing",
+            user_info: {
+              _id: callerProfile._id,
+              username: callerProfile.username,
+              display_name: callerProfile.display_name,
+              avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+            },
+          });
+
+          console.log(
+            `[Direct-Calling] Sent pending incomingCall to user ${userDehiveId}`,
+          );
+        }
+      }
     }
   }
 
@@ -370,7 +390,6 @@ export class DirectCallGateway
       | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
@@ -378,7 +397,6 @@ export class DirectCallGateway
     const meta = this.meta.get(client);
     const callerId = meta?.userDehiveId;
 
-    // Parse data if it's a string
     let parsedData: {
       target_user_id: string;
     };
@@ -408,7 +426,6 @@ export class DirectCallGateway
     }
 
     try {
-      // Get callee profile first - NO EMIT if not found
       const calleeProfile = await this.getUserProfile(
         parsedData.target_user_id,
       );
@@ -419,7 +436,6 @@ export class DirectCallGateway
         });
       }
 
-      // Get caller profile - NO EMIT if not found
       const callerProfile = await this.getUserProfile(callerId);
       if (!callerProfile) {
         return this.send(client, "error", {
@@ -428,7 +444,6 @@ export class DirectCallGateway
         });
       }
 
-      // Find or create call for this conversation (uses conversation_id)
       const call = await this.findOrCreateCall(
         callerId,
         parsedData.target_user_id,
@@ -450,7 +465,6 @@ export class DirectCallGateway
             (currentCall.status === CallStatus.CALLING ||
               currentCall.status === CallStatus.RINGING)
           ) {
-            // Update call status to timeout
             await this.dmCallModel.findByIdAndUpdate(
               call._id,
               {
@@ -461,7 +475,6 @@ export class DirectCallGateway
               { new: true },
             );
 
-            // Notify caller - status: ended, user_info: callee
             this.send(client, "callTimeout", {
               conversation_id: String(call.conversation_id),
               status: "ended",
@@ -473,7 +486,6 @@ export class DirectCallGateway
               },
             });
 
-            // Notify callee - status: ended, user_info: caller
             this.broadcast(`user:${parsedData.target_user_id}`, "callTimeout", {
               conversation_id: String(call.conversation_id),
               status: "ended",
@@ -490,10 +502,8 @@ export class DirectCallGateway
         }
       }, callTimeoutMs);
 
-      // Store timeout ID in meta for later cleanup
       meta.callTimeout = timeoutId;
 
-      // Notify caller - status: calling, user_info: callee
       this.send(client, "callStarted", {
         conversation_id: String(call.conversation_id),
         status: "calling",
@@ -505,7 +515,6 @@ export class DirectCallGateway
         },
       });
 
-      // Notify callee - status: ringing, user_info: caller
       this.broadcast(`user:${parsedData.target_user_id}`, "incomingCall", {
         conversation_id: String(call.conversation_id),
         status: "ringing",
@@ -531,7 +540,6 @@ export class DirectCallGateway
     data: { conversation_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
@@ -539,7 +547,6 @@ export class DirectCallGateway
     const meta = this.meta.get(client);
     const calleeId = meta?.userDehiveId;
 
-    // Parse data if it's a string
     let parsedData: {
       conversation_id: string;
     };
@@ -566,7 +573,6 @@ export class DirectCallGateway
     }
 
     try {
-      // Get call info first - find call with CALLING status
       const existingCall = await this.dmCallModel.findOne({
         conversation_id: new Types.ObjectId(parsedData.conversation_id),
         status: CallStatus.CALLING,
@@ -580,7 +586,6 @@ export class DirectCallGateway
 
       const callerId = String(existingCall.caller_id);
 
-      // Get both profiles - NO EMIT if not found
       const calleeProfile = await this.getUserProfile(calleeId);
       const callerProfile = await this.getUserProfile(callerId);
 
@@ -591,7 +596,6 @@ export class DirectCallGateway
         });
       }
 
-      // Clear timeout if it exists
       const callerSocket = this.findSocketByUserId(callerId);
       if (callerSocket) {
         const callerMeta = this.meta.get(callerSocket);
@@ -601,7 +605,6 @@ export class DirectCallGateway
         }
       }
 
-      // Update call status to connected
       const call = await this.dmCallModel.findByIdAndUpdate(
         existingCall._id,
         {
@@ -620,7 +623,6 @@ export class DirectCallGateway
 
       meta.callId = String(call._id);
 
-      // Notify caller - status: connected, user_info: callee
       this.broadcast(`user:${call.caller_id}`, "callAccepted", {
         conversation_id: String(call.conversation_id),
         status: "connected",
@@ -632,7 +634,6 @@ export class DirectCallGateway
         },
       });
 
-      // Notify callee - status: connected, user_info: caller
       this.send(client, "callAccepted", {
         conversation_id: String(call.conversation_id),
         status: "connected",
@@ -657,7 +658,6 @@ export class DirectCallGateway
     @MessageBody() data: { conversation_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
@@ -665,7 +665,6 @@ export class DirectCallGateway
     const meta = this.meta.get(client);
     const calleeId = meta?.userDehiveId;
 
-    // Parse data if it's a string
     let parsedData: { conversation_id: string };
     if (typeof data === "string") {
       try {
@@ -690,7 +689,6 @@ export class DirectCallGateway
     }
 
     try {
-      // Get call info first - find call with CALLING status
       const existingCall = await this.dmCallModel.findOne({
         conversation_id: new Types.ObjectId(parsedData.conversation_id),
         status: CallStatus.CALLING,
@@ -704,7 +702,6 @@ export class DirectCallGateway
 
       const callerId = String(existingCall.caller_id);
 
-      // Get both profiles - NO EMIT if not found
       const calleeProfile = await this.getUserProfile(calleeId);
       const callerProfile = await this.getUserProfile(callerId);
 
@@ -715,7 +712,6 @@ export class DirectCallGateway
         });
       }
 
-      // Clear timeout if it exists
       const callerSocket = this.findSocketByUserId(callerId);
       if (callerSocket) {
         const callerMeta = this.meta.get(callerSocket);
@@ -725,7 +721,6 @@ export class DirectCallGateway
         }
       }
 
-      // Update call status to declined
       const call = await this.dmCallModel.findByIdAndUpdate(
         existingCall._id,
         {
@@ -742,7 +737,6 @@ export class DirectCallGateway
         });
       }
 
-      // Notify caller - status: declined, user_info: callee
       this.broadcast(`user:${call.caller_id}`, "callDeclined", {
         conversation_id: String(call.conversation_id),
         status: "declined",
@@ -754,7 +748,6 @@ export class DirectCallGateway
         },
       });
 
-      // Notify callee - status: declined, user_info: caller
       this.send(client, "callDeclined", {
         conversation_id: String(call.conversation_id),
         status: "declined",
@@ -788,7 +781,6 @@ export class DirectCallGateway
     @MessageBody() data: { conversation_id: string } | string,
     @ConnectedSocket() client: Socket,
   ) {
-    // Ensure meta Map is initialized
     if (!this.meta) {
       this.meta = new Map<Socket, SocketMeta>();
     }
@@ -796,7 +788,6 @@ export class DirectCallGateway
     const meta = this.meta.get(client);
     const userId = meta?.userDehiveId;
 
-    // Parse data if it's a string
     let parsedData: { conversation_id: string };
     if (typeof data === "string") {
       try {
@@ -821,11 +812,11 @@ export class DirectCallGateway
     }
 
     try {
-      // Get call info first
       const existingCall = await this.dmCallModel.findOne({
         conversation_id: new Types.ObjectId(parsedData.conversation_id),
-        status: CallStatus.CONNECTED,
+        status: { $in: [CallStatus.CALLING, CallStatus.CONNECTED] },
       });
+
       if (!existingCall) {
         return this.send(client, "error", {
           message: "Active call not found for this conversation",
@@ -836,10 +827,8 @@ export class DirectCallGateway
       const callerId = String(existingCall.caller_id);
       const calleeId = String(existingCall.callee_id);
 
-      // Determine other user
       const otherUserId = callerId === userId ? calleeId : callerId;
 
-      // Get both profiles - NO EMIT if not found
       const currentUserProfile = await this.getUserProfile(userId);
       const otherUserProfile = await this.getUserProfile(otherUserId);
 
@@ -850,12 +839,35 @@ export class DirectCallGateway
         });
       }
 
-      // Update call status to ended
+      if (meta.callTimeout) {
+        clearTimeout(meta.callTimeout);
+        meta.callTimeout = undefined;
+        console.log(`[Direct-Calling] Cleared call timeout for user ${userId}`);
+      }
+
+      const otherUserSocket = this.findSocketByUserId(otherUserId);
+      if (otherUserSocket) {
+        const otherMeta = this.meta.get(otherUserSocket);
+        if (otherMeta?.callTimeout) {
+          clearTimeout(otherMeta.callTimeout);
+          otherMeta.callTimeout = undefined;
+          console.log(
+            `[Direct-Calling] Cleared call timeout for other user ${otherUserId}`,
+          );
+        }
+      }
+
+      const endReason =
+        existingCall.status === CallStatus.CALLING
+          ? CallEndReason.USER_HANGUP
+          : CallEndReason.USER_HANGUP;
+
       const call = await this.dmCallModel.findByIdAndUpdate(
         existingCall._id,
         {
           status: CallStatus.ENDED,
           ended_at: new Date(),
+          end_reason: endReason,
         },
         { new: true },
       );
@@ -867,10 +879,17 @@ export class DirectCallGateway
         });
       }
 
-      // Notify other user - status: ended, user_info: current user
+      const endReasonText =
+        existingCall.status === CallStatus.CALLING ? "cancelled" : "ended";
+
+      console.log(
+        `[Direct-Calling] Call ${call._id} ended with reason: ${endReasonText}`,
+      );
+
       this.broadcast(`user:${otherUserId}`, "callEnded", {
         conversation_id: String(call.conversation_id),
         status: "ended",
+        reason: endReasonText,
         user_info: {
           _id: currentUserProfile._id,
           username: currentUserProfile.username,
@@ -879,10 +898,10 @@ export class DirectCallGateway
         },
       });
 
-      // Notify current user - status: ended, user_info: other user
       this.send(client, "callEnded", {
         conversation_id: String(call.conversation_id),
         status: "ended",
+        reason: endReasonText,
         user_info: {
           _id: otherUserProfile._id,
           username: otherUserProfile.username,
