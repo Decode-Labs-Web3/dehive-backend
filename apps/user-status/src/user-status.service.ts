@@ -392,31 +392,26 @@ export class UserStatusService {
         };
       }
 
-      // Convert to ObjectIds
-      const memberObjectIds = memberIds.map((id) => new Types.ObjectId(id));
-
       this.logger.log(
-        `Searching for online members in MongoDB with user_ids: [${memberObjectIds.join(", ")}]`,
+        `Checking online status for ${memberIds.length} members via gateway`,
       );
 
-      // Get online members only
-      const onlineMembers = await this.userStatusModel
-        .find({
-          user_id: { $in: memberObjectIds },
-          status: UserStatus.ONLINE,
-        })
-        .select("user_id status last_seen")
-        .exec();
-
+      // Get actually connected users from WebSocket gateway
+      const connectedUserIds =
+        this.gateway?.getConnectedUserIds() || new Set<string>();
       this.logger.log(
-        `Found ${onlineMembers.length} online members in MongoDB:`,
-        onlineMembers.map((m) => ({
-          user_id: m.user_id.toString(),
-          status: m.status,
-        })),
+        `Currently connected users: ${connectedUserIds.size} - [${Array.from(connectedUserIds).join(", ")}]`,
       );
 
-      const onlineMemberIds = onlineMembers.map((u) => u.user_id.toString());
+      // Filter only members who are actually connected
+      const onlineMemberIds = memberIds.filter((userId) =>
+        connectedUserIds.has(userId),
+      );
+
+      this.logger.log(
+        `Found ${onlineMemberIds.length} online members (actually connected):`,
+        onlineMemberIds,
+      );
 
       if (onlineMemberIds.length === 0) {
         return {
@@ -442,29 +437,21 @@ export class UserStatusService {
       const profileMap =
         await this.decodeApiClient.getBulkUserProfiles(paginatedMemberIds);
 
-      // Get status data for these users
-      const statusMap = new Map(
-        onlineMembers.map((u) => [u.user_id.toString(), u]),
-      );
-
+      // Build user list - all are online since we filtered by connectedUserIds
       const users = paginatedMemberIds
         .map((userId) => {
           const profile = profileMap.get(userId);
           if (!profile) return null;
 
-          const status = statusMap.get(userId);
-
           return {
             user_id: userId,
-            status: (status?.status || UserStatus.ONLINE) as
-              | "online"
-              | "offline",
+            status: "online" as "online" | "offline",
             conversationid: "", // Server members don't have conversationid
             displayname: profile.display_name,
             username: profile.username,
             avatar_ipfs_hash: profile.avatar_ipfs_hash,
             isCall: false, // Server members are not in call
-            last_seen: status?.last_seen || new Date(),
+            last_seen: new Date(), // They are online now
             lastMessageAt: undefined, // Server members don't have lastMessageAt
           };
         })
