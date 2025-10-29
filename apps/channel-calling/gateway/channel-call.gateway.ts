@@ -350,7 +350,7 @@ export class ChannelCallGateway
     }
 
     try {
-      const result = await this.service.joinChannel(userId, channelId);
+      await this.service.joinChannel(userId, channelId);
 
       if (meta) {
         meta.channelId = channelId;
@@ -362,12 +362,6 @@ export class ChannelCallGateway
           channelId: channelId,
         });
       }
-
-      this.send(client, "channelJoined", {
-        channel_id: channelId,
-        status: result.call.status,
-        participants: result.otherParticipants,
-      });
 
       const userProfile = await this.getUserProfile(userId, channelId);
 
@@ -443,33 +437,11 @@ export class ChannelCallGateway
     try {
       const userProfile = await this.getUserProfile(userId, channelId);
 
-      const result = await this.service.leaveChannel(userId, channelId);
+      await this.service.leaveChannel(userId, channelId);
 
       if (meta) {
         meta.channelId = undefined;
         this.meta.set(client, meta);
-      }
-
-      if (userProfile) {
-        this.send(client, "channelLeft", {
-          channel_id: channelId,
-          status: result.call.status,
-          user_info: {
-            _id: userProfile._id,
-            username: userProfile.username,
-            display_name: userProfile.display_name,
-            avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
-            isCamera: userProfile.isCamera,
-            isMic: userProfile.isMic,
-            isHeadphone: userProfile.isHeadphone,
-            isLive: userProfile.isLive,
-          },
-        });
-      } else {
-        this.send(client, "channelLeft", {
-          channel_id: channelId,
-          status: result.call.status,
-        });
       }
 
       if (userProfile && serverId) {

@@ -48,11 +48,6 @@ import { DecodeApiClient } from "../clients/decode-api.client";
     }),
   ],
   controllers: [UserStatusController],
-  providers: [
-    UserStatusService,
-    UserStatusGateway,
-    AuthGuard,
-    DecodeApiClient,
-  ],
+  providers: [UserStatusService, UserStatusGateway, AuthGuard, DecodeApiClient],
 })
 export class UserStatusModule {}

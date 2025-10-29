@@ -48,9 +48,6 @@ export class UserStatusController {
     );
   }
 
-  /**
-   * Get online users from current user's following list with pagination
-   */
   @Get("online")
   async getOnlineUsers(
     @Req() request: Request,
@@ -73,9 +70,6 @@ export class UserStatusController {
     return ApiResponse.ok(result, "Successfully fetched online users");
   }
 
-  /**
-   * Get online members in a specific server with pagination
-   */
   @Get("server/:serverId")
   async getOnlineServerMembers(
     @Param("serverId") serverId: string,

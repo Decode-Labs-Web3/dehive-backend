@@ -45,10 +45,6 @@ export class DecodeApiClient {
     userDehiveId: string,
   ): Promise<UserProfile | null> {
     try {
-      this.logger.log(
-        `Calling Decode API (public): GET ${this.decodeApiUrl}/users/profile/${userDehiveId}`,
-      );
-
       const response = await firstValueFrom(
         this.httpService.get<{ success: boolean; data: UserProfile }>(
           `${this.decodeApiUrl}/users/profile/${userDehiveId}`,
@@ -94,45 +90,36 @@ export class DecodeApiClient {
     return profileMap;
   }
 
-  /**
-   * Get following users with conversation details (conversationId, isCall)
-   * Calls direct-messaging service /api/dm/following-messages endpoint
-   * Returns array of objects with user_id, conversation_id, and isCall
-   */
   async getUserFollowing(
     userId: string,
     sessionId?: string,
     fingerprintHash?: string,
   ): Promise<
-    Array<{ user_id: string; conversation_id: string; isCall: boolean }>
+    Array<{ user_id: string; conversationid?: string; isCall?: boolean }>
   > {
-    // If no auth credentials, cannot fetch following list
     if (!sessionId || !fingerprintHash) {
       this.logger.warn(
-        `No auth credentials provided for getUserFollowing(${userId}). Cannot fetch without authentication.`,
+        `No auth credentials provided for getUserFollowing(${userId}). Cannot fetch following list without authentication.`,
       );
       return [];
     }
 
     try {
-      this.logger.log(
-        `Fetching following list with conversations for user ${userId}`,
-      );
-
       const url = `${this.directMessageUrl}/api/dm/following-messages`;
-      this.logger.log(`Calling: GET ${url}`);
-      this.logger.log(
-        `Headers: x-session-id=${sessionId.substring(0, 8)}..., x-fingerprint-hashed=${fingerprintHash.substring(0, 20)}...`,
-      );
 
       const response = await firstValueFrom(
         this.httpService.get<{
           success: boolean;
           data: {
             items: Array<{
-              id: string; // user id
-              conversationid: string; // conversation id
+              id: string;
+              conversationid: string;
+              displayname: string;
+              username: string;
+              avatar_ipfs_hash?: string;
+              isActive: boolean;
               isCall: boolean;
+              lastMessageAt?: string;
             }>;
           };
         }>(url, {
@@ -149,55 +136,30 @@ export class DecodeApiClient {
 
       if (!response.data?.success || !response.data?.data?.items) {
         this.logger.warn(
-          `Failed to fetch following list with conversations for user ${userId}: Invalid response structure`,
+          `Failed to fetch following messages for user ${userId}: Invalid response structure`,
         );
         return [];
       }
 
-      // DEBUG: Log raw response to verify field names
-      this.logger.debug(
-        `Raw response from /api/dm/following-messages:`,
-        JSON.stringify(response.data.data.items.slice(0, 2)), // Log first 2 items
-      );
-
-      // Map response fields (id → user_id, conversationid → conversation_id)
-      const followingWithConversations = response.data.data.items.map(
-        (item) => ({
-          user_id: item.id, // Map 'id' to 'user_id'
-          conversation_id: item.conversationid, // Map 'conversationid' to 'conversation_id'
-          isCall: item.isCall,
-        }),
-      );
-
-      // DEBUG: Log mapped result
-      this.logger.debug(
-        `Mapped result (first 2):`,
-        JSON.stringify(followingWithConversations.slice(0, 2)),
-      );
+      const followingData = response.data.data.items.map((item) => ({
+        user_id: item.id,
+        conversationid: item.conversationid,
+        isCall: item.isCall,
+      }));
 
       this.logger.log(
-        `Successfully fetched ${followingWithConversations.length} following users with conversation details for ${userId}`,
+        `Successfully fetched ${followingData.length} following messages for ${userId}`,
       );
-
-      return followingWithConversations;
+      return followingData;
     } catch (error) {
       // Check if it's a token expiry error
       if (error.response?.status === 401) {
         this.logger.warn(
-          `Authentication failed for user ${userId}: Token expired or invalid. User needs to re-login.`,
-        );
-      } else if (error.response) {
-        this.logger.error(
-          `Error fetching following list with conversations for user ${userId}:`,
-          error.message,
-        );
-        this.logger.error(
-          `Response status: ${error.response.status}, data:`,
-          JSON.stringify(error.response.data),
+          `Authentication failed for user ${userId}: Token expired or invalid. User needs to re-login. Skipping broadcast.`,
         );
       } else {
         this.logger.error(
-          `Error fetching following list with conversations for user ${userId}:`,
+          `Error fetching following messages for user ${userId}:`,
           error.message,
         );
       }
@@ -214,10 +176,6 @@ export class DecodeApiClient {
     fingerprintHash?: string,
   ): Promise<string[]> {
     try {
-      this.logger.log(
-        `Getting members list for server ${serverId} from user-dehive-server service`,
-      );
-
       const headers: Record<string, string> = {};
       if (sessionId) {
         headers["x-session-id"] = sessionId;
@@ -238,11 +196,6 @@ export class DecodeApiClient {
         ),
       );
 
-      this.logger.log(
-        `Raw response from user-dehive-server:`,
-        JSON.stringify(response.data, null, 2),
-      );
-
       if (!response.data.success || !response.data.data) {
         this.logger.warn(`Members list not found for server ${serverId}`);
         return [];
@@ -250,7 +203,6 @@ export class DecodeApiClient {
 
       const memberIds = response.data.data.map((member) => member._id);
 
-      this.logger.log(`Extracted memberIds: [${memberIds.join(", ")}]`);
       this.logger.log(
         `Found ${memberIds.length} members in server ${serverId}`,
       );

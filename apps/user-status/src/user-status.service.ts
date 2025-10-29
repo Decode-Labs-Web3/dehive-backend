@@ -88,13 +88,13 @@ export class UserStatusService {
   ): Promise<BulkStatusResponse> {
     try {
       // Get following list from direct-message service
-      const followingIds = await this.decodeApiClient.getUserFollowing(
+      const followingData = await this.decodeApiClient.getUserFollowing(
         currentUserId,
         sessionId,
         fingerprintHash,
       );
 
-      if (followingIds.length === 0) {
+      if (followingData.length === 0) {
         return {
           users: [],
           metadata: {
@@ -108,20 +108,35 @@ export class UserStatusService {
 
       // Apply pagination (0-based: page 0, 1, 2...)
       const skip = page * limit;
-      const paginatedIds = followingIds.slice(skip, skip + limit);
+      const paginatedData = followingData.slice(skip, skip + limit);
 
       // Check if this is the last page
-      const is_last_page = skip + paginatedIds.length >= followingIds.length;
+      const is_last_page = skip + paginatedData.length >= followingData.length;
+
+      // Extract user IDs for status lookup
+      const userIds = paginatedData.map((item) => item.user_id);
 
       // Get status + profile of paginated following users
-      const result = await this.getBulkUserStatus(paginatedIds, true);
+      const result = await this.getBulkUserStatus(userIds, true);
+
+      // Map conversationid and isCall to each user
+      const usersWithConversation = result.users.map((user) => {
+        const followingItem = paginatedData.find(
+          (item) => item.user_id === user.user_id,
+        );
+        return {
+          ...user,
+          conversationid: followingItem?.conversationid,
+          isCall: followingItem?.isCall,
+        };
+      });
 
       return {
-        ...result,
+        users: usersWithConversation,
         metadata: {
           page,
           limit,
-          total: paginatedIds.length, // Total in current page, not total of all
+          total: paginatedData.length, // Total in current page, not total of all
           is_last_page,
         },
       };
@@ -146,13 +161,13 @@ export class UserStatusService {
   ): Promise<OnlineUsersResponse> {
     try {
       // Get following list from direct-message service
-      const followingIds = await this.decodeApiClient.getUserFollowing(
+      const followingData = await this.decodeApiClient.getUserFollowing(
         currentUserId,
         sessionId,
         fingerprintHash,
       );
 
-      if (followingIds.length === 0) {
+      if (followingData.length === 0) {
         return {
           online_users: [],
           metadata: {
@@ -165,8 +180,8 @@ export class UserStatusService {
       }
 
       // Convert to ObjectIds
-      const followingObjectIds = followingIds.map(
-        (id) => new Types.ObjectId(id),
+      const followingObjectIds = followingData.map(
+        (item) => new Types.ObjectId(item.user_id),
       );
 
       // Get online users from following list only
@@ -209,8 +224,15 @@ export class UserStatusService {
           const profile = profileMap.get(userId);
           if (!profile) return null;
 
+          // Find conversation data for this user
+          const followingItem = followingData.find(
+            (item) => item.user_id === userId,
+          );
+
           return {
             user_id: userId,
+            conversationid: followingItem?.conversationid,
+            isCall: followingItem?.isCall,
             user_profile: {
               username: profile.username,
               display_name: profile.display_name,

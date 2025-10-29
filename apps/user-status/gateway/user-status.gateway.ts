@@ -100,7 +100,7 @@ export class UserStatusGateway
       // Save with 24 hour expiry (same as session typically)
       await this.redis.set(key, fingerprintHash, "EX", 86400);
     } catch (error) {
-      console.error("Error saving fingerprint to Redis:", error);
+      this.logger.error("Error saving fingerprint to Redis:", error);
     }
   }
 
@@ -111,7 +111,7 @@ export class UserStatusGateway
       const key = `user:fingerprint:${userId}`;
       return await this.redis.get(key);
     } catch (error) {
-      console.error("Error getting fingerprint from Redis:", error);
+      this.logger.error("Error getting fingerprint from Redis:", error);
       return null;
     }
   }
@@ -171,20 +171,20 @@ export class UserStatusGateway
 
         if (sessionId && fingerprintHash) {
           try {
-            const followingUsers = await this.decodeApiClient.getUserFollowing(
+            const followingData = await this.decodeApiClient.getUserFollowing(
               userDehiveId,
               sessionId,
               fingerprintHash,
             );
 
-            if (followingUsers && followingUsers.length > 0) {
+            if (followingData && followingData.length > 0) {
               this.logger.log(
-                `Broadcasting offline status to ${followingUsers.length} following users`,
+                `Broadcasting offline status to ${followingData.length} following users`,
               );
 
-              for (const followingUserId of followingUsers) {
+              for (const followingItem of followingData) {
                 for (const [socket, socketMeta] of this.meta.entries()) {
-                  if (socketMeta.userDehiveId === followingUserId) {
+                  if (socketMeta.userDehiveId === followingItem.user_id) {
                     this.send(socket, "userStatusChanged", {
                       userId: userDehiveId,
                       status: "offline",
@@ -294,15 +294,15 @@ export class UserStatusGateway
 
       if (sessionId && fingerprintHash) {
         try {
-          const followingUsers = await this.decodeApiClient.getUserFollowing(
+          const followingData = await this.decodeApiClient.getUserFollowing(
             userDehiveId,
             sessionId,
             fingerprintHash,
           );
 
-          if (followingUsers && followingUsers.length > 0) {
+          if (followingData && followingData.length > 0) {
             this.logger.log(
-              `Broadcasting online status to ${followingUsers.length} following users`,
+              `Broadcasting online status to ${followingData.length} following users`,
             );
 
             // Log all connected users for debugging
@@ -315,17 +315,17 @@ export class UserStatusGateway
 
             // Broadcast to each following user
             let broadcastCount = 0;
-            for (const followingUserId of followingUsers) {
+            for (const followingItem of followingData) {
               // Find all connected clients for this following user
               for (const [socket, socketMeta] of this.meta.entries()) {
-                if (socketMeta.userDehiveId === followingUserId) {
+                if (socketMeta.userDehiveId === followingItem.user_id) {
                   this.send(socket, "userStatusChanged", {
                     userId: userDehiveId,
                     status: "online",
                   });
                   broadcastCount++;
                   this.logger.log(
-                    `Sent online notification to user ${followingUserId}`,
+                    `Sent online notification to user ${followingItem.user_id}`,
                   );
                 }
               }
