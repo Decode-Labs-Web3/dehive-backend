@@ -52,20 +52,20 @@ export class ChannelCallGateway
 
   private send(client: Socket, event: string, data: unknown) {
     // Production: emit object (default for frontend)
-    client.emit(event, data);
+    // client.emit(event, data);
 
     // Debug (Insomnia): emit pretty JSON string
-    // const serializedData = JSON.stringify(data, null, 2);
-    // client.emit(event, serializedData);
+    const serializedData = JSON.stringify(data, null, 2);
+    client.emit(event, serializedData);
   }
 
   private broadcast(room: string, event: string, data: unknown) {
     // Production: emit object (default for frontend)
-    this.server.to(room).emit(event, data);
+    // this.server.to(room).emit(event, data);
 
     // Debug (Insomnia): emit pretty JSON string
-    // const serializedData = JSON.stringify(data, null, 2);
-    // this.server.to(room).emit(event, serializedData);
+    const serializedData = JSON.stringify(data, null, 2);
+    this.server.to(room).emit(event, serializedData);
   }
 
   private async getUserProfile(
@@ -350,6 +350,43 @@ export class ChannelCallGateway
     }
 
     try {
+      // AUTO-LEAVE previous channel if user is already in one
+      const previousChannelId = meta.channelId;
+      if (previousChannelId && previousChannelId !== channelId) {
+        // Get user profile from previous channel before leaving
+        const previousUserProfile = await this.getUserProfile(
+          userId,
+          previousChannelId,
+        );
+
+        // Leave previous channel in database
+        await this.service.leaveChannel(userId, previousChannelId);
+
+        // Broadcast userLeftChannel event
+        if (previousUserProfile) {
+          this.broadcast(`server:${meta.serverId}`, "userLeftChannel", {
+            channel_id: previousChannelId,
+            user_id: userId,
+            user_info: {
+              _id: previousUserProfile._id,
+              username: previousUserProfile.username,
+              display_name: previousUserProfile.display_name,
+              avatar_ipfs_hash: previousUserProfile.avatar_ipfs_hash,
+              isCamera: previousUserProfile.isCamera,
+              isMic: previousUserProfile.isMic,
+              isHeadphone: previousUserProfile.isHeadphone,
+              isLive: previousUserProfile.isLive,
+            },
+          });
+        } else {
+          this.broadcast(`server:${meta.serverId}`, "userLeftChannel", {
+            channel_id: previousChannelId,
+            user_id: userId,
+          });
+        }
+      }
+
+      // JOIN new channel
       await this.service.joinChannel(userId, channelId);
 
       if (meta) {
