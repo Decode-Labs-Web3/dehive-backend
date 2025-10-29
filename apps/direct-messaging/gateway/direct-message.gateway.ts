@@ -193,15 +193,18 @@ export class DmGateway
       // Debugging (Insomnia): emit pretty JSON string to inspect (commented)
       // const jsonIdentity = JSON.stringify({
       //   userDehiveId,
-      //   status: "success",
+      //     status: "success",
       //   timestamp: new Date().toISOString(),
-      // }, null, 2);
-      // // Use sendDebug helper or emit directly for Insomnia
-      // this.sendDebug(client, "identityConfirmed", {
-      //   userDehiveId,
-      //   status: "success",
-      //   timestamp: new Date().toISOString(),
-      // });
+      //   },
+      //   null,
+      //   2,
+      // );
+      // Use sendDebug helper or emit directly for Insomnia
+      this.sendDebug(client, "identityConfirmed", {
+        userDehiveId,
+        status: "success",
+        timestamp: new Date().toISOString(),
+      });
     }
   }
 

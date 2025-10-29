@@ -535,7 +535,7 @@ export class DirectMessagingController {
     description: "The ID of the conversation to search messages in",
   })
   @ApiQuery({
-    name: "q",
+    name: "search",
     description: "Search query string",
     required: true,
   })
@@ -590,7 +590,7 @@ export class DirectMessagingController {
     required: false,
   })
   @ApiQuery({
-    name: "q",
+    name: "search",
     description: "Search query string",
     required: true,
   })

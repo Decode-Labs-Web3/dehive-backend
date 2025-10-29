@@ -95,7 +95,12 @@ export class DecodeApiClient {
     sessionId?: string,
     fingerprintHash?: string,
   ): Promise<
-    Array<{ user_id: string; conversationid?: string; isCall?: boolean }>
+    Array<{
+      user_id: string;
+      conversationid?: string;
+      isCall?: boolean;
+      lastMessageAt?: Date;
+    }>
   > {
     if (!sessionId || !fingerprintHash) {
       this.logger.warn(
@@ -117,7 +122,7 @@ export class DecodeApiClient {
               displayname: string;
               username: string;
               avatar_ipfs_hash?: string;
-              isActive: boolean;
+              status: "online" | "offline";
               isCall: boolean;
               lastMessageAt?: string;
             }>;
@@ -145,6 +150,9 @@ export class DecodeApiClient {
         user_id: item.id,
         conversationid: item.conversationid,
         isCall: item.isCall,
+        lastMessageAt: item.lastMessageAt
+          ? new Date(item.lastMessageAt)
+          : undefined,
       }));
 
       this.logger.log(

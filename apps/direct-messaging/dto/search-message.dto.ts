@@ -3,7 +3,7 @@ import { Type } from "class-transformer";
 
 export class SearchMessageDto {
   @IsString()
-  q: string; // Query search
+  search: string; // Query search
 
   @IsOptional()
   @Type(() => Number)

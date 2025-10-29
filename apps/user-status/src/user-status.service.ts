@@ -123,6 +123,7 @@ export class UserStatusService {
           ...user,
           conversationid: followingItem?.conversationid || "",
           isCall: followingItem?.isCall || false,
+          lastMessageAt: followingItem?.lastMessageAt,
         };
       });
 
@@ -235,14 +236,14 @@ export class UserStatusService {
             user_id: userId,
             status: (status?.status || UserStatus.ONLINE) as
               | "online"
-              | "offline"
-              | "away",
+              | "offline",
             conversationid: followingItem?.conversationid || "",
             displayname: profile.display_name,
             username: profile.username,
             avatar_ipfs_hash: profile.avatar_ipfs_hash,
             isCall: followingItem?.isCall || false,
             last_seen: status?.last_seen || new Date(),
+            lastMessageAt: followingItem?.lastMessageAt,
           };
         })
         .filter((user) => user !== null) as OnlineUsersResponse["users"];
@@ -302,14 +303,14 @@ export class UserStatusService {
           user_id: userId,
           status: (status?.status || UserStatus.OFFLINE) as
             | "online"
-            | "offline"
-            | "away",
+            | "offline",
           conversationid: undefined, // Will be set by caller if needed
           displayname: profile?.display_name || `User_${userId}`,
           username: profile?.username || `user_${userId}`,
           avatar_ipfs_hash: profile?.avatar_ipfs_hash || "",
           isCall: false, // Will be set by caller if needed
           last_seen: status?.last_seen || new Date(),
+          lastMessageAt: undefined, // Will be set by caller if needed
         };
       });
 
@@ -420,14 +421,14 @@ export class UserStatusService {
             user_id: userId,
             status: (status?.status || UserStatus.ONLINE) as
               | "online"
-              | "offline"
-              | "away",
+              | "offline",
             conversationid: "", // Server members don't have conversationid
             displayname: profile.display_name,
             username: profile.username,
             avatar_ipfs_hash: profile.avatar_ipfs_hash,
             isCall: false, // Server members are not in call
             last_seen: status?.last_seen || new Date(),
+            lastMessageAt: undefined, // Server members don't have lastMessageAt
           };
         })
         .filter((user) => user !== null) as OnlineUsersResponse["users"];

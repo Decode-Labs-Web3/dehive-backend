@@ -25,9 +25,9 @@ export class SearchService {
     _sessionId?: string,
     _fingerprintHash?: string,
   ): Promise<SearchResultResponse> {
-    const { q, page = 0, limit = 20 } = searchDto;
+    const { search, page = 0, limit = 20 } = searchDto;
 
-    if (!q || q.trim().length === 0) {
+    if (!search || search.trim().length === 0) {
       throw new BadRequestException("Search query is required");
     }
 
@@ -46,7 +46,7 @@ export class SearchService {
             // Exact match
             {
               text: {
-                query: q,
+                query: search,
                 path: "content",
                 score: { boost: { value: 3 } },
               },
@@ -54,7 +54,7 @@ export class SearchService {
             // Wildcard - tìm bất kỳ đâu (partial search)
             {
               wildcard: {
-                query: `*${q}*`,
+                query: `*${search}*`,
                 path: "content",
                 allowAnalyzedField: true,
                 score: { boost: { value: 2 } },
@@ -63,7 +63,7 @@ export class SearchService {
             // Fuzzy - dung sai lỗi chính tả
             {
               text: {
-                query: q,
+                query: search,
                 path: "content",
                 fuzzy: { maxEdits: 1 },
                 score: { boost: { value: 1.5 } },
@@ -213,9 +213,9 @@ export class SearchService {
     _sessionId?: string,
     _fingerprintHash?: string,
   ): Promise<SearchResultResponse> {
-    const { q, page = 0, limit = 20 } = searchDto;
+    const { search, page = 0, limit = 20 } = searchDto;
 
-    if (!q || q.trim().length === 0) {
+    if (!search || search.trim().length === 0) {
       throw new BadRequestException("Search query is required");
     }
 
@@ -234,7 +234,7 @@ export class SearchService {
             // Exact match
             {
               text: {
-                query: q,
+                query: search,
                 path: "content",
                 score: { boost: { value: 3 } },
               },
@@ -242,7 +242,7 @@ export class SearchService {
             // Wildcard - tìm bất kỳ đâu (partial search)
             {
               wildcard: {
-                query: `*${q}*`,
+                query: `*${search}*`,
                 path: "content",
                 allowAnalyzedField: true,
                 score: { boost: { value: 2 } },
@@ -251,7 +251,7 @@ export class SearchService {
             // Fuzzy - dung sai lỗi chính tả
             {
               text: {
-                query: q,
+                query: search,
                 path: "content",
                 fuzzy: { maxEdits: 1 },
                 score: { boost: { value: 1.5 } },

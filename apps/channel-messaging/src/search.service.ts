@@ -23,9 +23,9 @@ export class SearchService {
     sessionId?: string,
     fingerprintHash?: string,
   ): Promise<SearchResultResponse> {
-    const { q, page = 0, limit = 20 } = searchDto;
+    const { search, page = 0, limit = 20 } = searchDto;
 
-    if (!q || q.trim().length === 0) {
+    if (!search || search.trim().length === 0) {
       throw new BadRequestException("Search query is required");
     }
 
@@ -45,7 +45,7 @@ export class SearchService {
               // 1. Exact phrase match (cao nhất)
               {
                 phrase: {
-                  query: q,
+                  query: search,
                   path: "content",
                   score: { boost: { value: 3 } },
                 },
@@ -53,7 +53,7 @@ export class SearchService {
               // 2. Partial word match (autocomplete - tìm từng phần)
               {
                 autocomplete: {
-                  query: q,
+                  query: search,
                   path: "content",
                   score: { boost: { value: 2 } },
                 },
@@ -61,7 +61,7 @@ export class SearchService {
               // 3. Fuzzy match (dung sai lỗi chính tả)
               {
                 text: {
-                  query: q,
+                  query: search,
                   path: "content",
                   fuzzy: {
                     maxEdits: 1,
@@ -72,7 +72,7 @@ export class SearchService {
               // 4. Wildcard match (tìm bất kỳ đâu trong text)
               {
                 wildcard: {
-                  query: `*${q}*`,
+                  query: `*${search}*`,
                   path: "content",
                   allowAnalyzedField: true,
                   score: { boost: { value: 1 } },
@@ -218,9 +218,9 @@ export class SearchService {
     sessionId?: string,
     fingerprintHash?: string,
   ): Promise<SearchResultResponse> {
-    const { q, page = 0, limit = 20 } = searchDto;
+    const { search, page = 0, limit = 20 } = searchDto;
 
-    if (!q || q.trim().length === 0) {
+    if (!search || search.trim().length === 0) {
       throw new BadRequestException("Search query is required");
     }
 
@@ -239,7 +239,7 @@ export class SearchService {
             // Exact match
             {
               text: {
-                query: q,
+                query: search,
                 path: "content",
                 score: { boost: { value: 3 } },
               },
@@ -247,7 +247,7 @@ export class SearchService {
             // Wildcard - tìm bất kỳ đâu (QUAN TRỌNG cho partial search)
             {
               wildcard: {
-                query: `*${q}*`,
+                query: `*${search}*`,
                 path: "content",
                 allowAnalyzedField: true,
                 score: { boost: { value: 2 } },
@@ -256,7 +256,7 @@ export class SearchService {
             // Fuzzy - dung sai lỗi chính tả
             {
               text: {
-                query: q,
+                query: search,
                 path: "content",
                 fuzzy: { maxEdits: 1 },
                 score: { boost: { value: 1.5 } },

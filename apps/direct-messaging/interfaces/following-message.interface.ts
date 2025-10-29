@@ -4,7 +4,7 @@ export interface FollowingMessageUser {
   displayname: string;
   username: string;
   avatar_ipfs_hash?: string; // avatar ipfs hash
-  isActive: boolean;
+  status: "online" | "offline";
   isCall: boolean;
   lastMessageAt?: Date; // timestamp of last message for sorting - included in response
 }

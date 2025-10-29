@@ -200,7 +200,7 @@ export class MessagingController {
     description: "The ID of the channel to search messages in",
   })
   @ApiQuery({
-    name: "q",
+    name: "search",
     description: "Search query string",
     required: true,
   })
@@ -257,7 +257,7 @@ export class MessagingController {
     description: "The ID of the server to search messages in",
   })
   @ApiQuery({
-    name: "q",
+    name: "search",
     description: "Search query string",
     required: true,
   })

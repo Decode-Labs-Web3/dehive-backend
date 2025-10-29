@@ -1,12 +1,13 @@
 export interface UserStatusItem {
   user_id: string;
-  status: "online" | "offline" | "away";
+  status: "online" | "offline";
   conversationid?: string;
   displayname: string;
   username: string;
   avatar_ipfs_hash: string;
   isCall: boolean;
   last_seen: Date;
+  lastMessageAt?: Date;
 }
 
 export interface BulkStatusResponse {

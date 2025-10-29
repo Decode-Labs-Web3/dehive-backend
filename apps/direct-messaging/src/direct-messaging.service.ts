@@ -809,7 +809,7 @@ export class DirectMessagingService {
       const conversationId = userToConversationMap.get(userId);
 
       let lastMessageAt: Date | undefined;
-      let isActive = false;
+      let status: "online" | "offline" = "offline";
       const isCall = false;
 
       if (conversationId) {
@@ -819,10 +819,10 @@ export class DirectMessagingService {
           lastMessageAt = lastMessageInfo.lastMessageAt;
           // Check if user is active (has sent a message recently - within last 5 minutes)
           const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-          isActive = lastMessageAt > fiveMinutesAgo;
+          status = lastMessageAt > fiveMinutesAgo ? "online" : "offline";
 
           // this.logger.log(
-          //   `User ${userId} last message at: ${lastMessageAt}, isActive: ${isActive}`,
+          //   `User ${userId} last message at: ${lastMessageAt}, status: ${status}`,
           // );
         }
       }
@@ -833,7 +833,7 @@ export class DirectMessagingService {
         displayname: user.display_name || user.username || `User_${userId}`,
         username: user.username || `User_${userId}`,
         avatar_ipfs_hash: user.avatar_ipfs_hash || undefined,
-        isActive,
+        status,
         isCall,
         lastMessageAt,
       });
@@ -987,7 +987,7 @@ export class DirectMessagingService {
 
   /**
    * Emit conversation update to both users in the conversation
-   * This updates the conversation list with isActive status and last message time
+   * This updates the conversation list with status and last message time
    */
   async emitConversationUpdate(
     senderId: string,
@@ -1015,19 +1015,20 @@ export class DirectMessagingService {
         .sort({ createdAt: -1 })
         .lean();
 
-      // Calculate isActive (message sent within last 5 minutes)
+      // Calculate status (message sent within last 5 minutes = "online", otherwise "offline")
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       const lastMessageDate = lastMessage
         ? new Date((lastMessage as unknown as { createdAt: Date }).createdAt)
         : new Date();
-      const isActive = lastMessageDate > fiveMinutesAgo;
+      const status: "online" | "offline" =
+        lastMessageDate > fiveMinutesAgo ? "online" : "offline";
 
       // Create simplified event data
       const conversationUpdate: ConversationUpdateEvent = {
         type: "conversation_update",
         data: {
           conversationId: String(conversation._id),
-          isActive,
+          status,
           isCall: false, // This is always false for direct messages
           lastMessageAt: lastMessageDate.toISOString(),
         },
