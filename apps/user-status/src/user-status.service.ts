@@ -106,28 +106,23 @@ export class UserStatusService {
         };
       }
 
-      // Apply pagination (0-based: page 0, 1, 2...)
       const skip = page * limit;
       const paginatedData = followingData.slice(skip, skip + limit);
 
-      // Check if this is the last page
       const is_last_page = skip + paginatedData.length >= followingData.length;
 
-      // Extract user IDs for status lookup
       const userIds = paginatedData.map((item) => item.user_id);
 
-      // Get status + profile of paginated following users
       const result = await this.getBulkUserStatus(userIds, true);
 
-      // Map conversationid and isCall to each user
       const usersWithConversation = result.users.map((user) => {
         const followingItem = paginatedData.find(
           (item) => item.user_id === user.user_id,
         );
         return {
           ...user,
-          conversationid: followingItem?.conversationid,
-          isCall: followingItem?.isCall,
+          conversationid: followingItem?.conversationid || "",
+          isCall: followingItem?.isCall || false,
         };
       });
 
@@ -169,7 +164,7 @@ export class UserStatusService {
 
       if (followingData.length === 0) {
         return {
-          online_users: [],
+          users: [],
           metadata: {
             page,
             limit,
@@ -190,14 +185,14 @@ export class UserStatusService {
           user_id: { $in: followingObjectIds },
           status: UserStatus.ONLINE,
         })
-        .select("user_id")
+        .select("user_id status last_seen")
         .exec();
 
       const onlineUserIds = onlineUsers.map((u) => u.user_id.toString());
 
       if (onlineUserIds.length === 0) {
         return {
-          online_users: [],
+          users: [],
           metadata: {
             page,
             limit,
@@ -215,14 +210,21 @@ export class UserStatusService {
       const is_last_page =
         skip + paginatedOnlineIds.length >= onlineUserIds.length;
 
-      // Get profiles for online users
+      // Get profiles and status for online users
       const profileMap =
         await this.decodeApiClient.getBulkUserProfiles(paginatedOnlineIds);
 
-      const online_users = paginatedOnlineIds
+      // Get status data for these users
+      const statusMap = new Map(
+        onlineUsers.map((u) => [u.user_id.toString(), u]),
+      );
+
+      const users = paginatedOnlineIds
         .map((userId) => {
           const profile = profileMap.get(userId);
           if (!profile) return null;
+
+          const status = statusMap.get(userId);
 
           // Find conversation data for this user
           const followingItem = followingData.find(
@@ -231,23 +233,26 @@ export class UserStatusService {
 
           return {
             user_id: userId,
-            conversationid: followingItem?.conversationid,
-            isCall: followingItem?.isCall,
-            user_profile: {
-              username: profile.username,
-              display_name: profile.display_name,
-              avatar_ipfs_hash: profile.avatar_ipfs_hash,
-            },
+            status: (status?.status || UserStatus.ONLINE) as
+              | "online"
+              | "offline"
+              | "away",
+            conversationid: followingItem?.conversationid || "",
+            displayname: profile.display_name,
+            username: profile.username,
+            avatar_ipfs_hash: profile.avatar_ipfs_hash,
+            isCall: followingItem?.isCall || false,
+            last_seen: status?.last_seen || new Date(),
           };
         })
-        .filter((user) => user !== null) as OnlineUsersResponse["online_users"];
+        .filter((user) => user !== null) as OnlineUsersResponse["users"];
 
       return {
-        online_users,
+        users,
         metadata: {
           page,
           limit,
-          total: online_users.length, // Total in current page
+          total: users.length, // Total in current page
           is_last_page,
         },
       };
@@ -291,27 +296,21 @@ export class UserStatusService {
 
       const users = userIds.map((userId) => {
         const status = statusMap.get(userId);
-        const userStatus: BulkStatusResponse["users"][number] = {
+        const profile = profileMap.get(userId);
+
+        return {
           user_id: userId,
           status: (status?.status || UserStatus.OFFLINE) as
             | "online"
             | "offline"
             | "away",
+          conversationid: undefined, // Will be set by caller if needed
+          displayname: profile?.display_name || `User_${userId}`,
+          username: profile?.username || `user_${userId}`,
+          avatar_ipfs_hash: profile?.avatar_ipfs_hash || "",
+          isCall: false, // Will be set by caller if needed
           last_seen: status?.last_seen || new Date(),
         };
-
-        if (includeProfile) {
-          const profile = profileMap.get(userId);
-          if (profile) {
-            userStatus.user_profile = {
-              username: profile.username,
-              display_name: profile.display_name,
-              avatar_ipfs_hash: profile.avatar_ipfs_hash,
-            };
-          }
-        }
-
-        return userStatus;
       });
 
       return { users };
@@ -345,7 +344,7 @@ export class UserStatusService {
 
       if (memberIds.length === 0) {
         return {
-          online_users: [],
+          users: [],
           metadata: {
             page,
             limit,
@@ -368,7 +367,7 @@ export class UserStatusService {
           user_id: { $in: memberObjectIds },
           status: UserStatus.ONLINE,
         })
-        .select("user_id status")
+        .select("user_id status last_seen")
         .exec();
 
       this.logger.log(
@@ -383,7 +382,7 @@ export class UserStatusService {
 
       if (onlineMemberIds.length === 0) {
         return {
-          online_users: [],
+          users: [],
           metadata: {
             page,
             limit,
@@ -405,28 +404,40 @@ export class UserStatusService {
       const profileMap =
         await this.decodeApiClient.getBulkUserProfiles(paginatedMemberIds);
 
-      const online_users = paginatedMemberIds
+      // Get status data for these users
+      const statusMap = new Map(
+        onlineMembers.map((u) => [u.user_id.toString(), u]),
+      );
+
+      const users = paginatedMemberIds
         .map((userId) => {
           const profile = profileMap.get(userId);
           if (!profile) return null;
 
+          const status = statusMap.get(userId);
+
           return {
             user_id: userId,
-            user_profile: {
-              username: profile.username,
-              display_name: profile.display_name,
-              avatar_ipfs_hash: profile.avatar_ipfs_hash,
-            },
+            status: (status?.status || UserStatus.ONLINE) as
+              | "online"
+              | "offline"
+              | "away",
+            conversationid: "", // Server members don't have conversationid
+            displayname: profile.display_name,
+            username: profile.username,
+            avatar_ipfs_hash: profile.avatar_ipfs_hash,
+            isCall: false, // Server members are not in call
+            last_seen: status?.last_seen || new Date(),
           };
         })
-        .filter((user) => user !== null) as OnlineUsersResponse["online_users"];
+        .filter((user) => user !== null) as OnlineUsersResponse["users"];
 
       return {
-        online_users,
+        users,
         metadata: {
           page,
           limit,
-          total: online_users.length, // Total in current page
+          total: users.length, // Total in current page
           is_last_page,
         },
       };

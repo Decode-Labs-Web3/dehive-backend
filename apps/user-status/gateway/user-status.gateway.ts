@@ -22,7 +22,6 @@ type SocketMeta = {
 };
 
 @WebSocketGateway({
-  namespace: "/status",
   cors: { origin: "*" },
 })
 export class UserStatusGateway

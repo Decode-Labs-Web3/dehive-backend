@@ -11,6 +11,10 @@ import {
   HttpException,
   HttpStatus,
   Req,
+  Headers,
+  UnauthorizedException,
+  UsePipes,
+  ValidationPipe,
 } from "@nestjs/common";
 import {
   ApiBody,
@@ -20,15 +24,18 @@ import {
   ApiParam,
   ApiResponse,
   ApiTags,
+  ApiQuery,
 } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { DirectMessagingService } from "./direct-messaging.service";
+import { SearchService } from "./search.service";
 import { CreateOrGetConversationDto } from "../dto/create-or-get-conversation.dto.ts";
 import {
   DirectUploadInitDto,
   DirectUploadResponseDto,
 } from "../dto/direct-upload.dto";
 import { ListDirectMessagesDto } from "../dto/list-direct-messages.dto";
+import { SearchMessageDto } from "../dto/search-message.dto";
 import { Express } from "express";
 import { ListDirectUploadsDto } from "../dto/list-direct-upload.dto";
 import { SendDirectMessageDto } from "../dto/send-direct-message.dto";
@@ -44,7 +51,10 @@ import { Request } from "express";
 @Controller("dm")
 @UseGuards(AuthGuard)
 export class DirectMessagingController {
-  constructor(private readonly service: DirectMessagingService) {}
+  constructor(
+    private readonly service: DirectMessagingService,
+    private readonly searchService: SearchService,
+  ) {}
 
   @Post("send")
   @ApiOperation({ summary: "Send a message to a direct conversation" })
@@ -504,5 +514,123 @@ export class DirectMessagingController {
 
     const result = await this.service.getConversationUsers(currentUser, params);
     return result;
+  }
+
+  @Get("conversations/:conversationId/search")
+  @ApiOperation({
+    summary: "Search messages in a specific direct conversation",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: false,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hash",
+    description: "Fingerprint hash of the user",
+    required: false,
+  })
+  @ApiParam({
+    name: "conversationId",
+    description: "The ID of the conversation to search messages in",
+  })
+  @ApiQuery({
+    name: "q",
+    description: "Search query string",
+    required: true,
+  })
+  @ApiQuery({
+    name: "page",
+    description: "Page number (default: 0)",
+    required: false,
+  })
+  @ApiQuery({
+    name: "limit",
+    description: "Number of items per page (default: 20, max: 100)",
+    required: false,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Returns search results with relevance score.",
+  })
+  @ApiResponse({ status: 400, description: "Invalid input." })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async searchInConversation(
+    @Param("conversationId") conversationId: string,
+    @Query() searchDto: SearchMessageDto,
+    @Headers("x-session-id") sessionId?: string,
+    @Headers("x-fingerprint-hash") fingerprintHash?: string,
+  ) {
+    const data = await this.searchService.searchInConversation(
+      conversationId,
+      searchDto,
+      sessionId,
+      fingerprintHash,
+    );
+    return {
+      success: true,
+      statusCode: 200,
+      message: "Search completed successfully",
+      data,
+    };
+  }
+
+  @Get("search")
+  @ApiOperation({
+    summary: "Search messages across all conversations of the user",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: false,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hash",
+    description: "Fingerprint hash of the user",
+    required: false,
+  })
+  @ApiQuery({
+    name: "q",
+    description: "Search query string",
+    required: true,
+  })
+  @ApiQuery({
+    name: "page",
+    description: "Page number (default: 0)",
+    required: false,
+  })
+  @ApiQuery({
+    name: "limit",
+    description: "Number of items per page (default: 20, max: 100)",
+    required: false,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Returns search results across all user conversations.",
+  })
+  @ApiResponse({ status: 400, description: "Invalid input." })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async searchAllConversations(
+    @Query() searchDto: SearchMessageDto,
+    @CurrentUser("_id") userId: string,
+    @Headers("x-session-id") sessionId?: string,
+    @Headers("x-fingerprint-hash") fingerprintHash?: string,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException("User not authenticated");
+    }
+
+    const data = await this.searchService.searchAllConversations(
+      userId,
+      searchDto,
+      sessionId,
+      fingerprintHash,
+    );
+    return {
+      success: true,
+      statusCode: 200,
+      message: "Search completed successfully",
+      data,
+    };
   }
 }

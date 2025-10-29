@@ -5,6 +5,7 @@ import { HttpModule } from "@nestjs/axios";
 import { RedisModule } from "@nestjs-modules/ioredis";
 import { DirectMessagingController } from "./direct-messaging.controller";
 import { DirectMessagingService } from "./direct-messaging.service";
+import { SearchService } from "./search.service";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import {
   DirectConversation,
@@ -56,6 +57,12 @@ import { AuthGuard } from "../common/guards/auth.guard";
     ]),
   ],
   controllers: [DirectMessagingController],
-  providers: [DirectMessagingService, DmGateway, AuthGuard, DecodeApiClient],
+  providers: [
+    DirectMessagingService,
+    SearchService,
+    DmGateway,
+    AuthGuard,
+    DecodeApiClient,
+  ],
 })
 export class DirectMessagingModule {}

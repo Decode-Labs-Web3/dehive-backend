@@ -9,6 +9,8 @@ import {
   UploadedFile,
   Body,
   UseInterceptors,
+  Headers,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import {
@@ -19,9 +21,12 @@ import {
   ApiHeader,
   ApiConsumes,
   ApiBody,
+  ApiQuery,
 } from "@nestjs/swagger";
 import { MessagingService } from "./channel-messaging.service";
+import { SearchService } from "./search.service";
 import { GetMessagesDto } from "../dto/get-messages.dto";
+import { SearchMessageDto } from "../dto/search-message.dto";
 import { UploadInitDto, UploadResponseDto } from "../dto/channel-upload.dto";
 import { ListUploadsDto } from "../dto/list-channel-upload.dto";
 import { CreateMessageDto } from "../dto/create-message.dto";
@@ -34,7 +39,10 @@ import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 @Controller("messages")
 @UseGuards(AuthGuard)
 export class MessagingController {
-  constructor(private readonly messagingService: MessagingService) {}
+  constructor(
+    private readonly messagingService: MessagingService,
+    private readonly searchService: SearchService,
+  ) {}
 
   @Post("send")
   @ApiOperation({ summary: "Send a message to a channel conversation" })
@@ -172,6 +180,126 @@ export class MessagingController {
       statusCode: 200,
       message: "Fetched uploads successfully",
       data: result,
+    };
+  }
+
+  @Get("channels/:channelId/search")
+  @ApiOperation({ summary: "Search messages in a specific channel" })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: false,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hash",
+    description: "Fingerprint hash of the user",
+    required: false,
+  })
+  @ApiParam({
+    name: "channelId",
+    description: "The ID of the channel to search messages in",
+  })
+  @ApiQuery({
+    name: "q",
+    description: "Search query string",
+    required: true,
+  })
+  @ApiQuery({
+    name: "page",
+    description: "Page number (default: 0)",
+    required: false,
+  })
+  @ApiQuery({
+    name: "limit",
+    description: "Number of items per page (default: 20, max: 100)",
+    required: false,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Returns search results with relevance score.",
+  })
+  @ApiResponse({ status: 400, description: "Invalid input." })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async searchInChannel(
+    @Param("channelId") channelId: string,
+    @Query() searchDto: SearchMessageDto,
+    @Headers("x-session-id") sessionId?: string,
+    @Headers("x-fingerprint-hash") fingerprintHash?: string,
+  ) {
+    const data = await this.searchService.searchInChannel(
+      channelId,
+      searchDto,
+      sessionId,
+      fingerprintHash,
+    );
+    return {
+      success: true,
+      statusCode: 200,
+      message: "Search completed successfully",
+      data,
+    };
+  }
+
+  @Get("servers/:serverId/search")
+  @ApiOperation({ summary: "Search messages across all channels in a server" })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: false,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hash",
+    description: "Fingerprint hash of the user",
+    required: false,
+  })
+  @ApiParam({
+    name: "serverId",
+    description: "The ID of the server to search messages in",
+  })
+  @ApiQuery({
+    name: "q",
+    description: "Search query string",
+    required: true,
+  })
+  @ApiQuery({
+    name: "page",
+    description: "Page number (default: 0)",
+    required: false,
+  })
+  @ApiQuery({
+    name: "limit",
+    description: "Number of items per page (default: 20, max: 100)",
+    required: false,
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Returns search results across all channels in the server.",
+  })
+  @ApiResponse({ status: 400, description: "Invalid input." })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async searchInServer(
+    @Param("serverId") serverId: string,
+    @Query() searchDto: SearchMessageDto,
+    @CurrentUser("_id") userId: string,
+    @Headers("x-session-id") sessionId?: string,
+    @Headers("x-fingerprint-hash") fingerprintHash?: string,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException("User not authenticated");
+    }
+
+    const data = await this.searchService.searchInServer(
+      serverId,
+      searchDto,
+      userId,
+      sessionId,
+      fingerprintHash,
+    );
+    return {
+      success: true,
+      statusCode: 200,
+      message: "Search completed successfully",
+      data,
     };
   }
 }

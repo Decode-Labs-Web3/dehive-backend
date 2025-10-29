@@ -1,16 +1,17 @@
+// Chuẩn hóa response cho tất cả user status endpoints
+export interface UserStatusItem {
+  user_id: string;
+  status: "online" | "offline" | "away";
+  conversationid?: string;
+  displayname: string;
+  username: string;
+  avatar_ipfs_hash: string;
+  isCall: boolean;
+  last_seen: Date;
+}
+
 export interface BulkStatusResponse {
-  users: {
-    user_id: string;
-    status: "online" | "offline" | "away";
-    last_seen: Date;
-    conversationid?: string;
-    isCall?: boolean;
-    user_profile?: {
-      username: string;
-      display_name: string;
-      avatar_ipfs_hash: string;
-    };
-  }[];
+  users: UserStatusItem[];
   metadata?: {
     page: number;
     limit: number;
@@ -20,16 +21,7 @@ export interface BulkStatusResponse {
 }
 
 export interface OnlineUsersResponse {
-  online_users: {
-    user_id: string;
-    conversationid?: string;
-    isCall?: boolean;
-    user_profile: {
-      username: string;
-      display_name: string;
-      avatar_ipfs_hash: string;
-    };
-  }[];
+  users: UserStatusItem[]; // Đổi từ online_users → users để đồng nhất
   metadata?: {
     page: number;
     limit: number;
