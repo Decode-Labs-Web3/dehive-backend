@@ -619,6 +619,201 @@ export class DirectMessagingService {
     };
   }
 
+  /**
+   * List messages relative to an anchor message (point-of-view).
+   * direction: 'up' => older messages after the anchor in the ordered list (createdAt desc)
+   *            'down' => newer messages before the anchor (createdAt desc)
+   * page: 0-based, limit: page size
+   */
+  async listMessagesFromAnchor(
+    selfId: string,
+    anchorMessageId: string,
+    direction: "up" | "down",
+    page = 0,
+    limit = 10,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ) {
+    if (!Types.ObjectId.isValid(selfId))
+      throw new BadRequestException("Invalid self id");
+    if (!Types.ObjectId.isValid(anchorMessageId))
+      throw new BadRequestException("Invalid message id");
+    if (direction !== "up" && direction !== "down")
+      throw new BadRequestException("direction must be 'up' or 'down'");
+
+    const anchor = (await this.messageModel
+      .findById(anchorMessageId)
+      .lean()) as unknown as {
+      createdAt: Date;
+      _id: Types.ObjectId;
+      conversationId: Types.ObjectId;
+    };
+    if (!anchor) throw new NotFoundException("Anchor message not found");
+
+    const conv = await this.conversationModel
+      .findById(String(anchor.conversationId))
+      .lean();
+    if (!conv) throw new NotFoundException("Conversation not found");
+
+    const isParticipant = [
+      conv.userA.toString(),
+      conv.userB.toString(),
+    ].includes(selfId);
+    if (!isParticipant) throw new BadRequestException("Not a participant");
+
+    const skip = page * limit;
+
+    // Build comparator for the requested direction (anchor itself will be returned when page === 0)
+    let queryComparator: Record<string, unknown>;
+    let sortOrder: { [key: string]: 1 | -1 };
+
+    if (direction === "up") {
+      // older messages -> createdAt < anchor.createdAt OR (createdAt == anchor.createdAt AND _id < anchor._id)
+      queryComparator = {
+        $or: [
+          { createdAt: { $lt: anchor.createdAt } },
+          { createdAt: anchor.createdAt, _id: { $lt: anchor._id } },
+        ],
+      };
+      // fetch nearest older first (descending)
+      sortOrder = { createdAt: -1, _id: -1 };
+    } else {
+      // newer messages -> createdAt > anchor.createdAt OR (createdAt == anchor.createdAt AND _id > anchor._id)
+      queryComparator = {
+        $or: [
+          { createdAt: { $gt: anchor.createdAt } },
+          { createdAt: anchor.createdAt, _id: { $gt: anchor._id } },
+        ],
+      };
+      // fetch nearest newer first using ascending sort, so results are chronological after anchor
+      sortOrder = { createdAt: 1, _id: 1 };
+    }
+
+    // total messages in conversation (conversation-wide)
+    const total = await this.messageModel.countDocuments({
+      conversationId: new Types.ObjectId(String(anchor.conversationId)),
+    });
+
+    // also count how many messages exist in the requested direction relative to anchor
+    const directionTotal = await this.messageModel.countDocuments({
+      conversationId: new Types.ObjectId(String(anchor.conversationId)),
+      ...queryComparator,
+    });
+
+    // Fetch messages in the requested direction (exclude anchor itself)
+    const rawItems = await this.messageModel
+      .find({
+        conversationId: new Types.ObjectId(String(anchor.conversationId)),
+        ...queryComparator,
+      })
+      .populate("replyTo", "content senderId createdAt")
+      .sort(sortOrder)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const fetchedItems = await Promise.all(
+      rawItems.map(async (item) => {
+        let userProfile;
+        if (sessionId && fingerprintHash) {
+          userProfile = await this.getUserProfileFromDecode(
+            String(item.senderId),
+            sessionId,
+            fingerprintHash,
+          );
+          if (!userProfile) {
+            userProfile = await this.getUserProfile(String(item.senderId));
+          }
+        } else {
+          userProfile = await this.getUserProfile(String(item.senderId));
+        }
+
+        return {
+          _id: item._id,
+          conversationId: item.conversationId,
+          sender: {
+            dehive_id: item.senderId,
+            username: userProfile.username || `User_${String(item.senderId)}`,
+            display_name:
+              userProfile.display_name || `User_${String(item.senderId)}`,
+            avatar_ipfs_hash: userProfile.avatar_ipfs_hash || null,
+          },
+          content: item.content,
+          attachments: item.attachments || [],
+          isEdited: item.isEdited || false,
+          isDeleted: item.isDeleted || false,
+          replyTo: item.replyTo || null,
+          createdAt: (item as { createdAt?: Date }).createdAt,
+          updatedAt: (item as { updatedAt?: Date }).updatedAt,
+          __v: item.__v,
+        };
+      }),
+    );
+
+    // Build response items.
+    // - For 'up': include anchor as the first item when page === 0 (POV at top).
+    // - For 'down': do NOT include the anchor (POV is implicit); always return messages below the anchor.
+    let items: unknown[] = [];
+    if (page === 0 && direction === "up") {
+      // Format anchor similarly to messages (only for 'up' page 0)
+      const anchorTyped = anchor as unknown as {
+        _id: Types.ObjectId;
+        conversationId: Types.ObjectId;
+        senderId?: string;
+        content?: string;
+        attachments?: unknown[];
+        isEdited?: boolean;
+        isDeleted?: boolean;
+        replyTo?: unknown | null;
+        createdAt?: Date;
+        updatedAt?: Date;
+        __v?: number;
+      };
+
+      const anchorProfile = await this.getUserProfile(
+        String(anchorTyped.senderId || anchorTyped._id),
+      );
+      const anchorItem = {
+        _id: anchorTyped._id,
+        conversationId: anchorTyped.conversationId,
+        sender: {
+          dehive_id: anchorTyped.senderId || null,
+          username: anchorProfile.username || `User_${String(anchorTyped._id)}`,
+          display_name:
+            anchorProfile.display_name || `User_${String(anchorTyped._id)}`,
+          avatar_ipfs_hash: anchorProfile.avatar_ipfs_hash || null,
+        },
+        content: anchorTyped.content || null,
+        attachments: anchorTyped.attachments || [],
+        isEdited: anchorTyped.isEdited || false,
+        isDeleted: anchorTyped.isDeleted || false,
+        replyTo: anchorTyped.replyTo || null,
+        createdAt: anchorTyped.createdAt,
+        updatedAt: anchorTyped.updatedAt,
+        __v: anchorTyped.__v,
+      };
+
+      items = [anchorItem, ...fetchedItems];
+    } else {
+      // For any other case (including direction === 'down'), return only fetched items
+      items = fetchedItems;
+    }
+
+    // compute is_last_page relative to directionTotal
+    const totalDirectionPages = Math.ceil(directionTotal / limit) || 1;
+    const isLastPage = page >= totalDirectionPages - 1;
+
+    return {
+      items,
+      metadata: {
+        page,
+        limit,
+        total,
+        is_last_page: isLastPage,
+      },
+    };
+  }
+
   async editMessage(selfId: string, messageId: string, content: string) {
     if (!Types.ObjectId.isValid(selfId))
       throw new BadRequestException("Invalid self id");

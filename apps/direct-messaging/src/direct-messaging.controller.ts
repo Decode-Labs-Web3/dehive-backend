@@ -12,7 +12,6 @@ import {
   HttpStatus,
   Req,
   Headers,
-  UnauthorizedException,
   UsePipes,
   ValidationPipe,
 } from "@nestjs/common";
@@ -172,6 +171,75 @@ export class DirectMessagingController {
       sessionId,
       fingerprintHash,
     );
+    return { success: true, statusCode: 200, message: "OK", data };
+  }
+
+  @Get("messages/:messageId/:direction")
+  @ApiOperation({
+    summary: "List messages around an anchor message (point-of-view)",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "The hashed fingerprint of the client device",
+    required: true,
+  })
+  @ApiParam({ name: "messageId", description: "Anchor message id" })
+  @ApiParam({
+    name: "direction",
+    description: "Direction relative to anchor: 'up' or 'down'",
+  })
+  @ApiQuery({
+    name: "page",
+    description: "Page number (0-based)",
+    required: false,
+  })
+  @ApiQuery({ name: "limit", description: "Items per page", required: false })
+  @ApiResponse({
+    status: 200,
+    description: "Returns messages around anchor",
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Invalid input or not a participant",
+  })
+  @ApiResponse({ status: 404, description: "Anchor or conversation not found" })
+  async listFromAnchor(
+    @CurrentUser("_id") selfId: string,
+    @Param("messageId") messageId: string,
+    @Param("direction") direction: string,
+    @Query("page") page = "0",
+    @Query("limit") limit = "10",
+    @Req() req: Request,
+  ) {
+    // enforce GET
+    if (req.method !== "GET") {
+      throw new HttpException(
+        `Method ${req.method} not allowed for this endpoint. Only GET is allowed.`,
+        HttpStatus.METHOD_NOT_ALLOWED,
+      );
+    }
+
+    const sessionId = req.headers["x-session-id"] as string;
+    const fingerprintHash = req.headers["x-fingerprint-hashed"] as string;
+
+    const pageNum = Number.parseInt(String(page) || "0", 10) || 0;
+    const limitNum = Number.parseInt(String(limit) || "10", 10) || 10;
+
+    const data = await this.service.listMessagesFromAnchor(
+      selfId,
+      messageId,
+      direction as "up" | "down",
+      pageNum,
+      limitNum,
+      sessionId,
+      fingerprintHash,
+    );
+
     return { success: true, statusCode: 200, message: "OK", data };
   }
 
@@ -575,62 +643,6 @@ export class DirectMessagingController {
     };
   }
 
-  @Get("search")
-  @ApiOperation({
-    summary: "Search messages across all conversations of the user",
-  })
-  @ApiHeader({
-    name: "x-session-id",
-    description: "Session ID of authenticated user",
-    required: false,
-  })
-  @ApiHeader({
-    name: "x-fingerprint-hash",
-    description: "Fingerprint hash of the user",
-    required: false,
-  })
-  @ApiQuery({
-    name: "search",
-    description: "Search query string",
-    required: true,
-  })
-  @ApiQuery({
-    name: "page",
-    description: "Page number (default: 0)",
-    required: false,
-  })
-  @ApiQuery({
-    name: "limit",
-    description: "Number of items per page (default: 20, max: 100)",
-    required: false,
-  })
-  @ApiResponse({
-    status: 200,
-    description: "Returns search results across all user conversations.",
-  })
-  @ApiResponse({ status: 400, description: "Invalid input." })
-  @UsePipes(new ValidationPipe({ transform: true }))
-  async searchAllConversations(
-    @Query() searchDto: SearchMessageDto,
-    @CurrentUser("_id") userId: string,
-    @Headers("x-session-id") sessionId?: string,
-    @Headers("x-fingerprint-hash") fingerprintHash?: string,
-  ) {
-    if (!userId) {
-      throw new UnauthorizedException("User not authenticated");
-    }
-
-    const data = await this.searchService.searchAllConversations(
-      userId,
-      searchDto,
-      sessionId,
-      fingerprintHash,
-    );
-    return {
-      success: true,
-      statusCode: 200,
-      message: "Search completed successfully",
-      data,
-    };
-  }
+  // Note: global search across all conversations has been removed.
+  // Use the per-conversation endpoint `GET /dm/conversations/:conversationId/search` instead.
 }

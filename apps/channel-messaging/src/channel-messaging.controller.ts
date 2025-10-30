@@ -10,7 +10,6 @@ import {
   Body,
   UseInterceptors,
   Headers,
-  UnauthorizedException,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import {
@@ -247,66 +246,5 @@ export class MessagingController {
     };
   }
 
-  @Get("servers/:serverId/search")
-  @ApiOperation({ summary: "Search messages across all channels in a server" })
-  @ApiHeader({
-    name: "x-session-id",
-    description: "Session ID of authenticated user",
-    required: false,
-  })
-  @ApiHeader({
-    name: "x-fingerprint-hash",
-    description: "Fingerprint hash of the user",
-    required: false,
-  })
-  @ApiParam({
-    name: "serverId",
-    description: "The ID of the server to search messages in",
-  })
-  @ApiQuery({
-    name: "search",
-    description: "Search query string",
-    required: true,
-  })
-  @ApiQuery({
-    name: "page",
-    description: "Page number (default: 0)",
-    required: false,
-  })
-  @ApiQuery({
-    name: "limit",
-    description: "Number of items per page (default: 20, max: 100)",
-    required: false,
-  })
-  @ApiResponse({
-    status: 200,
-    description: "Returns search results across all channels in the server.",
-  })
-  @ApiResponse({ status: 400, description: "Invalid input." })
-  @UsePipes(new ValidationPipe({ transform: true }))
-  async searchInServer(
-    @Param("serverId") serverId: string,
-    @Query() searchDto: SearchMessageDto,
-    @CurrentUser("_id") userId: string,
-    @Headers("x-session-id") sessionId?: string,
-    @Headers("x-fingerprint-hash") fingerprintHash?: string,
-  ) {
-    if (!userId) {
-      throw new UnauthorizedException("User not authenticated");
-    }
-
-    const data = await this.searchService.searchInServer(
-      serverId,
-      searchDto,
-      userId,
-      sessionId,
-      fingerprintHash,
-    );
-    return {
-      success: true,
-      statusCode: 200,
-      message: "Search completed successfully",
-      data,
-    };
-  }
+  // Note: server-wide search removed. Use channel-level search `GET /messages/channels/:channelId/search`.
 }
