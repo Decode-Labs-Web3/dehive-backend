@@ -56,13 +56,14 @@ export class AuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const sessionId = request.headers["x-session-id"] as string | undefined;
 
-    // Accept either x-fingerprint-hashed (original) or x-fingerprint-hash (common typo)
+    // accept either header name: x-fingerprint-hashed (existing) or
+    // x-fingerprint-hash (some clients/controllers use this)
     const fingerprintHash =
       (request.headers["x-fingerprint-hashed"] as string | undefined) ||
       (request.headers["x-fingerprint-hash"] as string | undefined);
 
-    this.logger.debug(
-      `AuthGuard headers: x-session-id=${sessionId}, x-fingerprint-hash=${fingerprintHash}`,
+    this.logger.log(
+      `AuthGuard headers received x-session-id=${sessionId} x-fingerprint=${fingerprintHash}`,
     );
 
     if (!sessionId) {
@@ -70,7 +71,7 @@ export class AuthGuard implements CanActivate {
     }
     if (!fingerprintHash) {
       throw new UnauthorizedException(
-        "Fingerprint hash is required in headers (x-fingerprint-hash or x-fingerprint-hashed)",
+        "Fingerprint hash is required in headers (x-fingerprint-hashed)",
       );
     }
 
@@ -136,7 +137,7 @@ export class AuthGuard implements CanActivate {
 
       const authenticatedUser: AuthenticatedUser = {
         ...userProfile,
-        _id: userProfile.user_id, // Map user_id to _id
+        _id: userProfile.user_id,
         session_id: sessionId,
         fingerprint_hash: fingerprintHash,
       };

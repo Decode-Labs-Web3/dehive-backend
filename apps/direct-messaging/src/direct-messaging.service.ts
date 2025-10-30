@@ -550,7 +550,8 @@ export class DirectMessagingService {
       this.messageModel
         .find({ conversationId: new Types.ObjectId(conversationId) })
         .populate("replyTo", "content senderId createdAt")
-        .sort({ createdAt: -1 })
+        // ensure deterministic ordering when createdAt is identical
+        .sort({ createdAt: -1, _id: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -560,7 +561,6 @@ export class DirectMessagingService {
     ]);
 
     const totalPages = Math.ceil(total / limit);
-    const isLastPage = page >= totalPages - 1;
 
     // Format messages with sender information and avatar
     const formattedItems = await Promise.all(
@@ -614,7 +614,9 @@ export class DirectMessagingService {
         page,
         limit,
         total: items.length,
-        is_last_page: isLastPage,
+        totalPages,
+        hasNextPage: page < totalPages - 1,
+        hasPrevPage: page > 0,
       },
     };
   }

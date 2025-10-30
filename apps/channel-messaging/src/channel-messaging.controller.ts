@@ -191,8 +191,8 @@ export class MessagingController {
     required: false,
   })
   @ApiHeader({
-    name: "x-fingerprint-hash",
-    description: "Fingerprint hash of the user",
+    name: "x-fingerprint-hashed",
+    description: "Fingerprint hash of the user (header name used by guard)",
     required: false,
   })
   @ApiParam({
@@ -224,8 +224,15 @@ export class MessagingController {
     @Param("channelId") channelId: string,
     @Query() searchDto: SearchMessageDto,
     @Headers("x-session-id") sessionId?: string,
-    @Headers("x-fingerprint-hash") fingerprintHash?: string,
+    @Headers("x-fingerprint-hashed") fingerprintHash?: string,
   ) {
+    // debug: log received headers (helps detect header name mismatches)
+    console.log(
+      "[CHANNEL] searchInChannel headers:",
+      sessionId,
+      fingerprintHash,
+    );
+
     const data = await this.searchService.searchInChannel(
       channelId,
       searchDto,

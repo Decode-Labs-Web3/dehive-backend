@@ -16,6 +16,16 @@ async function bootstrap() {
   app.enableCors({ origin: "*" });
   app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  // Temporary request logger to help debug search endpoint issues
+  app.use((req, _res, next) => {
+    // Log method, path, query and key headers for debugging
+    console.log(
+      `[REQ] ${req.method} ${req.originalUrl} query=${JSON.stringify(
+        req.query,
+      )} headers={x-session-id:${req.headers["x-session-id"]}, x-fingerprint-hash:${req.headers["x-fingerprint-hash"]}, x-fingerprint-hashed:${req.headers["x-fingerprint-hashed"]}}`,
+    );
+    next();
+  });
   app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 
   const config = new DocumentBuilder()
