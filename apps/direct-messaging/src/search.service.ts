@@ -25,7 +25,7 @@ export class SearchService {
     _sessionId?: string,
     _fingerprintHash?: string,
   ): Promise<SearchResultResponse> {
-    const { search, page = 0, limit: requestLimit = 30 } = searchDto;
+    const { search, page = 0, limit: requestLimit = 50 } = searchDto;
 
     if (!search || search.trim().length === 0) {
       throw new BadRequestException("Search query is required");
@@ -258,7 +258,7 @@ export class SearchService {
     _sessionId?: string,
     _fingerprintHash?: string,
   ): Promise<SearchResultResponse> {
-    const { search, page = 0, limit: requestLimit = 30 } = searchDto;
+    const { search, page = 0, limit: requestLimit = 50 } = searchDto;
 
     if (!search || search.trim().length === 0) {
       throw new BadRequestException("Search query is required");

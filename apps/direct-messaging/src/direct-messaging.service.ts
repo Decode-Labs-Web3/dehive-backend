@@ -613,7 +613,7 @@ export class DirectMessagingService {
       metadata: {
         page,
         limit,
-        total: items.length,
+        total,
         totalPages,
         hasNextPage: page < totalPages - 1,
         hasPrevPage: page > 0,
