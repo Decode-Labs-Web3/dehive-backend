@@ -24,8 +24,7 @@ export interface SearchResultResponse {
     page: number;
     limit: number;
     total: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
+    // Whether this page is the last page (true) or not (false)
+    is_last_page: boolean;
   };
 }

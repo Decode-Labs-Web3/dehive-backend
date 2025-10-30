@@ -614,9 +614,7 @@ export class DirectMessagingService {
         page,
         limit,
         total,
-        totalPages,
-        hasNextPage: page < totalPages - 1,
-        hasPrevPage: page > 0,
+        is_last_page: page >= totalPages - 1,
       },
     };
   }

@@ -25,7 +25,7 @@ export class SearchService {
     _sessionId?: string,
     _fingerprintHash?: string,
   ): Promise<SearchResultResponse> {
-    const { search, page = 0, limit: requestLimit = 50 } = searchDto;
+    const { search, page = 0, limit: requestLimit = 30 } = searchDto;
 
     if (!search || search.trim().length === 0) {
       throw new BadRequestException("Search query is required");
@@ -137,8 +137,6 @@ export class SearchService {
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(totalResults / requestLimit);
-    const hasNextPage = page < totalPages - 1;
-    const hasPrevPage = page > 0;
 
     if (!messages || messages.length === 0) {
       return {
@@ -147,9 +145,7 @@ export class SearchService {
           page,
           limit: requestLimit,
           total: 0,
-          totalPages: 0,
-          hasNextPage: false,
-          hasPrevPage: false,
+          is_last_page: true,
         },
       };
     }
@@ -172,72 +168,28 @@ export class SearchService {
     }
 
     // Map results with user profiles
-    // Compute DB positions for each message (position in search results ordered by score desc, createdAt desc)
-    const dbPositions = await Promise.all(
-      messages.map(async (m) => {
-        try {
-          // Count messages that would come before this message in search results
-          // i.e. messages with higher score, or same score but newer createdAt, or same score and createdAt but higher _id
-          const countPipeline = [
-            searchStage,
-            {
-              $match: {
-                $or: [
-                  { score: { $gt: m.score } },
-                  { score: m.score, createdAt: { $gt: m.createdAt } },
-                  {
-                    score: m.score,
-                    createdAt: m.createdAt,
-                    _id: { $gt: m._id },
-                  },
-                ],
-              },
-            },
-            { $count: "count" },
-          ];
-          const countResult = await this.directMessageModel
-            .aggregate(countPipeline)
-            .exec();
-          return countResult[0]?.count || 0;
-        } catch {
-          return 0;
-        }
-      }),
-    );
 
-    const items = messages.map((msg, idx) => {
-      const positionInConversation = dbPositions[idx] ?? 0; // 0-based
-      const itemPage =
-        requestLimit > 0
-          ? Math.floor(positionInConversation / requestLimit)
-          : 0; // 0-based page
-
-      return {
-        _id: msg._id,
-        conversationId: msg.conversationId,
-        sender: {
-          dehive_id: msg.senderId?.toString() || "",
-          username:
-            profiles[msg.senderId?.toString()]?.username ||
-            `User_${msg.senderId}`,
-          display_name:
-            profiles[msg.senderId?.toString()]?.display_name ||
-            `User_${msg.senderId}`,
-          avatar_ipfs_hash:
-            profiles[msg.senderId?.toString()]?.avatar_ipfs_hash || null,
-        },
-        content: msg.content,
-        attachments: msg.attachments || [],
-        isEdited: msg.isEdited || false,
-        isDeleted: msg.isDeleted || false,
-        createdAt: msg.createdAt,
-        score: msg.score,
-        // per-message pagination info requested
-        page: itemPage,
-        // return 1-based position so it can be used as `limit` for listMessages
-        limit: positionInConversation + 1,
-      };
-    });
+    const items = messages.map((msg) => ({
+      _id: msg._id,
+      conversationId: msg.conversationId,
+      sender: {
+        dehive_id: msg.senderId?.toString() || "",
+        username:
+          profiles[msg.senderId?.toString()]?.username ||
+          `User_${msg.senderId}`,
+        display_name:
+          profiles[msg.senderId?.toString()]?.display_name ||
+          `User_${msg.senderId}`,
+        avatar_ipfs_hash:
+          profiles[msg.senderId?.toString()]?.avatar_ipfs_hash || null,
+      },
+      content: msg.content,
+      attachments: msg.attachments || [],
+      isEdited: msg.isEdited || false,
+      isDeleted: msg.isDeleted || false,
+      createdAt: msg.createdAt,
+      score: msg.score,
+    }));
 
     return {
       items,
@@ -245,9 +197,7 @@ export class SearchService {
         page,
         limit: requestLimit,
         total: totalResults,
-        totalPages,
-        hasNextPage,
-        hasPrevPage,
+        is_last_page: page >= totalPages - 1,
       },
     };
   }
@@ -380,8 +330,6 @@ export class SearchService {
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(totalResults / requestLimit);
-    const hasNextPage = page < totalPages - 1;
-    const hasPrevPage = page > 0;
 
     if (!messages || messages.length === 0) {
       return {
@@ -390,9 +338,7 @@ export class SearchService {
           page,
           limit: requestLimit,
           total: 0,
-          totalPages: 0,
-          hasNextPage: false,
-          hasPrevPage: false,
+          is_last_page: true,
         },
       };
     }
@@ -416,88 +362,27 @@ export class SearchService {
       }
     }
 
-    // Compute DB positions for each message (position in search results ordered by score desc, createdAt desc)
-    const dbPositionsAll = await Promise.all(
-      messages.map(async (m) => {
-        try {
-          // Count messages that would come before this message in search results
-          // i.e. messages with higher score, or same score but newer createdAt, or same score and createdAt but higher _id
-          const countPipeline = [
-            searchStage,
-            {
-              $lookup: {
-                from: "direct_conversation",
-                localField: "conversationId",
-                foreignField: "_id",
-                as: "conversation",
-              },
-            },
-            {
-              $unwind: "$conversation",
-            },
-            {
-              $match: {
-                "conversation.participants": new Types.ObjectId(userId),
-              },
-            },
-            {
-              $match: {
-                $or: [
-                  { score: { $gt: m.score } },
-                  { score: m.score, createdAt: { $gt: m.createdAt } },
-                  {
-                    score: m.score,
-                    createdAt: m.createdAt,
-                    _id: { $gt: m._id },
-                  },
-                ],
-              },
-            },
-            { $count: "count" },
-          ];
-          const countResult = await this.directMessageModel
-            .aggregate(countPipeline)
-            .exec();
-          return countResult[0]?.count || 0;
-        } catch {
-          return 0;
-        }
-      }),
-    );
-
-    const items = messages.map((msg, idx) => {
-      const positionInConversation = dbPositionsAll[idx] ?? 0; // 0-based
-      const itemPage =
-        requestLimit > 0
-          ? Math.floor(positionInConversation / requestLimit)
-          : 0; // 0-based page
-
-      return {
-        _id: msg._id,
-        conversationId: msg.conversationId,
-        sender: {
-          dehive_id: msg.senderId?.toString() || "",
-          username:
-            profiles[msg.senderId?.toString()]?.username ||
-            `User_${msg.senderId}`,
-          display_name:
-            profiles[msg.senderId?.toString()]?.display_name ||
-            `User_${msg.senderId}`,
-          avatar_ipfs_hash:
-            profiles[msg.senderId?.toString()]?.avatar_ipfs_hash || null,
-        },
-        content: msg.content,
-        attachments: msg.attachments || [],
-        isEdited: msg.isEdited || false,
-        isDeleted: msg.isDeleted || false,
-        createdAt: msg.createdAt,
-        score: msg.score,
-        // per-message pagination info requested
-        page: itemPage,
-        // return 1-based position so it can be used as `limit` for listMessages
-        limit: positionInConversation + 1,
-      };
-    });
+    const items = messages.map((msg) => ({
+      _id: msg._id,
+      conversationId: msg.conversationId,
+      sender: {
+        dehive_id: msg.senderId?.toString() || "",
+        username:
+          profiles[msg.senderId?.toString()]?.username ||
+          `User_${msg.senderId}`,
+        display_name:
+          profiles[msg.senderId?.toString()]?.display_name ||
+          `User_${msg.senderId}`,
+        avatar_ipfs_hash:
+          profiles[msg.senderId?.toString()]?.avatar_ipfs_hash || null,
+      },
+      content: msg.content,
+      attachments: msg.attachments || [],
+      isEdited: msg.isEdited || false,
+      isDeleted: msg.isDeleted || false,
+      createdAt: msg.createdAt,
+      score: msg.score,
+    }));
 
     return {
       items,
@@ -505,9 +390,7 @@ export class SearchService {
         page,
         limit: requestLimit,
         total: totalResults,
-        totalPages,
-        hasNextPage,
-        hasPrevPage,
+        is_last_page: page >= totalPages - 1,
       },
     };
   }
