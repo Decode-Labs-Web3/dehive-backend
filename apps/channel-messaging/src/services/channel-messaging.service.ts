@@ -755,6 +755,10 @@ export class MessagingService {
     });
 
     // Build items array; include anchor for 'up' page 0
+    // For 'up' direction we want the anchor to appear at the BOTTOM
+    // because frontend renders top->bottom. So reverse the fetched
+    // items (oldest -> newest) and then append the anchor as the last
+    // element for page 0.
     let items: unknown[] = [];
     if (page === 0 && direction === "up") {
       const anchorProfile =
@@ -784,7 +788,17 @@ export class MessagingService {
         updatedAt: anchor.updatedAt,
       };
 
-      items = [anchorItem, ...fetchedItems];
+      // fetchedItems are returned sorted newest->oldest for 'up' (createdAt -1)
+      // Reverse so the array becomes oldest->newest, then put anchor last.
+      const reversed = Array.isArray(fetchedItems)
+        ? [...fetchedItems].reverse()
+        : fetchedItems;
+
+      if (Array.isArray(reversed)) {
+        items = [...reversed, anchorItem];
+      } else {
+        items = [anchorItem];
+      }
     } else {
       items = fetchedItems;
     }

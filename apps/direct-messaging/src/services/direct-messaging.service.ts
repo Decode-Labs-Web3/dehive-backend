@@ -793,7 +793,18 @@ export class DirectMessagingService {
         __v: anchorTyped.__v,
       };
 
-      items = [anchorItem, ...fetchedItems];
+      // fetchedItems are returned sorted newest->oldest for 'up' (createdAt -1)
+      // Reverse so the array becomes oldest->newest, then put anchor last
+      // so frontend rendering top->bottom shows anchor at the bottom.
+      const reversed = Array.isArray(fetchedItems)
+        ? [...fetchedItems].reverse()
+        : fetchedItems;
+
+      if (Array.isArray(reversed)) {
+        items = [...reversed, anchorItem];
+      } else {
+        items = [anchorItem];
+      }
     } else {
       // For any other case (including direction === 'down'), return only fetched items
       items = fetchedItems;
