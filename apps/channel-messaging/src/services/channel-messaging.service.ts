@@ -2,28 +2,29 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from "@nestjs/common";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import { ConfigService } from "@nestjs/config";
 import * as fs from "fs";
 import * as path from "path";
-import { AuthServiceClient } from "./auth-service.client";
-import { DecodeApiClient } from "../clients/decode-api.client";
+import { AuthServiceClient } from "../auth-service.client";
+import { DecodeApiClient } from "../../clients/decode-api.client";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
-import { UserProfile } from "../interfaces/user-profile.interface";
+import { UserProfile } from "../../interfaces/user-profile.interface";
 import { randomUUID } from "crypto";
 import {
   ChannelMessage,
   ChannelMessageDocument,
-} from "../schemas/channel-message.schema";
-import { CreateMessageDto } from "../dto/create-message.dto";
-import { AttachmentDto } from "../dto/attachment.dto";
-import { GetMessagesDto } from "../dto/get-messages.dto";
-import { Upload, UploadDocument } from "../schemas/upload.schema";
-import { UploadInitDto, UploadResponseDto } from "../dto/channel-upload.dto";
-import { AttachmentType } from "../enum/enum";
+} from "../../schemas/channel-message.schema";
+import { CreateMessageDto } from "../../dto/create-message.dto";
+import { AttachmentDto } from "../../dto/attachment.dto";
+import { GetMessagesDto } from "../../dto/get-messages.dto";
+import { Upload, UploadDocument } from "../../schemas/upload.schema";
+import { UploadInitDto, UploadResponseDto } from "../../dto/channel-upload.dto";
+import { AttachmentType } from "../../enum/enum";
 import sharp from "sharp";
 import * as childProcess from "child_process";
 import ffmpegPath from "ffmpeg-static";
@@ -31,15 +32,19 @@ import ffprobePath from "ffprobe-static";
 import {
   UserDehiveServer,
   UserDehiveServerDocument,
-} from "../../user-dehive-server/schemas/user-dehive-server.schema";
+} from "../../../user-dehive-server/schemas/user-dehive-server.schema";
 import {
   UserDehive,
   UserDehiveDocument,
-} from "../../user-dehive-server/schemas/user-dehive.schema";
-import { Channel, ChannelDocument } from "../../server/schemas/channel.schema";
+} from "../../../user-dehive-server/schemas/user-dehive.schema";
+import {
+  Channel,
+  ChannelDocument,
+} from "../../../server/schemas/channel.schema";
 
 @Injectable()
 export class MessagingService {
+  private readonly logger = new Logger(MessagingService.name);
   constructor(
     @InjectModel(ChannelMessage.name)
     private readonly channelMessageModel: Model<ChannelMessageDocument>,
@@ -460,13 +465,14 @@ export class MessagingService {
       .filter((id): id is string => Boolean(id));
 
     // 3. Batch get profiles from decode service (with cache)
-    console.log("[CHANNEL-MESSAGING] Debug getMessagesByConversationId:", {
-      userIds,
-      sessionId,
-      fingerprintHash,
-      hasSessionId: !!sessionId,
-      hasFingerprintHash: !!fingerprintHash,
-    });
+    this.logger.debug(
+      "[CHANNEL-MESSAGING] Debug getMessagesByConversationId: userIds, session/fingerprint flags",
+      {
+        userIds,
+        hasSessionId: !!sessionId,
+        hasFingerprintHash: !!fingerprintHash,
+      },
+    );
 
     const profiles = await this.decodeClient.batchGetProfiles(
       userIds,
@@ -474,20 +480,20 @@ export class MessagingService {
       fingerprintHash,
     );
 
-    console.log("[CHANNEL-MESSAGING] Profiles received:", {
+    this.logger.debug("[CHANNEL-MESSAGING] Profiles received", {
       requestedUserIds: userIds,
-      receivedProfiles: Object.keys(profiles),
-      profiles: profiles,
+      receivedProfiles: Object.keys(profiles || {}),
     });
 
     // Debug avatar data specifically
-    Object.keys(profiles).forEach((userId) => {
-      const profile = profiles[userId];
-      console.log(`[CHANNEL-MESSAGING] Profile for ${userId}:`, {
+    Object.keys(profiles || {}).forEach((userId) => {
+      const profile = (profiles as Record<string, Partial<UserProfile>>)[
+        userId
+      ];
+      this.logger.debug(`[CHANNEL-MESSAGING] Profile for ${userId}`, {
         username: profile?.username,
         display_name: profile?.display_name,
         avatar: profile?.avatar,
-        fullProfile: profile,
       });
     });
 
@@ -520,7 +526,7 @@ export class MessagingService {
       };
     });
 
-    const totalPages = Math.ceil(total / limit);
+    const totalPages = Math.ceil(total / limit) || 1;
     const isLastPage = page >= totalPages - 1;
 
     return {
@@ -528,7 +534,7 @@ export class MessagingService {
       metadata: {
         page,
         limit,
-        total: items.length,
+        total,
         is_last_page: isLastPage,
       },
     };
@@ -603,6 +609,198 @@ export class MessagingService {
     };
 
     return formattedMessage;
+  }
+
+  /**
+   * List messages relative to an anchor message (point-of-view) in a channel.
+   * direction: 'up' => older messages (createdAt < anchor) returned in descending order
+   *            'down' => newer messages (createdAt > anchor) returned in ascending order
+   */
+  async listMessagesFromAnchor(
+    selfId: string,
+    channelId: string,
+    anchorMessageId: string,
+    direction: "up" | "down",
+    page = 0,
+    limit = 10,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ) {
+    if (!Types.ObjectId.isValid(anchorMessageId))
+      throw new BadRequestException("Invalid message id");
+    if (!Types.ObjectId.isValid(channelId))
+      throw new BadRequestException("Invalid channel id");
+    if (direction !== "up" && direction !== "down")
+      throw new BadRequestException("direction must be 'up' or 'down'");
+
+    // Find anchor and ensure it belongs to requested channel
+    const anchor = (await this.channelMessageModel
+      .findById(anchorMessageId)
+      .lean()) as unknown as {
+      createdAt: Date;
+      _id: Types.ObjectId;
+      channelId: Types.ObjectId;
+      senderId?: unknown;
+      content?: string;
+      attachments?: unknown[];
+      isEdited?: boolean;
+      isDeleted?: boolean;
+      replyTo?: unknown | null;
+      updatedAt?: Date;
+      __v?: number;
+    };
+
+    if (!anchor) throw new BadRequestException("Anchor message not found");
+    if (String(anchor.channelId) !== String(channelId))
+      throw new BadRequestException("Anchor does not belong to the channel");
+
+    const skip = page * limit;
+
+    // Build comparator similar to direct messaging
+    let queryComparator: Record<string, unknown>;
+    let sortOrder: { [key: string]: 1 | -1 };
+
+    if (direction === "up") {
+      queryComparator = {
+        $or: [
+          { createdAt: { $lt: anchor.createdAt } },
+          { createdAt: anchor.createdAt, _id: { $lt: anchor._id } },
+        ],
+      };
+      sortOrder = { createdAt: -1, _id: -1 };
+    } else {
+      queryComparator = {
+        $or: [
+          { createdAt: { $gt: anchor.createdAt } },
+          { createdAt: anchor.createdAt, _id: { $gt: anchor._id } },
+        ],
+      };
+      sortOrder = { createdAt: 1, _id: 1 };
+    }
+
+    // total messages in channel
+    const total = await this.channelMessageModel.countDocuments({
+      channelId: new Types.ObjectId(channelId),
+    });
+
+    // total messages in requested direction
+    const directionTotal = await this.channelMessageModel.countDocuments({
+      channelId: new Types.ObjectId(channelId),
+      ...queryComparator,
+    });
+
+    const rawItems = await this.channelMessageModel
+      .find({
+        channelId: new Types.ObjectId(channelId),
+        ...queryComparator,
+      })
+      .populate("replyTo", "content senderId createdAt")
+      .sort(sortOrder)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    // Collect user ids to fetch profiles
+    const userIds = rawItems
+      .map((it: unknown) => {
+        const obj = it as { senderId?: unknown };
+        return obj.senderId ? String(obj.senderId) : undefined;
+      })
+      .filter((id: string | undefined): id is string => Boolean(id));
+
+    // Ensure anchor sender is included for anchor formatting
+    const anchorSenderId = anchor.senderId
+      ? String(anchor.senderId)
+      : undefined;
+    if (anchorSenderId && !userIds.includes(anchorSenderId)) {
+      userIds.push(anchorSenderId);
+    }
+
+    // Batch fetch profiles
+    let profiles: Record<string, Partial<UserProfile>> = {};
+    try {
+      profiles = await this.decodeClient.batchGetProfiles(
+        userIds,
+        sessionId,
+        fingerprintHash,
+      );
+    } catch (err) {
+      // If decode fails, continue with empty profiles (fallback to default)
+      this.logger.warn(`[CHANNEL] batchGetProfiles failed: ${String(err)}`);
+      profiles = {};
+    }
+
+    const fetchedItems = rawItems.map((item: unknown) => {
+      const it = item as Record<string, unknown>;
+      const userId = it["senderId"] ? String(it["senderId"]) : "";
+      const profile = profiles[userId] || null;
+      return {
+        _id: it["_id"],
+        channelId: it["channelId"],
+        sender: {
+          dehive_id: userId,
+          username: (profile && profile.username) || `User_${userId}`,
+          display_name: (profile && profile.display_name) || `User_${userId}`,
+          avatar_ipfs_hash:
+            (profile && (profile.avatar_ipfs_hash || profile.avatar)) || null,
+        },
+        content: it["content"],
+        attachments: (it["attachments"] as unknown[]) || [],
+        isEdited: (it["isEdited"] as unknown as boolean) || false,
+        isDeleted: (it["isDeleted"] as unknown as boolean) || false,
+        replyTo: it["replyTo"] || null,
+        createdAt: it["createdAt"],
+        updatedAt: it["updatedAt"],
+      };
+    });
+
+    // Build items array; include anchor for 'up' page 0
+    let items: unknown[] = [];
+    if (page === 0 && direction === "up") {
+      const anchorProfile =
+        (anchorSenderId && profiles[anchorSenderId]) || null;
+      const anchorItem = {
+        _id: anchor._id,
+        channelId: anchor.channelId,
+        sender: {
+          dehive_id: anchorSenderId || "",
+          username:
+            (anchorProfile && anchorProfile.username) ||
+            `User_${anchorSenderId || ""}`,
+          display_name:
+            (anchorProfile && anchorProfile.display_name) ||
+            `User_${anchorSenderId || ""}`,
+          avatar_ipfs_hash:
+            (anchorProfile &&
+              (anchorProfile.avatar_ipfs_hash || anchorProfile.avatar)) ||
+            null,
+        },
+        content: anchor.content || null,
+        attachments: anchor.attachments || [],
+        isEdited: anchor.isEdited || false,
+        isDeleted: anchor.isDeleted || false,
+        replyTo: anchor.replyTo || null,
+        createdAt: anchor.createdAt,
+        updatedAt: anchor.updatedAt,
+      };
+
+      items = [anchorItem, ...fetchedItems];
+    } else {
+      items = fetchedItems;
+    }
+
+    const totalDirectionPages = Math.ceil(directionTotal / limit) || 1;
+    const isLastPage = page >= totalDirectionPages - 1;
+
+    return {
+      items,
+      metadata: {
+        page,
+        limit,
+        total,
+        is_last_page: isLastPage,
+      },
+    };
   }
   async listUploads(params: {
     serverId: string;
@@ -692,7 +890,7 @@ export class MessagingService {
 
       if (cachedData) {
         const profile = JSON.parse(cachedData);
-        console.log(
+        this.logger.debug(
           `[CHANNEL-MESSAGING] Retrieved cached profile for ${userDehiveId} in WebSocket`,
         );
         return profile;
@@ -703,12 +901,11 @@ export class MessagingService {
       const error = new Error(
         `User profile not cached for ${userDehiveId}. HTTP API must be called first to cache user profiles before WebSocket usage.`,
       );
-      console.error(`[CHANNEL-MESSAGING] CRITICAL ERROR: ${error.message}`);
+      this.logger.error(`[CHANNEL-MESSAGING] CRITICAL ERROR: ${error.message}`);
       throw error;
     } catch (error) {
-      console.error(
-        `[CHANNEL-MESSAGING] Error getting user profile for ${userDehiveId}:`,
-        error,
+      this.logger.error(
+        `[CHANNEL-MESSAGING] Error getting user profile for ${userDehiveId}: ${String(error)}`,
       );
       throw error;
     }

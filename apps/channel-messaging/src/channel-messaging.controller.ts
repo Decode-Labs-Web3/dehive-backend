@@ -10,6 +10,7 @@ import {
   Body,
   UseInterceptors,
   Headers,
+  Logger,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import {
@@ -22,8 +23,8 @@ import {
   ApiBody,
   ApiQuery,
 } from "@nestjs/swagger";
-import { MessagingService } from "./channel-messaging.service";
-import { SearchService } from "./search.service";
+import { MessagingService } from "./services/channel-messaging.service";
+import { SearchService } from "./services/search.service";
 import { GetMessagesDto } from "../dto/get-messages.dto";
 import { SearchMessageDto } from "../dto/search-message.dto";
 import { UploadInitDto, UploadResponseDto } from "../dto/channel-upload.dto";
@@ -38,6 +39,7 @@ import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 @Controller("messages")
 @UseGuards(AuthGuard)
 export class MessagingController {
+  private readonly logger = new Logger(MessagingController.name);
   constructor(
     private readonly messagingService: MessagingService,
     private readonly searchService: SearchService,
@@ -226,11 +228,10 @@ export class MessagingController {
     @Headers("x-fingerprint-hashed") fingerprintHash?: string,
   ) {
     // debug: log received headers (helps detect header name mismatches)
-    console.log(
-      "[CHANNEL] searchInChannel headers:",
+    this.logger.debug("[CHANNEL] searchInChannel headers:", {
       sessionId,
       fingerprintHash,
-    );
+    });
 
     const data = await this.searchService.searchInChannel(
       channelId,
@@ -244,6 +245,45 @@ export class MessagingController {
       message: "Search completed successfully",
       data,
     };
+  }
+
+  @Get("channels/:channelId/messages/:messageId/:direction")
+  @ApiOperation({
+    summary: "List messages around an anchor message in a channel",
+  })
+  @ApiHeader({ name: "x-session-id", required: false })
+  @ApiHeader({ name: "x-fingerprint-hashed", required: false })
+  @ApiParam({ name: "channelId" })
+  @ApiParam({ name: "messageId", description: "Anchor message id" })
+  @ApiParam({ name: "direction", description: "'up' or 'down'" })
+  @ApiQuery({ name: "page", required: false })
+  @ApiQuery({ name: "limit", required: false })
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async listMessagesFromAnchor(
+    @CurrentUser("_id") selfId: string,
+    @Param("channelId") channelId: string,
+    @Param("messageId") messageId: string,
+    @Param("direction") direction: string,
+    @Query("page") page = "0",
+    @Query("limit") limit = "10",
+    @Headers("x-session-id") sessionId?: string,
+    @Headers("x-fingerprint-hashed") fingerprintHash?: string,
+  ) {
+    const pageNum = Number.parseInt(String(page) || "0", 10) || 0;
+    const limitNum = Number.parseInt(String(limit) || "10", 10) || 10;
+
+    const data = await this.messagingService.listMessagesFromAnchor(
+      selfId,
+      channelId,
+      messageId,
+      direction as "up" | "down",
+      pageNum,
+      limitNum,
+      sessionId,
+      fingerprintHash,
+    );
+
+    return { success: true, statusCode: 200, message: "OK", data };
   }
 
   // Note: server-wide search removed. Use channel-level search `GET /messages/channels/:channelId/search`.

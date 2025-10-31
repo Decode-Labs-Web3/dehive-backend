@@ -4,12 +4,12 @@ import { Model, Types } from "mongoose";
 import {
   DirectMessage,
   DirectMessageDocument,
-} from "../schemas/direct-message.schema";
-import { SearchMessageDto } from "../dto/search-message.dto";
-import { SearchResultResponse } from "../interfaces/search-result.interface";
+} from "../../schemas/direct-message.schema";
+import { SearchMessageDto } from "../../dto/search-message.dto";
+import { SearchResultResponse } from "../../interfaces/search-result.interface";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
-import { UserProfile } from "../interfaces/user-profile.interface";
+import { UserProfile } from "../../interfaces/user-profile.interface";
 
 @Injectable()
 export class SearchService {

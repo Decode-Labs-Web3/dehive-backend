@@ -10,23 +10,23 @@ import { Model, Types } from "mongoose";
 import {
   DirectConversation,
   DirectConversationDocument,
-} from "../schemas/direct-conversation.schema";
+} from "../../schemas/direct-conversation.schema";
 import {
   DirectMessage,
   DirectMessageDocument,
-} from "../schemas/direct-message.schema";
-import { CreateOrGetConversationDto } from "../dto/create-or-get-conversation.dto.ts";
+} from "../../schemas/direct-message.schema";
+import { CreateOrGetConversationDto } from "../../dto/create-or-get-conversation.dto.ts";
 import {
   DirectUploadInitDto,
   DirectUploadResponseDto,
-} from "../dto/direct-upload.dto";
-import { ListDirectMessagesDto } from "../dto/list-direct-messages.dto";
-import { SendDirectMessageDto } from "../dto/send-direct-message.dto";
+} from "../../dto/direct-upload.dto";
+import { ListDirectMessagesDto } from "../../dto/list-direct-messages.dto";
+import { SendDirectMessageDto } from "../../dto/send-direct-message.dto";
 import {
   DirectUpload,
   DirectUploadDocument,
-} from "../schemas/direct-upload.schema";
-import { AttachmentType } from "../enum/enum";
+} from "../../schemas/direct-upload.schema";
+import { AttachmentType } from "../../enum/enum";
 import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
@@ -35,25 +35,25 @@ import * as childProcess from "child_process";
 import ffmpegPath from "ffmpeg-static";
 import ffprobePath from "ffprobe-static";
 import { ConfigService } from "@nestjs/config";
-import { ListDirectUploadsDto } from "../dto/list-direct-upload.dto";
-import { DecodeApiClient } from "../clients/decode-api.client";
-import { GetFollowingDto } from "../dto/get-following.dto";
-import { GetFollowingMessagesDto } from "../dto/get-following-messages.dto";
-import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
+import { ListDirectUploadsDto } from "../../dto/list-direct-upload.dto";
+import { DecodeApiClient } from "../../clients/decode-api.client";
+import { GetFollowingDto } from "../../dto/get-following.dto";
+import { GetFollowingMessagesDto } from "../../dto/get-following-messages.dto";
+import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
-import { SessionCacheDoc } from "../interfaces/session-doc.interface";
-import { UserProfile } from "../interfaces/user-profile.interface";
+import { SessionCacheDoc } from "../../interfaces/session-doc.interface";
+import { UserProfile } from "../../interfaces/user-profile.interface";
 import {
   FollowingMessageUser,
   FollowingMessagesResponse,
-} from "../interfaces/following-message.interface";
-import { ConversationUpdateEvent } from "../interfaces/following-message-event.interface";
+} from "../../interfaces/following-message.interface";
+import { ConversationUpdateEvent } from "../../interfaces/following-message-event.interface";
 import {
   ConversationUser,
   ConversationUsersResponse,
-} from "../interfaces/conversation-user.interface";
-import { GetConversationUsersDto } from "../dto/get-conversation-users.dto";
+} from "../../interfaces/conversation-user.interface";
+import { GetConversationUsersDto } from "../../dto/get-conversation-users.dto";
 
 @Injectable()
 export class DirectMessagingService {

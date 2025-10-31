@@ -11,7 +11,7 @@ import {
 import { Server, Socket } from "socket.io";
 import { Model, Types } from "mongoose";
 import { InjectModel } from "@nestjs/mongoose";
-import { DirectMessagingService } from "../src/direct-messaging.service";
+import { DirectMessagingService } from "../src/services/direct-messaging.service";
 import { SendDirectMessageDto } from "../dto/send-direct-message.dto";
 import {
   UserDehive,

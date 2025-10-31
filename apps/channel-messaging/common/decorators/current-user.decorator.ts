@@ -1,27 +1,14 @@
-import { createParamDecorator, ExecutionContext } from "@nestjs/common";
+import { createParamDecorator, ExecutionContext, Logger } from "@nestjs/common";
 import { AuthenticatedUser } from "../../interfaces/authenticated-user.interface";
 
-/**
- * CurrentUser decorator to extract authenticated user data from the request
- *
- * This decorator extracts the user data that was attached to the request
- * by the AuthGuard after successful authentication.
- *
- * @example
- * ```typescript
- * @Get('profile')
- * @UseGuards(AuthGuard)
- * async getProfile(@CurrentUser() user: AuthenticatedUser) {
- *   return { userId: user.userId, username: user.username };
- * }
- * ```
- */
+const logger = new Logger("CurrentUserDecorator");
+
 export const CurrentUser = createParamDecorator(
   (
     data: keyof AuthenticatedUser | "sessionId" | undefined,
     ctx: ExecutionContext,
   ): AuthenticatedUser | string | null | undefined => {
-    console.log(
+    logger.debug(
       "🎯 [CHANNEL-MESSAGING CURRENT USER] Decorator called with data:",
       data,
     );
@@ -30,11 +17,11 @@ export const CurrentUser = createParamDecorator(
         .switchToHttp()
         .getRequest<{ user: AuthenticatedUser; sessionId?: string }>();
 
-      console.log(
+      logger.debug(
         "🎯 [CHANNEL-MESSAGING CURRENT USER] Request user:",
         request.user,
       );
-      console.log(
+      logger.debug(
         "🎯 [CHANNEL-MESSAGING CURRENT USER] Request sessionId:",
         request.sessionId,
       );
@@ -48,7 +35,7 @@ export const CurrentUser = createParamDecorator(
 
       // If a specific property is requested, return only that property
       if (data && user) {
-        console.log(
+        logger.debug(
           `🎯 [CHANNEL-MESSAGING CURRENT USER] Returning user.${data}:`,
           user[data],
         );
@@ -56,13 +43,13 @@ export const CurrentUser = createParamDecorator(
       }
 
       // Return the entire user object
-      console.log(
+      logger.debug(
         "🎯 [CHANNEL-MESSAGING CURRENT USER] Returning full user:",
         user,
       );
       return user;
     } catch (error) {
-      console.error("❌ [CHANNEL-MESSAGING CURRENT USER] Error:", error);
+      logger.error("❌ [CHANNEL-MESSAGING CURRENT USER] Error:", String(error));
       return undefined;
     }
   },

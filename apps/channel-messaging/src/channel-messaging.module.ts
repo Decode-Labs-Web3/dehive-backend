@@ -5,8 +5,8 @@ import { HttpModule } from "@nestjs/axios";
 import { RedisModule } from "@nestjs-modules/ioredis";
 import { ChatGateway } from "../gateway/chat.gateway";
 import { MessagingController } from "./channel-messaging.controller";
-import { MessagingService } from "./channel-messaging.service";
-import { SearchService } from "./search.service";
+import { MessagingService } from "./services/channel-messaging.service";
+import { SearchService } from "./services/search.service";
 import { AuthServiceClient } from "./auth-service.client";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import {

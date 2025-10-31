@@ -26,8 +26,8 @@ import {
   ApiQuery,
 } from "@nestjs/swagger";
 import { FileInterceptor } from "@nestjs/platform-express";
-import { DirectMessagingService } from "./direct-messaging.service";
-import { SearchService } from "./search.service";
+import { DirectMessagingService } from "./services/direct-messaging.service";
+import { SearchService } from "./services/search.service";
 import { CreateOrGetConversationDto } from "../dto/create-or-get-conversation.dto.ts";
 import {
   DirectUploadInitDto,
@@ -642,7 +642,4 @@ export class DirectMessagingController {
       data,
     };
   }
-
-  // Note: global search across all conversations has been removed.
-  // Use the per-conversation endpoint `GET /dm/conversations/:conversationId/search` instead.
 }

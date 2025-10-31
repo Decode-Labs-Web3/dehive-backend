@@ -1,5 +1,5 @@
 import { NestFactory } from "@nestjs/core";
-import { ValidationPipe } from "@nestjs/common";
+import { ValidationPipe, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import { MessagingModule } from "./channel-messaging.module";
@@ -16,13 +16,12 @@ async function bootstrap() {
   app.enableCors({ origin: "*" });
   app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  const logger = new Logger("ChannelMessagingMain");
   // Temporary request logger to help debug search endpoint issues
   app.use((req, _res, next) => {
     // Log method, path, query and key headers for debugging
-    console.log(
-      `[REQ] ${req.method} ${req.originalUrl} query=${JSON.stringify(
-        req.query,
-      )} headers={x-session-id:${req.headers["x-session-id"]}, x-fingerprint-hash:${req.headers["x-fingerprint-hash"]}, x-fingerprint-hashed:${req.headers["x-fingerprint-hashed"]}}`,
+    logger.debug(
+      `[REQ] ${req.method} ${req.originalUrl} query=${JSON.stringify(req.query)} headers={x-session-id:${req.headers["x-session-id"]}, x-fingerprint-hash:${req.headers["x-fingerprint-hash"]}, x-fingerprint-hashed:${req.headers["x-fingerprint-hashed"]}}`,
     );
     next();
   });
@@ -44,10 +43,10 @@ async function bootstrap() {
   const host = configService.get<string>("CLOUD_HOST") || "localhost";
   await app.listen(port, host);
 
-  console.log(
+  logger.log(
     `[Dehive] Channel-Messaging service is running on: ${await app.getUrl()}`,
   );
-  console.log(
+  logger.log(
     `[Dehive] Swagger UI available at: http://localhost:${port}/api-docs`,
   );
 }

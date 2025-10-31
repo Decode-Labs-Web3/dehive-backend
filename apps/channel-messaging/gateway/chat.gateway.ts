@@ -7,9 +7,10 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from "@nestjs/websockets";
+import { Logger } from "@nestjs/common";
 import { Server as IOServer, Socket } from "socket.io";
 import { CreateMessageDto } from "../dto/create-message.dto";
-import { MessagingService } from "../src/channel-messaging.service";
+import { MessagingService } from "../src/services/channel-messaging.service";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import {
@@ -41,6 +42,8 @@ type SocketMeta = {
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: IOServer;
+
+  private readonly logger = new Logger(ChatGateway.name);
 
   constructor(
     private readonly messagingService: MessagingService,
@@ -135,7 +138,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleConnection(client: Socket) {
-    console.log("[WebSocket] Client connected. Awaiting identity.");
+    this.logger.log("[WebSocket] Client connected. Awaiting identity.");
     this.meta.set(client, {
       currentRooms: new Set<string>(),
       isAuthenticated: false,
@@ -143,7 +146,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: Socket) {
-    console.log("[WebSocket] Client disconnected.");
+    this.logger.log("[WebSocket] Client disconnected.");
     const meta = this.meta.get(client);
     if (meta) {
       // Leave all rooms before disconnecting
@@ -197,7 +200,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         _id: new Types.ObjectId(userDehiveId),
       });
       if (!exists) {
-        console.log(`[WebSocket] UserDehive not found: ${userDehiveId}`);
+        this.logger.warn(`[WebSocket] UserDehive not found: ${userDehiveId}`);
         return this.send(client, "error", {
           message: "UserDehive not found.",
         });
@@ -207,7 +210,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         message: "Database error while checking user existence.",
       });
     }
-    console.log(
+    this.logger.log(
       `[WebSocket] Client is identifying as UserDehive ID: ${userDehiveId}`,
     );
 
@@ -220,9 +223,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         userDehiveId: userDehiveId,
       });
 
-      console.log(`[WebSocket] identityConfirmed sent successfully`);
+      this.logger.log(`[WebSocket] identityConfirmed sent successfully`);
     } catch (error) {
-      console.error(`[WebSocket] Error sending identityConfirmed:`, error);
+      this.logger.error(
+        `[WebSocket] Error sending identityConfirmed: ${String(error)}`,
+      );
     }
   }
 
@@ -261,15 +266,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const { serverId } = parsedData;
 
     // Debug logging
-    console.log("[WebSocket] joinServer raw data:", data);
-    console.log(
+    this.logger.debug("[WebSocket] joinServer raw data:", data);
+    this.logger.debug(
       "[WebSocket] joinServer parsed data:",
       JSON.stringify(parsedData, null, 2),
     );
-    console.log("[WebSocket] Extracted serverId:", serverId);
+    this.logger.debug("[WebSocket] Extracted serverId:", serverId);
 
     if (!serverId || !Types.ObjectId.isValid(serverId)) {
-      console.log("[WebSocket] Validation failed:", {
+      this.logger.warn("[WebSocket] Validation failed:", {
         serverId: { value: serverId, valid: Types.ObjectId.isValid(serverId) },
       });
 
@@ -284,8 +289,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     try {
-      console.log("[WebSocket] Checking user membership...");
-      console.log("[WebSocket] Query params:", {
+      this.logger.debug("[WebSocket] Checking user membership...");
+      this.logger.debug("[WebSocket] Query params:", {
         userDehiveId: meta.userDehiveId,
         serverId: serverId,
       });
@@ -297,7 +302,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
 
       if (!isMember) {
-        console.log("[WebSocket] User is not a member of server:", serverId);
+        this.logger.warn(
+          "[WebSocket] User is not a member of server:",
+          serverId,
+        );
         return this.send(client, "error", {
           message: "Access denied. You are not a member of this server.",
           details: {
@@ -307,19 +315,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
       }
 
-      console.log("[WebSocket] User membership confirmed:", isMember);
+      this.logger.debug("[WebSocket] User membership confirmed:", isMember);
 
       // Verify server exists
       const server = await this.serverModel.findById(serverId);
       if (!server) {
-        console.log("[WebSocket] Server not found:", serverId);
+        this.logger.warn("[WebSocket] Server not found:", serverId);
         return this.send(client, "error", {
           message: "Server not found.",
           details: { serverId },
         });
       }
 
-      console.log("[WebSocket] Server validation passed");
+      this.logger.debug("[WebSocket] Server validation passed");
 
       // Leave previous rooms if any
       if (meta.currentRooms) {
@@ -333,11 +341,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       await client.join(`server:${serverId}`);
       meta.currentRooms?.add(`server:${serverId}`);
 
-      console.log(
+      this.logger.log(
         `[WebSocket] ✅ SUCCESS: User ${meta.userDehiveId} joined server ${serverId}`,
       );
-      console.log(`[WebSocket] ✅ SERVER ID: ${serverId}`);
-      console.log(`[WebSocket] ✅ ROOM JOINED: server:${serverId}`);
+      this.logger.log(`[WebSocket] ✅ SERVER ID: ${serverId}`);
+      this.logger.log(`[WebSocket] ✅ ROOM JOINED: server:${serverId}`);
 
       this.send(client, "joinedServer", {
         serverId,
@@ -345,7 +353,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           "Joined server room successfully. You will receive all messages from all channels in this server.",
       });
     } catch (error) {
-      console.error("[WebSocket] Error handling joinServer:", error);
+      this.logger.error(
+        "[WebSocket] Error handling joinServer:",
+        String(error),
+      );
       this.send(client, "error", {
         message: "Failed to join server.",
         details: error instanceof Error ? error.message : String(error),
@@ -423,11 +434,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         }
       }
 
-      console.log(
+      this.logger.log(
         `[WebSocket] 📨 SEND MESSAGE: User ${meta.userDehiveId} sending to channel ${channelId}`,
       );
-      console.log(`[WebSocket] 📨 MESSAGE CONTENT: "${parsedData.content}"`);
-      console.log(
+      this.logger.log(
+        `[WebSocket] 📨 MESSAGE CONTENT: "${parsedData.content}"`,
+      );
+      this.logger.debug(
         `[WebSocket] 📨 UPLOAD IDS: ${JSON.stringify(parsedData.uploadIds)}`,
       );
 
@@ -447,7 +460,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         updatedAt?: Date;
       };
 
-      console.log(`[WebSocket] ✅ MESSAGE SAVED: ${savedMessage._id}`);
+      this.logger.log(`[WebSocket] ✅ MESSAGE SAVED: ${savedMessage._id}`);
 
       // Get channel to find server_id
       const channel = await this.channelModel.findById(channelId);
@@ -481,17 +494,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         updatedAt: savedMessage.updatedAt,
       });
 
-      console.log(
+      this.logger.log(
         `[WebSocket] 📢 MESSAGE BROADCASTED to server room: server:${serverId}`,
       );
-      console.log(
-        `[WebSocket] 📢 BROADCAST DATA:`,
-        JSON.stringify(messageToBroadcast, null, 2),
+      this.logger.debug(
+        `[WebSocket] 📢 BROADCAST DATA: ${JSON.stringify(messageToBroadcast, null, 2)}`,
       );
 
       this.broadcast(`server:${serverId}`, "newMessage", messageToBroadcast);
     } catch (error: unknown) {
-      console.error("[WebSocket] Error handling message:", error);
+      this.logger.error("[WebSocket] Error handling message:", String(error));
       this.send(client, "error", {
         message: "Failed to send message.",
         details: error instanceof Error ? error.message : String(error),

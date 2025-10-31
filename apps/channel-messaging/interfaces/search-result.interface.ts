@@ -21,11 +21,9 @@ export interface SearchResultItem {
 export interface SearchResultResponse {
   items: SearchResultItem[];
   metadata: {
-    page: number; // Trang hiện tại (0-indexed)
-    limit: number; // Số item mỗi trang
-    total: number; // Tổng số kết quả tìm được
-    totalPages: number; // Tổng số trang
-    hasNextPage: boolean; // Còn trang tiếp theo không
-    hasPrevPage: boolean; // Có trang trước không
+    page: number;
+    limit: number;
+    total: number;
+    is_last_page: boolean;
   };
 }

@@ -4,10 +4,10 @@ import { Model, Types } from "mongoose";
 import {
   ChannelMessage,
   ChannelMessageDocument,
-} from "../schemas/channel-message.schema";
-import { SearchMessageDto } from "../dto/search-message.dto";
-import { SearchResultResponse } from "../interfaces/search-result.interface";
-import { DecodeApiClient } from "../clients/decode-api.client";
+} from "../../schemas/channel-message.schema";
+import { SearchMessageDto } from "../../dto/search-message.dto";
+import { SearchResultResponse } from "../../interfaces/search-result.interface";
+import { DecodeApiClient } from "../../clients/decode-api.client";
 
 @Injectable()
 export class SearchService {
@@ -160,9 +160,9 @@ export class SearchService {
         .exec()) as unknown as SearchMessageRow[];
     } catch (_err) {
       // Log and fallback: regex search on content (case-insensitive)
-      console.warn(
+      this.logger.warn(
         "[CHANNEL-MESSAGING-SEARCH] Atlas $search failed, falling back to regex",
-        _err,
+        String(_err),
       );
       const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const regex = new RegExp(escaped, "i");
@@ -187,8 +187,6 @@ export class SearchService {
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(totalResults / limit);
-    const hasNextPage = page < totalPages - 1;
-    const hasPrevPage = page > 0;
 
     if (!messages || messages.length === 0) {
       return {
@@ -197,9 +195,7 @@ export class SearchService {
           page,
           limit,
           total: totalResults,
-          totalPages,
-          hasNextPage,
-          hasPrevPage,
+          is_last_page: page >= totalPages - 1,
         },
       };
     }
@@ -209,7 +205,9 @@ export class SearchService {
       .map((m) => (m.senderId ? String(m.senderId) : undefined))
       .filter((id): id is string => Boolean(id));
 
-    console.log("[CHANNEL-MESSAGING-SEARCH] Fetching profiles for:", userIds);
+    this.logger.log(
+      `[CHANNEL-MESSAGING-SEARCH] Fetching profiles for: ${JSON.stringify(userIds)}`,
+    );
 
     const profiles = await this.decodeClient.batchGetProfiles(
       userIds,
@@ -246,9 +244,7 @@ export class SearchService {
         page,
         limit,
         total: totalResults,
-        totalPages,
-        hasNextPage,
-        hasPrevPage,
+        is_last_page: page >= totalPages - 1,
       },
     };
   }
