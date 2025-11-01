@@ -5,7 +5,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUrl,
   Min,
 } from "class-validator";
 import { AttachmentType } from "../enum/enum";
@@ -15,9 +14,10 @@ export class AttachmentDto {
   @IsEnum(AttachmentType)
   type: AttachmentType;
 
-  @ApiProperty({ description: "Public URL to access the file" })
-  @IsUrl()
-  url: string;
+  @ApiPropertyOptional({ description: "IPFS hash (CID) of the file" })
+  @IsOptional()
+  @IsString()
+  ipfsHash?: string;
 
   @ApiProperty({ description: "Original file name" })
   @IsString()
@@ -53,9 +53,4 @@ export class AttachmentDto {
   @IsInt()
   @Min(0)
   durationMs?: number;
-
-  @ApiPropertyOptional({ description: "Thumbnail/preview URL (image/video)" })
-  @IsOptional()
-  @IsString()
-  thumbnailUrl?: string;
 }

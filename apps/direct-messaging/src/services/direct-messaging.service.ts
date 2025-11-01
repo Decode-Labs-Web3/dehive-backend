@@ -30,10 +30,10 @@ import { AttachmentType } from "../../enum/enum";
 import * as fs from "fs";
 import * as path from "path";
 import { randomUUID } from "crypto";
-import sharp from "sharp";
+import * as sharp from "sharp";
 import * as childProcess from "child_process";
-import ffmpegPath from "ffmpeg-static";
-import ffprobePath from "ffprobe-static";
+import * as ffmpegPath from "ffmpeg-static";
+import * as ffprobePath from "ffprobe-static";
 import { ConfigService } from "@nestjs/config";
 import { ListDirectUploadsDto } from "../../dto/list-direct-upload.dto";
 import { DecodeApiClient } from "../../clients/decode-api.client";
@@ -54,6 +54,7 @@ import {
   ConversationUsersResponse,
 } from "../../interfaces/conversation-user.interface";
 import { GetConversationUsersDto } from "../../dto/get-conversation-users.dto";
+import { IPFSService } from "./ipfs.service";
 
 @Injectable()
 export class DirectMessagingService {
@@ -68,6 +69,7 @@ export class DirectMessagingService {
     private readonly directuploadModel: Model<DirectUploadDocument>,
     private readonly configService: ConfigService,
     private readonly decodeApiClient: DecodeApiClient,
+    private readonly ipfsService: IPFSService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -266,19 +268,35 @@ export class DirectMessagingService {
     const storage = (
       this.configService.get<string>("STORAGE") || "local"
     ).toLowerCase();
-    const port =
-      this.configService.get<number>("DIRECT_MESSAGING_PORT") || 4004;
-    const cdnBase =
-      this.configService.get<string>("CDN_BASE_URL_DM") ||
-      `http://localhost:${port}/uploads`;
 
-    let fileUrl = "";
+    let ipfsHash: string | undefined;
     const originalName = uploaded.originalname || "upload.bin";
     const ext = path.extname(originalName) || "";
     const safeName = `${randomUUID()}${ext}`;
     const uploadDir = path.resolve(process.cwd(), "uploads");
 
-    if (storage === "local") {
+    if (storage === "ipfs") {
+      // Upload to IPFS
+      this.logger.log(`Uploading file to IPFS: ${originalName}`);
+      const buffer: Buffer = Buffer.isBuffer(uploaded.buffer)
+        ? uploaded.buffer
+        : Buffer.from("");
+
+      const ipfsResult = await this.ipfsService.uploadFile(buffer, safeName);
+
+      if (!ipfsResult) {
+        this.logger.warn("IPFS upload failed, falling back to local storage");
+        // Fallback to local storage
+        if (!fs.existsSync(uploadDir))
+          fs.mkdirSync(uploadDir, { recursive: true });
+        const dest = path.join(uploadDir, safeName);
+        fs.writeFileSync(dest, buffer);
+      } else {
+        ipfsHash = `ipfs://${ipfsResult.hash}`;
+        this.logger.log(`File uploaded to IPFS: ${ipfsHash}`);
+      }
+    } else {
+      // Local storage
       if (!fs.existsSync(uploadDir))
         fs.mkdirSync(uploadDir, { recursive: true });
       const dest = path.join(uploadDir, safeName);
@@ -286,16 +304,12 @@ export class DirectMessagingService {
         ? uploaded.buffer
         : Buffer.from("");
       fs.writeFileSync(dest, buffer);
-      fileUrl = `${cdnBase.replace(/\/$/, "")}/${safeName}`;
-    } else {
-      throw new BadRequestException("S3/MinIO storage is not implemented yet");
     }
 
     const type = this.detectAttachmentType(mime);
     let width: number | undefined,
       height: number | undefined,
-      durationMs: number | undefined,
-      thumbnailUrl: string | undefined;
+      durationMs: number | undefined;
 
     try {
       if (type === AttachmentType.IMAGE) {
@@ -371,8 +385,8 @@ export class DirectMessagingService {
           if (type === AttachmentType.VIDEO) {
             const thumbName = `${path.parse(safeName).name}_thumb.jpg`;
             const thumbPath = path.join(uploadDir, thumbName);
-            const ffmpegBin = ffmpegPath || "ffmpeg";
-            const ffmpeg = childProcess.spawnSync(
+            const ffmpegBin = (ffmpegPath as unknown as string) || "ffmpeg";
+            childProcess.spawnSync(
               ffmpegBin,
               [
                 "-i",
@@ -388,9 +402,7 @@ export class DirectMessagingService {
               ],
               { encoding: "utf-8" },
             );
-            if (ffmpeg.status === 0) {
-              thumbnailUrl = `${cdnBase.replace(/\/$/, "")}/${thumbName}`;
-            }
+            // Thumbnail generated locally but URL not stored
           }
         }
       }
@@ -405,27 +417,25 @@ export class DirectMessagingService {
       ownerId: new Types.ObjectId(selfId),
       conversationId: new Types.ObjectId(body.conversationId),
       type,
-      url: fileUrl,
+      ipfsHash,
       name: originalName,
       size,
       mimeType: mime,
       width,
       height,
       durationMs,
-      thumbnailUrl,
     });
 
     return {
       uploadId: (doc._id as Types.ObjectId).toString(),
       type: doc.type as AttachmentType,
-      url: doc.url,
+      ipfsHash: doc.ipfsHash,
       name: doc.name,
       size: doc.size,
       mimeType: doc.mimeType,
       width: doc.width,
       height: doc.height,
       durationMs: doc.durationMs,
-      thumbnailUrl: doc.thumbnailUrl,
     };
   }
 
@@ -447,14 +457,13 @@ export class DirectMessagingService {
 
     let attachments: Array<{
       type: AttachmentType;
-      url: string;
+      ipfsHash?: string;
       name: string;
       size: number;
       mimeType: string;
       width?: number;
       height?: number;
       durationMs?: number;
-      thumbnailUrl?: string;
     }> = [];
     if (Array.isArray(dto.uploadIds) && dto.uploadIds.length > 0) {
       const ids = dto.uploadIds.map((id) => new Types.ObjectId(id));
@@ -466,14 +475,13 @@ export class DirectMessagingService {
       }
       attachments = uploads.map((u) => ({
         type: u.type as unknown as AttachmentType,
-        url: u.url,
+        ipfsHash: u.ipfsHash,
         name: u.name,
         size: u.size,
         mimeType: u.mimeType,
         width: u.width,
         height: u.height,
         durationMs: u.durationMs,
-        thumbnailUrl: u.thumbnailUrl,
       }));
     }
 

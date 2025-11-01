@@ -26,6 +26,7 @@ import {
   UserDehiveServerSchema,
 } from "../../user-dehive-server/schemas/user-dehive-server.schema";
 import { AuthGuard } from "../common/guards/auth.guard";
+import { IPFSService } from "./services/ipfs.service";
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { AuthGuard } from "../common/guards/auth.guard";
     AuthGuard,
     AuthServiceClient,
     DecodeApiClient,
+    IPFSService,
   ],
 })
 export class MessagingModule {}

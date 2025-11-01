@@ -5,7 +5,6 @@ import {
   IsMongoId,
   IsOptional,
   IsString,
-  IsUrl,
   Min,
 } from "class-validator";
 import { AttachmentType } from "../enum/enum";
@@ -35,12 +34,13 @@ export class DirectUploadResponseDto {
   @IsEnum(AttachmentType)
   type: AttachmentType;
 
-  @ApiProperty({
-    description: "The public URL to access the uploaded file.",
-    example: "http://localhost:4004/uploads/uuid-filename.jpg",
+  @ApiPropertyOptional({
+    description: "The IPFS hash (CID) if file was uploaded to IPFS.",
+    example: "ipfs://QmT5NvUtoM5nWFfrQdVrFtvGfKFmre5YEoWyv...",
   })
-  @IsUrl()
-  url: string;
+  @IsOptional()
+  @IsString()
+  ipfsHash?: string;
 
   @ApiProperty({
     description: "The original name of the file.",
@@ -90,12 +90,4 @@ export class DirectUploadResponseDto {
   @IsInt()
   @Min(1)
   durationMs?: number;
-
-  @ApiPropertyOptional({
-    description: "The public URL to a thumbnail generated for a video.",
-    example: "http://localhost:4004/uploads/uuid-filename_thumb.jpg",
-  })
-  @IsOptional()
-  @IsUrl()
-  thumbnailUrl?: string;
 }

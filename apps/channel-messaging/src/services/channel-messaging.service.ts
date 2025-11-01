@@ -25,10 +25,10 @@ import { GetMessagesDto } from "../../dto/get-messages.dto";
 import { Upload, UploadDocument } from "../../schemas/upload.schema";
 import { UploadInitDto, UploadResponseDto } from "../../dto/channel-upload.dto";
 import { AttachmentType } from "../../enum/enum";
-import sharp from "sharp";
+import * as sharp from "sharp";
 import * as childProcess from "child_process";
-import ffmpegPath from "ffmpeg-static";
-import ffprobePath from "ffprobe-static";
+import * as ffmpegPath from "ffmpeg-static";
+import * as ffprobePath from "ffprobe-static";
 import {
   UserDehiveServer,
   UserDehiveServerDocument,
@@ -41,6 +41,7 @@ import {
   Channel,
   ChannelDocument,
 } from "../../../server/schemas/channel.schema";
+import { IPFSService } from "./ipfs.service";
 
 @Injectable()
 export class MessagingService {
@@ -59,6 +60,7 @@ export class MessagingService {
     private readonly configService: ConfigService,
     private readonly authClient: AuthServiceClient,
     private readonly decodeClient: DecodeApiClient,
+    private readonly ipfsService: IPFSService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -158,17 +160,35 @@ export class MessagingService {
     const storage = (
       this.configService.get<string>("STORAGE") || "local"
     ).toLowerCase();
-    const cdnBase =
-      this.configService.get<string>("CDN_BASE_URL") ||
-      "http://localhost:4003/uploads";
 
-    let fileUrl = "";
+    let ipfsHash: string | undefined;
     const originalName: string = uploaded.originalname || "upload.bin";
     const ext = path.extname(originalName) || "";
     const safeName = `${randomUUID()}${ext}`;
+    const uploadDir = path.resolve(process.cwd(), "uploads");
 
-    if (storage === "local") {
-      const uploadDir = path.resolve(process.cwd(), "uploads");
+    if (storage === "ipfs") {
+      // Upload to IPFS
+      this.logger.log(`Uploading file to IPFS: ${originalName}`);
+      const buffer: Buffer = Buffer.isBuffer(uploaded.buffer)
+        ? uploaded.buffer
+        : Buffer.from("");
+
+      const ipfsResult = await this.ipfsService.uploadFile(buffer, safeName);
+
+      if (!ipfsResult) {
+        this.logger.warn("IPFS upload failed, falling back to local storage");
+        // Fallback to local storage
+        if (!fs.existsSync(uploadDir))
+          fs.mkdirSync(uploadDir, { recursive: true });
+        const dest = path.join(uploadDir, safeName);
+        fs.writeFileSync(dest, buffer);
+      } else {
+        ipfsHash = `ipfs://${ipfsResult.hash}`;
+        this.logger.log(`File uploaded to IPFS: ${ipfsHash}`);
+      }
+    } else {
+      // Local storage
       if (!fs.existsSync(uploadDir))
         fs.mkdirSync(uploadDir, { recursive: true });
       const dest = path.join(uploadDir, safeName);
@@ -176,17 +196,12 @@ export class MessagingService {
         ? uploaded.buffer
         : Buffer.from("");
       fs.writeFileSync(dest, buffer);
-      fileUrl = `${cdnBase.replace(/\/$/, "")}/${safeName}`;
-    } else {
-      throw new BadRequestException("S3/MinIO not implemented yet");
     }
 
     const type = this.detectAttachmentType(mime);
-
-    let width: number | undefined;
-    let height: number | undefined;
-    let durationMs: number | undefined;
-    let thumbnailUrl: string | undefined;
+    let width: number | undefined,
+      height: number | undefined,
+      durationMs: number | undefined;
 
     try {
       if (type === AttachmentType.IMAGE) {
@@ -244,7 +259,7 @@ export class MessagingService {
             const thumbName = `${safeName.replace(ext, "")}_thumb.jpg`;
             const thumbPath = path.resolve(process.cwd(), "uploads", thumbName);
             const ffmpegBin = (ffmpegPath as unknown as string) || "ffmpeg";
-            const ffmpeg = childProcess.spawnSync(
+            childProcess.spawnSync(
               ffmpegBin,
               [
                 "-i",
@@ -260,9 +275,7 @@ export class MessagingService {
               ],
               { encoding: "utf-8" },
             );
-            if (ffmpeg.status === 0) {
-              thumbnailUrl = `${cdnBase.replace(/\/$/, "")}/${thumbName}`;
-            }
+            // Thumbnail generated locally but URL not stored
           }
         }
       }
@@ -278,27 +291,25 @@ export class MessagingService {
       serverId: body.serverId ? new Types.ObjectId(body.serverId) : undefined,
       channelId: new Types.ObjectId(body.channelId),
       type,
-      url: fileUrl,
+      ipfsHash,
       name: originalName,
       size,
       mimeType: mime,
       width,
       height,
       durationMs,
-      thumbnailUrl,
     });
 
     return {
       uploadId: String(doc._id),
       type,
-      url: doc.url,
+      ipfsHash: doc.ipfsHash,
       name: doc.name,
       size: doc.size,
       mimeType: doc.mimeType,
       width: doc.width,
       height: doc.height,
       durationMs: doc.durationMs,
-      thumbnailUrl: doc.thumbnailUrl,
     };
   }
 
@@ -332,14 +343,13 @@ export class MessagingService {
       }
       attachments = uploads.map((u) => ({
         type: u.type as unknown as AttachmentDto["type"],
-        url: u.url,
+        ipfsHash: u.ipfsHash,
         name: u.name,
         size: u.size,
         mimeType: u.mimeType,
         width: u.width,
         height: u.height,
         durationMs: u.durationMs,
-        thumbnailUrl: u.thumbnailUrl,
       }));
     }
 
@@ -877,14 +887,13 @@ export class MessagingService {
         ownerId: u.ownerId,
         serverId: u.serverId,
         type: u.type,
-        url: u.url,
+        ipfsHash: u.ipfsHash,
         name: u.name,
         size: u.size,
         mimeType: u.mimeType,
         width: u.width,
         height: u.height,
         durationMs: u.durationMs,
-        thumbnailUrl: u.thumbnailUrl,
         createdAt: (u as unknown as { createdAt?: Date })?.createdAt,
       })),
       metadata: {

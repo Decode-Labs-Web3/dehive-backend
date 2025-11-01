@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsInt, IsMongoId, IsOptional, IsUrl, Min } from "class-validator";
+import { IsInt, IsMongoId, IsOptional, IsString, Min } from "class-validator";
 import { AttachmentType } from "../enum/enum";
 
 export class UploadInitDto {
@@ -24,9 +24,13 @@ export class UploadResponseDto {
   @ApiProperty({ enum: AttachmentType })
   type: AttachmentType;
 
-  @ApiProperty()
-  @IsUrl()
-  url: string;
+  @ApiPropertyOptional({
+    description: "The IPFS hash (CID) if file was uploaded to IPFS.",
+    example: "ipfs://QmT5NvUtoM5nWFfrQdVrFtvGfKFmre5YEoWyv...",
+  })
+  @IsOptional()
+  @IsString()
+  ipfsHash?: string;
 
   @ApiProperty()
   name: string;
@@ -50,7 +54,4 @@ export class UploadResponseDto {
 
   @ApiPropertyOptional()
   durationMs?: number;
-
-  @ApiPropertyOptional()
-  thumbnailUrl?: string;
 }

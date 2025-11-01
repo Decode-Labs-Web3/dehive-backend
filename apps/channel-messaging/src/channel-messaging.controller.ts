@@ -52,6 +52,11 @@ export class MessagingController {
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Fingerprint hash of the user",
+    required: true,
+  })
   @ApiBody({ type: CreateMessageDto })
   @ApiResponse({ status: 201, description: "Message sent successfully." })
   @ApiResponse({ status: 400, description: "Invalid input or missing fields." })
@@ -84,6 +89,11 @@ export class MessagingController {
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Fingerprint hash of the user",
+    required: true,
+  })
   @ApiParam({
     name: "channelId",
     description: "The ID of the channel to retrieve messages from",
@@ -113,6 +123,11 @@ export class MessagingController {
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Fingerprint hash of the user",
     required: true,
   })
   @ApiConsumes("multipart/form-data")
@@ -162,6 +177,11 @@ export class MessagingController {
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Fingerprint hash of the user",
+    required: true,
+  })
   @ApiResponse({ status: 200, description: "Returns paginated uploads." })
   @ApiResponse({ status: 400, description: "Invalid query or header." })
   @ApiResponse({ status: 403, description: "Not allowed." })
@@ -189,12 +209,12 @@ export class MessagingController {
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
-    required: false,
+    required: true,
   })
   @ApiHeader({
     name: "x-fingerprint-hashed",
-    description: "Fingerprint hash of the user (header name used by guard)",
-    required: false,
+    description: "Fingerprint hash of the user",
+    required: true,
   })
   @ApiParam({
     name: "channelId",
@@ -251,8 +271,16 @@ export class MessagingController {
   @ApiOperation({
     summary: "List messages around an anchor message in a channel",
   })
-  @ApiHeader({ name: "x-session-id", required: false })
-  @ApiHeader({ name: "x-fingerprint-hashed", required: false })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Fingerprint hash of the user",
+    required: true,
+  })
   @ApiParam({ name: "channelId" })
   @ApiParam({ name: "messageId", description: "Anchor message id" })
   @ApiParam({ name: "direction", description: "'up' or 'down'" })

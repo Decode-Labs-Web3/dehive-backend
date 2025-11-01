@@ -20,8 +20,8 @@ export class Upload {
   @Prop({ required: true })
   type: string; // image|video|audio|file
 
-  @Prop({ required: true })
-  url: string;
+  @Prop({ required: false })
+  ipfsHash?: string;
 
   @Prop({ required: true })
   name: string;
@@ -40,9 +40,6 @@ export class Upload {
 
   @Prop({ required: false })
   durationMs?: number;
-
-  @Prop({ required: false })
-  thumbnailUrl?: string;
 }
 
 export type UploadDocument = Upload & Document;
