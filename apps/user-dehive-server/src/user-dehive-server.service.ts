@@ -63,7 +63,7 @@ export class UserDehiveServerService {
   async joinServer(
     dto: JoinServerDto,
     userId: string,
-  ): Promise<{ server_id?: string; server_name?: string }> {
+  ): Promise<{ server_id: string; server_name: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
     const userDehiveId = userId;
@@ -120,7 +120,11 @@ export class UserDehiveServerService {
 
       await this.invalidateMemberListCache(dto.server_id);
 
-      return {};
+      // ✅ Return server info for consistent response structure
+      return {
+        server_id: dto.server_id,
+        server_name: server.name,
+      };
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       await session.abortTransaction();
@@ -224,7 +228,7 @@ export class UserDehiveServerService {
   async useInvite(
     code: string,
     actorBaseId: string,
-  ): Promise<{ server_id?: string }> {
+  ): Promise<{ server_id: string; server_name: string }> {
     const invite = await this.inviteLinkModel.findOne({ code });
     if (!invite || invite.expiredAt < new Date())
       throw new NotFoundException("Invite link is invalid or has expired.");

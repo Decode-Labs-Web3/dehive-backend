@@ -5,9 +5,9 @@ import { firstValueFrom } from "rxjs";
 import * as FormData from "form-data";
 
 export interface IPFSUploadResult {
-  hash: string; // IPFS CID (e.g., "QmT5Nv...")
-  url: string; // Full IPFS URL (e.g., "ipfs://QmT5Nv...")
-  gatewayUrl: string; // HTTP gateway URL for browsers
+  hash: string;
+  url: string;
+  gatewayUrl: string;
 }
 
 @Injectable()
