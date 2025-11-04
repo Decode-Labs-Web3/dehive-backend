@@ -5,6 +5,7 @@ import { HttpModule } from "@nestjs/axios";
 import { RedisModule } from "@nestjs-modules/ioredis";
 import { DirectMessagingController } from "./direct-messaging.controller";
 import { DirectMessagingService } from "./services/direct-messaging.service";
+import { DirectMessagingCacheService } from "./services/redis-cache.service";
 import { SearchService } from "./services/search.service";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import {
@@ -60,6 +61,7 @@ import { IPFSService } from "./services/ipfs.service";
   controllers: [DirectMessagingController],
   providers: [
     DirectMessagingService,
+    DirectMessagingCacheService,
     SearchService,
     DmGateway,
     AuthGuard,

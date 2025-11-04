@@ -6,6 +6,7 @@ import { RedisModule } from "@nestjs-modules/ioredis";
 import { ChatGateway } from "../gateway/chat.gateway";
 import { MessagingController } from "./channel-messaging.controller";
 import { MessagingService } from "./services/channel-messaging.service";
+import { ChannelMessagingCacheService } from "./services/redis-cache.service";
 import { SearchService } from "./services/search.service";
 import { AuthServiceClient } from "./auth-service.client";
 import { DecodeApiClient } from "../clients/decode-api.client";
@@ -69,6 +70,7 @@ import { IPFSService } from "./services/ipfs.service";
   controllers: [MessagingController],
   providers: [
     MessagingService,
+    ChannelMessagingCacheService,
     SearchService,
     ChatGateway,
     AuthGuard,

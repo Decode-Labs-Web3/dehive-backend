@@ -55,6 +55,7 @@ import {
 } from "../../interfaces/conversation-user.interface";
 import { GetConversationUsersDto } from "../../dto/get-conversation-users.dto";
 import { IPFSService } from "./ipfs.service";
+import { DirectMessagingCacheService } from "./redis-cache.service";
 
 @Injectable()
 export class DirectMessagingService {
@@ -70,6 +71,7 @@ export class DirectMessagingService {
     private readonly configService: ConfigService,
     private readonly decodeApiClient: DecodeApiClient,
     private readonly ipfsService: IPFSService,
+    private readonly cacheService: DirectMessagingCacheService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -517,6 +519,15 @@ export class DirectMessagingService {
       replyTo: replyToMessageId || null,
     });
 
+    // Invalidate cache for page 0 (first page where new message appears)
+    await this.cacheService
+      .invalidateConversationPageCache(dto.conversationId, 0)
+      .catch((err) =>
+        this.logger.error(
+          `Failed to invalidate cache after sending message: ${err.message}`,
+        ),
+      );
+
     // Populate the replyTo field to match the format returned by listMessages
     const populatedMessage = await this.messageModel
       .findById(message._id)
@@ -553,6 +564,155 @@ export class DirectMessagingService {
 
     const page = dto.page || 0;
     const limit = dto.limit || 10;
+
+    this.logger.log(
+      `📥 [CACHE] Request messages: conversation=${conversationId}, page=${page}, limit=${limit}`,
+    );
+
+    try {
+      // 1. Try to get from cache (with stale-while-revalidate)
+      const cachedResult = await this.cacheService.getCachedMessages(
+        conversationId,
+        page,
+      );
+
+      if (cachedResult) {
+        if (cachedResult.isStale) {
+          // Return stale data immediately + refresh in background
+          this.refreshMessagesInBackground(
+            conversationId,
+            page,
+            limit,
+            sessionId,
+            fingerprintHash,
+          ).catch((err) =>
+            this.logger.error(
+              `Failed to refresh messages cache in background: ${err.message}`,
+            ),
+          );
+
+          return cachedResult.data;
+        }
+
+        // Fresh cache - return immediately
+        this.logger.log(
+          `✅ Returning fresh cached messages for conversation ${conversationId} page ${page}`,
+        );
+        return cachedResult.data;
+      }
+
+      // 2. Cache MISS → Try to acquire lock
+      const lockAcquired = await this.cacheService.acquireLock(
+        conversationId,
+        page,
+      );
+
+      if (lockAcquired) {
+        try {
+          // Double-check cache (maybe another request just cached it)
+          const doubleCheck = await this.cacheService.getCachedMessages(
+            conversationId,
+            page,
+          );
+          if (doubleCheck && !doubleCheck.isStale) {
+            return doubleCheck.data;
+          }
+
+          // Fetch from DB and cache
+          const result = await this.fetchAndCacheMessages(
+            conversationId,
+            page,
+            limit,
+            sessionId,
+            fingerprintHash,
+          );
+          return result;
+        } finally {
+          // Always release lock
+          await this.cacheService.releaseLock(conversationId, page);
+        }
+      } else {
+        // Lock is held by another request → Wait for cache
+        const waitedCache = await this.cacheService.waitForCache(
+          conversationId,
+          page,
+        );
+
+        if (waitedCache) {
+          return waitedCache;
+        }
+
+        // Timeout waiting → Fetch directly (fallback)
+        this.logger.warn(
+          `Timeout waiting for cache, fetching directly: conversation ${conversationId} page ${page}`,
+        );
+        const result = await this.fetchAndCacheMessages(
+          conversationId,
+          page,
+          limit,
+          sessionId,
+          fingerprintHash,
+        );
+        return result;
+      }
+    } catch (error) {
+      // Redis error → Fallback to MongoDB
+      this.logger.error(`Cache error, falling back to DB: ${error.message}`);
+      return this.fetchMessagesFromDB(
+        conversationId,
+        page,
+        limit,
+        sessionId,
+        fingerprintHash,
+      );
+    }
+  }
+
+  /**
+   * Fetch messages from MongoDB and cache the result
+   */
+  private async fetchAndCacheMessages(
+    conversationId: string,
+    page: number,
+    limit: number,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ) {
+    this.logger.log(
+      `🔄 [CACHE] Fetching from MongoDB and caching: conversation=${conversationId}, page=${page}`,
+    );
+
+    const result = await this.fetchMessagesFromDB(
+      conversationId,
+      page,
+      limit,
+      sessionId,
+      fingerprintHash,
+    );
+
+    // Cache result (fire and forget - don't wait)
+    this.cacheService
+      .setCachedMessages(conversationId, page, {
+        items: result.items,
+        metadata: result.metadata,
+      })
+      .catch((err) =>
+        this.logger.error(`Failed to cache messages: ${err.message}`),
+      );
+
+    return result;
+  }
+
+  /**
+   * Fetch messages from DB without caching (core logic)
+   */
+  private async fetchMessagesFromDB(
+    conversationId: string,
+    page: number,
+    limit: number,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ) {
     const skip = page * limit;
     const [items, total] = await Promise.all([
       this.messageModel
@@ -625,6 +785,28 @@ export class DirectMessagingService {
         is_last_page: page >= totalPages - 1,
       },
     };
+  }
+
+  /**
+   * Refresh cache in background (non-blocking)
+   */
+  private async refreshMessagesInBackground(
+    conversationId: string,
+    page: number,
+    limit: number,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<void> {
+    this.logger.log(
+      `🔄 Refreshing messages cache in background: conversation ${conversationId} page ${page}`,
+    );
+    await this.fetchAndCacheMessages(
+      conversationId,
+      page,
+      limit,
+      sessionId,
+      fingerprintHash,
+    );
   }
 
   /**
@@ -852,6 +1034,16 @@ export class DirectMessagingService {
     message.isEdited = true;
     message.editedAt = new Date();
     await message.save();
+
+    // Invalidate all pages cache for this conversation
+    await this.cacheService
+      .invalidateConversationCache(String(message.conversationId))
+      .catch((err) =>
+        this.logger.error(
+          `Failed to invalidate cache after editing message: ${err.message}`,
+        ),
+      );
+
     return message.toJSON();
   }
 
@@ -871,6 +1063,16 @@ export class DirectMessagingService {
     message.content = "[deleted]";
     (message as unknown as { attachments?: unknown[] }).attachments = [];
     await message.save();
+
+    // Invalidate all pages cache for this conversation
+    await this.cacheService
+      .invalidateConversationCache(String(message.conversationId))
+      .catch((err) =>
+        this.logger.error(
+          `Failed to invalidate cache after deleting message: ${err.message}`,
+        ),
+      );
+
     return message.toJSON();
   }
 

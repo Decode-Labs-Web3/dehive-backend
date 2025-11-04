@@ -42,6 +42,7 @@ import {
   ChannelDocument,
 } from "../../../server/schemas/channel.schema";
 import { IPFSService } from "./ipfs.service";
+import { ChannelMessagingCacheService } from "./redis-cache.service";
 
 @Injectable()
 export class MessagingService {
@@ -61,6 +62,7 @@ export class MessagingService {
     private readonly authClient: AuthServiceClient,
     private readonly decodeClient: DecodeApiClient,
     private readonly ipfsService: IPFSService,
+    private readonly cacheService: ChannelMessagingCacheService,
     @InjectRedis() private readonly redis: Redis,
   ) {}
 
@@ -395,6 +397,15 @@ export class MessagingService {
 
     const savedMessage = await newMessage.save();
 
+    // Invalidate cache for page 0 (first page where new message appears)
+    await this.cacheService
+      .invalidateChannelPageCache(createMessageDto.channelId, 0)
+      .catch((err) =>
+        this.logger.error(
+          `Failed to invalidate cache after creating message: ${err.message}`,
+        ),
+      );
+
     // Populate the replyTo field to match the format returned by getMessagesByChannelId
     const populatedMessage = await this.channelMessageModel
       .findById(savedMessage._id)
@@ -425,11 +436,157 @@ export class MessagingService {
     };
   }> {
     const { page = 0, limit = 10 } = getMessagesDto;
-    const skip = page * limit;
 
     if (!Types.ObjectId.isValid(channelId)) {
       throw new BadRequestException("Invalid channelId");
     }
+
+    this.logger.log(
+      `📥 [CACHE] Request channel messages: channel=${channelId}, page=${page}, limit=${limit}`,
+    );
+
+    try {
+      // 1. Try to get from cache (with stale-while-revalidate)
+      const cachedResult = await this.cacheService.getCachedMessages(
+        channelId,
+        page,
+      );
+
+      if (cachedResult) {
+        if (cachedResult.isStale) {
+          // Return stale data immediately + refresh in background
+          this.refreshMessagesInBackground(
+            channelId,
+            page,
+            limit,
+            sessionId,
+            fingerprintHash,
+          ).catch((err) =>
+            this.logger.error(
+              `Failed to refresh channel messages cache in background: ${err.message}`,
+            ),
+          );
+
+          return cachedResult.data;
+        }
+
+        // Fresh cache - return immediately
+        this.logger.log(
+          `✅ Returning fresh cached messages for channel ${channelId} page ${page}`,
+        );
+        return cachedResult.data;
+      }
+
+      // 2. Cache MISS → Try to acquire lock
+      const lockAcquired = await this.cacheService.acquireLock(channelId, page);
+
+      if (lockAcquired) {
+        try {
+          // Double-check cache (maybe another request just cached it)
+          const doubleCheck = await this.cacheService.getCachedMessages(
+            channelId,
+            page,
+          );
+          if (doubleCheck && !doubleCheck.isStale) {
+            return doubleCheck.data;
+          }
+
+          // Fetch from DB and cache
+          const result = await this.fetchAndCacheMessages(
+            channelId,
+            page,
+            limit,
+            sessionId,
+            fingerprintHash,
+          );
+          return result;
+        } finally {
+          // Always release lock
+          await this.cacheService.releaseLock(channelId, page);
+        }
+      } else {
+        // Lock is held by another request → Wait for cache
+        const waitedCache = await this.cacheService.waitForCache(
+          channelId,
+          page,
+        );
+
+        if (waitedCache) {
+          return waitedCache;
+        }
+
+        // Timeout waiting → Fetch directly (fallback)
+        this.logger.warn(
+          `Timeout waiting for cache, fetching directly: channel ${channelId} page ${page}`,
+        );
+        const result = await this.fetchAndCacheMessages(
+          channelId,
+          page,
+          limit,
+          sessionId,
+          fingerprintHash,
+        );
+        return result;
+      }
+    } catch (error) {
+      // Redis error → Fallback to MongoDB
+      this.logger.error(`Cache error, falling back to DB: ${error.message}`);
+      return this.fetchMessagesFromDB(
+        channelId,
+        page,
+        limit,
+        sessionId,
+        fingerprintHash,
+      );
+    }
+  }
+
+  /**
+   * Fetch messages from MongoDB and cache the result
+   */
+  private async fetchAndCacheMessages(
+    channelId: string,
+    page: number,
+    limit: number,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ) {
+    this.logger.log(
+      `🔄 [CACHE] Fetching from MongoDB and caching: channel=${channelId}, page=${page}`,
+    );
+
+    const result = await this.fetchMessagesFromDB(
+      channelId,
+      page,
+      limit,
+      sessionId,
+      fingerprintHash,
+    );
+
+    // Cache result (fire and forget - don't wait)
+    this.cacheService
+      .setCachedMessages(channelId, page, {
+        items: result.items,
+        metadata: result.metadata,
+      })
+      .catch((err) =>
+        this.logger.error(`Failed to cache channel messages: ${err.message}`),
+      );
+
+    return result;
+  }
+
+  /**
+   * Fetch messages from DB without caching (core logic)
+   */
+  private async fetchMessagesFromDB(
+    channelId: string,
+    page: number,
+    limit: number,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ) {
+    const skip = page * limit;
 
     // 1. Get messages with UserDehive populated and replyTo populated
     const [messages, total] = await Promise.all([
@@ -550,6 +707,28 @@ export class MessagingService {
     };
   }
 
+  /**
+   * Refresh cache in background (non-blocking)
+   */
+  private async refreshMessagesInBackground(
+    channelId: string,
+    page: number,
+    limit: number,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<void> {
+    this.logger.log(
+      `🔄 Refreshing channel messages cache in background: channel ${channelId} page ${page}`,
+    );
+    await this.fetchAndCacheMessages(
+      channelId,
+      page,
+      limit,
+      sessionId,
+      fingerprintHash,
+    );
+  }
+
   async editMessage(
     messageId: string,
     editorUserDehiveId: string,
@@ -573,6 +752,15 @@ export class MessagingService {
     msg.isEdited = true;
     (msg as unknown as { editedAt?: Date }).editedAt = new Date();
     await msg.save();
+
+    // Invalidate all pages cache for this channel
+    await this.cacheService
+      .invalidateChannelCache(String(msg.channelId))
+      .catch((err) =>
+        this.logger.error(
+          `Failed to invalidate cache after editing message: ${err.message}`,
+        ),
+      );
 
     // Populate the replyTo field to match the format returned by getMessagesByConversationId
     const populatedMessage = await this.channelMessageModel
@@ -605,6 +793,15 @@ export class MessagingService {
     msg.content = "[deleted]";
     (msg as unknown as { attachments?: unknown[] }).attachments = [];
     await msg.save();
+
+    // Invalidate all pages cache for this channel
+    await this.cacheService
+      .invalidateChannelCache(String(msg.channelId))
+      .catch((err) =>
+        this.logger.error(
+          `Failed to invalidate cache after deleting message: ${err.message}`,
+        ),
+      );
 
     // Populate the replyTo field to match the format returned by getMessagesByChannelId
     const populatedMessage = await this.channelMessageModel
