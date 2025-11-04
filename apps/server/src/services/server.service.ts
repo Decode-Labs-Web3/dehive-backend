@@ -7,28 +7,29 @@ import {
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import { HttpService } from "@nestjs/axios";
-import { Server, ServerDocument } from "../schemas/server.schema";
+import { Server, ServerDocument } from "../../schemas/server.schema";
 import {
   UserDehive,
   UserDehiveDocument,
-} from "../../user-dehive-server/schemas/user-dehive.schema";
+} from "../../../user-dehive-server/schemas/user-dehive.schema";
 import {
   UserDehiveServer,
   UserDehiveServerDocument,
-} from "../../user-dehive-server/schemas/user-dehive-server.schema";
-import { Category, CategoryDocument } from "../schemas/category.schema";
-import { Channel, ChannelDocument } from "../schemas/channel.schema";
-import { CreateServerDto } from "../dto/create-server.dto";
-import { UpdateServerDto } from "../dto/update-server.dto";
-import { CreateCategoryDto } from "../dto/create-category.dto";
-import { CreateChannelDto } from "../dto/create-channel.dto";
-import { UpdateCategoryDto } from "../dto/update-category.dto";
-import { UpdateChannelDto } from "../dto/update-channel.dto";
+} from "../../../user-dehive-server/schemas/user-dehive-server.schema";
+import { Category, CategoryDocument } from "../../schemas/category.schema";
+import { Channel, ChannelDocument } from "../../schemas/channel.schema";
+import { CreateServerDto } from "../../dto/create-server.dto";
+import { UpdateServerDto } from "../../dto/update-server.dto";
+import { CreateCategoryDto } from "../../dto/create-category.dto";
+import { CreateChannelDto } from "../../dto/create-channel.dto";
+import { UpdateCategoryDto } from "../../dto/update-category.dto";
+import { UpdateChannelDto } from "../../dto/update-channel.dto";
 import {
   ChannelMessage,
   ChannelMessageDocument,
-} from "../schemas/channel-message.schema";
-import { ServerRole } from "../../user-dehive-server/enum/enum";
+} from "../../schemas/channel-message.schema";
+import { ServerRole } from "../../../user-dehive-server/enum/enum";
+import { IPFSService } from "./ipfs.service";
 
 @Injectable()
 export class ServerService {
@@ -46,6 +47,7 @@ export class ServerService {
     @InjectModel(ChannelMessage.name)
     private readonly channelMessageModel: Model<ChannelMessageDocument>,
     private readonly httpService: HttpService,
+    private readonly ipfsService: IPFSService,
   ) {
     // Constructor body can be empty or used for initialization
   }
@@ -53,6 +55,7 @@ export class ServerService {
   async createServer(
     createServerDto: CreateServerDto,
     ownerBaseId: string,
+    avatar?: Express.Multer.File,
   ): Promise<Server> {
     console.log("🚀 [CREATE SERVER] Starting with ownerBaseId:", ownerBaseId);
 
@@ -62,6 +65,32 @@ export class ServerService {
 
     const ownerDehiveId = ownerBaseId;
 
+    // Upload avatar to IPFS if provided
+    let avatarHash: string | undefined;
+    if (avatar) {
+      console.log(
+        `📸 [CREATE SERVER] Uploading avatar to IPFS: ${avatar.originalname}`,
+      );
+      const buffer: Buffer = Buffer.isBuffer(avatar.buffer)
+        ? avatar.buffer
+        : Buffer.from("");
+
+      const ipfsResult = await this.ipfsService.uploadFile(
+        buffer,
+        avatar.originalname,
+      );
+      if (ipfsResult) {
+        avatarHash = `ipfs://${ipfsResult.hash}`;
+        console.log(
+          `✅ [CREATE SERVER] Avatar uploaded to IPFS: ${avatarHash}`,
+        );
+      } else {
+        console.warn(
+          "⚠️ [CREATE SERVER] IPFS upload failed, server will be created without avatar",
+        );
+      }
+    }
+
     console.log("🔍 [CREATE SERVER] ownerDehiveId:", ownerDehiveId);
     const session = await this.serverModel.db.startSession();
     session.startTransaction();
@@ -69,6 +98,7 @@ export class ServerService {
       const newServerData = {
         ...createServerDto,
         owner_id: ownerBaseId,
+        avatar_hash: avatarHash,
         member_count: 1,
         is_private: false,
         tags: createServerDto.tags || [],
@@ -77,7 +107,34 @@ export class ServerService {
       const createdServers = await this.serverModel.create([newServerData], {
         session,
       });
-      const newServer = createdServers[0];
+      let newServer = createdServers[0];
+      console.log("🔍 [CREATE SERVER] newServerData:", newServerData);
+      console.log("🔍 [CREATE SERVER] newServer after create:", newServer);
+
+      // Force update avatar_hash if it exists (workaround for MongoDB not saving the field)
+      if (avatarHash) {
+        const updatedServer = await this.serverModel
+          .findByIdAndUpdate(
+            newServer._id,
+            { $set: { avatar_hash: avatarHash } },
+            { new: true, session, strict: false },
+          )
+          .exec();
+        if (updatedServer) {
+          newServer = updatedServer;
+        }
+        console.log("🔍 [CREATE SERVER] newServer after update:", newServer);
+        console.log(
+          "🔍 [CREATE SERVER] avatar_hash in update:",
+          updatedServer?.avatar_hash,
+        );
+      }
+
+      console.log(
+        "🔍 [CREATE SERVER] newServer.avatar_hash:",
+        newServer.avatar_hash,
+      );
+
       const newMembership = new this.userDehiveServerModel({
         user_dehive_id: ownerDehiveId,
         server_id: newServer._id,
@@ -104,6 +161,10 @@ export class ServerService {
         },
       );
       await session.commitTransaction();
+
+      console.log("📤 [CREATE SERVER] Returning server:", newServer);
+      console.log("📤 [CREATE SERVER] Server toObject:", newServer.toObject());
+
       return newServer;
     } catch (error) {
       await session.abortTransaction();
@@ -136,6 +197,7 @@ export class ServerService {
     id: string,
     updateServerDto: UpdateServerDto,
     actorId: string,
+    avatar?: Express.Multer.File,
   ): Promise<Server> {
     const server = await this.findServerById(id);
     if (server.owner_id.toString() !== actorId) {
@@ -143,9 +205,51 @@ export class ServerService {
         "You do not have permission to edit this server.",
       );
     }
+
+    // Upload new avatar to IPFS if provided
+    let avatarHash: string | undefined;
+    if (avatar) {
+      console.log(
+        `📸 [UPDATE SERVER] Uploading avatar to IPFS: ${avatar.originalname}`,
+      );
+      const buffer: Buffer = Buffer.isBuffer(avatar.buffer)
+        ? avatar.buffer
+        : Buffer.from("");
+
+      const ipfsResult = await this.ipfsService.uploadFile(
+        buffer,
+        avatar.originalname,
+      );
+      if (ipfsResult) {
+        avatarHash = `ipfs://${ipfsResult.hash}`;
+        console.log(
+          `✅ [UPDATE SERVER] Avatar uploaded to IPFS: ${avatarHash}`,
+        );
+      } else {
+        console.warn(
+          "⚠️ [UPDATE SERVER] IPFS upload failed, avatar will not be updated",
+        );
+      }
+    }
+
+    const updateData = {
+      ...updateServerDto,
+      ...(avatarHash && { avatar_hash: avatarHash }),
+    };
+
+    console.log(`🔍 [UPDATE SERVER] updateData:`, updateData);
+
+    // Use $set operator with strict: false to force MongoDB to accept avatar_hash field
     const updatedServer = await this.serverModel
-      .findByIdAndUpdate(id, updateServerDto, { new: true })
+      .findByIdAndUpdate(id, { $set: updateData }, { new: true, strict: false })
       .exec();
+
+    console.log(`🔍 [UPDATE SERVER] updatedServer:`, updatedServer);
+    console.log(
+      `🔍 [UPDATE SERVER] updatedServer.avatar_hash:`,
+      updatedServer?.avatar_hash,
+    );
+
     if (!updatedServer) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
     }

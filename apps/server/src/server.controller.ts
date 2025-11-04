@@ -7,8 +7,11 @@ import {
   Param,
   Delete,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from "@nestjs/common";
-import { ServerService } from "./server.service";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { ServerService } from "./services/server.service";
 import { CreateServerDto } from "../dto/create-server.dto";
 import { UpdateServerDto } from "../dto/update-server.dto";
 import { UpdateServerTagsDto } from "../dto/update-server-tags.dto";
@@ -23,6 +26,8 @@ import {
   ApiResponse,
   ApiParam,
   ApiHeader,
+  ApiConsumes,
+  ApiBody,
 } from "@nestjs/swagger";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { CurrentUser } from "../common/decorators/current-user.decorator";
@@ -33,23 +38,50 @@ import { CurrentUser } from "../common/decorators/current-user.decorator";
 export class ServerController {
   constructor(private readonly serverService: ServerService) {}
   @Post()
+  @UseInterceptors(FileInterceptor("avatar"))
+  @ApiConsumes("multipart/form-data")
   @ApiOperation({ summary: "Create a new server" })
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", example: "My Awesome Community" },
+        description: {
+          type: "string",
+          example: "A place to hang out and chat.",
+        },
+        "tags[]": {
+          type: "array",
+          items: { type: "string" },
+        },
+        avatar: { type: "string", format: "binary" },
+      },
+      required: ["name"],
+    },
+  })
   @ApiResponse({ status: 201, description: "Server created successfully." })
   createServer(
     @Body() createServerDto: CreateServerDto,
     @CurrentUser("_id") ownerId: string,
+    @UploadedFile() avatar?: Express.Multer.File,
   ) {
     console.log("🎯 [CONTROLLER] createServer called");
     console.log("🎯 [CONTROLLER] ownerId:", ownerId);
     console.log("🎯 [CONTROLLER] ownerId type:", typeof ownerId);
     console.log("🎯 [CONTROLLER] createServerDto:", createServerDto);
+    console.log("🎯 [CONTROLLER] avatar:", avatar?.originalname);
 
-    return this.serverService.createServer(createServerDto, ownerId);
+    return this.serverService.createServer(createServerDto, ownerId, avatar);
   }
 
   @Get()
@@ -61,6 +93,11 @@ export class ServerController {
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
     required: true,
   })
   @ApiResponse({
@@ -78,6 +115,11 @@ export class ServerController {
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
   @ApiParam({ name: "id", description: "The ID of the server" })
   @ApiResponse({ status: 200, description: "Returns the server details." })
   findServerById(@Param("id") id: string) {
@@ -85,19 +127,43 @@ export class ServerController {
   }
 
   @Patch(":id")
+  @UseInterceptors(FileInterceptor("avatar"))
+  @ApiConsumes("multipart/form-data")
   @ApiOperation({ summary: "Update a server" })
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
   @ApiParam({ name: "id", description: "The ID of the server to update" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        description: { type: "string" },
+        "tags[]": { type: "array", items: { type: "string" } },
+        avatar: { type: "string", format: "binary" },
+      },
+    },
+  })
   updateServer(
     @Param("id") id: string,
     @Body() updateServerDto: UpdateServerDto,
     @CurrentUser("_id") actorId: string,
+    @UploadedFile() avatar?: Express.Multer.File,
   ) {
-    return this.serverService.updateServer(id, updateServerDto, actorId);
+    return this.serverService.updateServer(
+      id,
+      updateServerDto,
+      actorId,
+      avatar,
+    );
   }
 
   @Patch(":id/tags")
@@ -105,6 +171,11 @@ export class ServerController {
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
     required: true,
   })
   @ApiParam({ name: "id", description: "The ID of the server to update tags" })
@@ -131,6 +202,11 @@ export class ServerController {
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
   @ApiParam({ name: "id", description: "The ID of the server to delete" })
   removeServer(@Param("id") id: string, @CurrentUser("_id") actorId: string) {
     return this.serverService.removeServer(id, actorId);
@@ -141,6 +217,11 @@ export class ServerController {
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
     required: true,
   })
   @ApiParam({ name: "serverId", description: "The ID of the server" })
@@ -163,6 +244,11 @@ export class ServerController {
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
   @ApiParam({ name: "serverId", description: "The ID of the server" })
   findAllCategoriesInServer(@Param("serverId") serverId: string) {
     return this.serverService.findAllCategoriesInServer(serverId);
@@ -173,6 +259,11 @@ export class ServerController {
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
     required: true,
   })
   @ApiParam({
@@ -198,6 +289,11 @@ export class ServerController {
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
   @ApiParam({
     name: "categoryId",
     description: "The ID of the category to delete",
@@ -214,6 +310,11 @@ export class ServerController {
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
     required: true,
   })
   @ApiParam({ name: "serverId", description: "The ID of the server" })
@@ -239,6 +340,11 @@ export class ServerController {
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
   @ApiParam({ name: "channelId", description: "The ID of the channel" })
   findChannelById(@Param("channelId") channelId: string) {
     return this.serverService.findChannelById(channelId);
@@ -252,6 +358,11 @@ export class ServerController {
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
     required: true,
   })
   @ApiParam({
@@ -281,6 +392,11 @@ export class ServerController {
     description: "Session ID of authenticated user",
     required: true,
   })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
   @ApiParam({
     name: "channelId",
     description: "The ID of the channel to move",
@@ -302,6 +418,11 @@ export class ServerController {
   @ApiHeader({
     name: "x-session-id",
     description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
     required: true,
   })
   @ApiParam({

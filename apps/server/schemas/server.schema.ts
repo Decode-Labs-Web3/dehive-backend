@@ -12,6 +12,9 @@ export class Server {
   @Prop({ type: String, required: true })
   owner_id: string;
 
+  @Prop({ type: String, required: false })
+  avatar_hash?: string;
+
   @Prop({ default: 0 })
   member_count: number;
 
@@ -25,3 +28,7 @@ export class Server {
 export type ServerDocument = Server & Document;
 
 export const ServerSchema = SchemaFactory.createForClass(Server);
+
+// Ensure avatar_hash is included in toJSON and toObject
+ServerSchema.set("toJSON", { virtuals: false });
+ServerSchema.set("toObject", { virtuals: false });

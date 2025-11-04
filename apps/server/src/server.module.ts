@@ -3,7 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { MongooseModule } from "@nestjs/mongoose";
 import { HttpModule } from "@nestjs/axios";
 import { ServerController } from "./server.controller";
-import { ServerService } from "./server.service";
+import { ServerService } from "./services/server.service";
 import { Server, ServerSchema } from "../schemas/server.schema";
 import { Category, CategorySchema } from "../schemas/category.schema";
 import { Channel, ChannelSchema } from "../schemas/channel.schema";
@@ -21,6 +21,7 @@ import {
 } from "../schemas/channel-message.schema";
 import { UserDehiveServerModule } from "../../user-dehive-server/src/user-dehive-server.module";
 import { AuthGuard } from "../common/guards/auth.guard";
+import { IPFSService } from "./services/ipfs.service";
 
 @Module({
   imports: [
@@ -53,6 +54,6 @@ import { AuthGuard } from "../common/guards/auth.guard";
     ]),
   ],
   controllers: [ServerController],
-  providers: [ServerService, AuthGuard],
+  providers: [ServerService, AuthGuard, IPFSService],
 })
 export class ServerModule {}
