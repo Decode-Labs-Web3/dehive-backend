@@ -3,6 +3,7 @@ import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 import { firstValueFrom } from "rxjs";
 import { UserProfile } from "../interfaces/user-profile.interface";
+import { Wallet } from "../interfaces/wallet.interface";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
 
@@ -60,7 +61,16 @@ export class DecodeApiClient {
       );
       this.logger.log(`Successfully retrieved user profile from Decode API.`);
 
-      return response.data.data;
+      const profileData = response.data.data;
+
+      // Extract wallets array from Decode API response
+      const walletsArray: Wallet[] =
+        (profileData as { wallets?: Wallet[] }).wallets || [];
+
+      return {
+        ...profileData,
+        wallets: walletsArray,
+      };
     } catch (error) {
       this.logger.error(`Error Response Status: ${error.response?.status}`);
       this.logger.error(
@@ -142,6 +152,7 @@ export class DecodeApiClient {
         avatar: profile.avatar || null,
         avatar_ipfs_hash: profile.avatar_ipfs_hash || null,
         bio: profile.bio || null,
+        wallets: profile.wallets || [],
       };
 
       // Cache for 1 hour (3600 seconds)

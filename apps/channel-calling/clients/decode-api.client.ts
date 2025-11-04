@@ -3,6 +3,7 @@ import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 import { firstValueFrom } from "rxjs";
 import { UserProfile } from "../interfaces/user-profile.interface";
+import { Wallet } from "../interfaces/wallet.interface";
 
 @Injectable()
 export class DecodeApiClient {
@@ -23,12 +24,9 @@ export class DecodeApiClient {
     this.decodeApiUrl = `http://${host}:${port}`;
   }
 
-  async getUserProfilePublic(userDehiveId: string): Promise<{
-    _id: string;
-    username: string;
-    display_name: string;
-    avatar_ipfs_hash: string;
-  } | null> {
+  async getUserProfilePublic(
+    userDehiveId: string,
+  ): Promise<Partial<UserProfile> | null> {
     try {
       this.logger.log(
         `Calling Decode API (public): GET ${this.decodeApiUrl}/users/profile/${userDehiveId}`,
@@ -47,11 +45,16 @@ export class DecodeApiClient {
 
       const profile = response.data.data;
 
+      // Extract wallets array from Decode API response
+      const walletsArray: Wallet[] =
+        (profile as { wallets?: Wallet[] }).wallets || [];
+
       return {
         _id: profile._id,
         username: profile.username,
         display_name: profile.display_name,
         avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
+        wallets: walletsArray,
       };
     } catch (error) {
       this.logger.error(

@@ -1,3 +1,5 @@
+import { Wallet } from "./wallet.interface";
+
 export interface UserProfile {
   _id: string;
   username: string;
@@ -8,7 +10,7 @@ export interface UserProfile {
   banner_color?: string;
   server_count?: number;
   last_login?: Date;
-  primary_wallet?: string;
+  wallets?: Wallet[];
   following_number?: number;
   followers_number?: number;
   is_following?: boolean;

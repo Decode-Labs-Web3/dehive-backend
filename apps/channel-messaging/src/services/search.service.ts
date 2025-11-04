@@ -228,6 +228,7 @@ export class SearchService {
           display_name: profile?.display_name || `User_${senderKey}`,
           avatar_ipfs_hash:
             profile?.avatar_ipfs_hash || profile?.avatar || null,
+          wallets: profile?.wallets || [],
         },
         content: m.content ?? "",
         attachments: m.attachments || [],

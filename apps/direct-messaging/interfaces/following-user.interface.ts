@@ -1,3 +1,5 @@
+import { Wallet } from "./wallet.interface";
+
 export interface FollowingUser {
   email?: string;
   _id?: string;
@@ -5,6 +7,7 @@ export interface FollowingUser {
   username: string;
   display_name: string;
   avatar_ipfs_hash?: string;
+  wallets?: Wallet[]; // Wallets array
   bio?: string;
   is_verified?: boolean;
   followers_count?: number;

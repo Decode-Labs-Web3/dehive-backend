@@ -182,6 +182,7 @@ export class SearchService {
           `User_${msg.senderId}`,
         avatar_ipfs_hash:
           profiles[msg.senderId?.toString()]?.avatar_ipfs_hash || null,
+        wallets: profiles[msg.senderId?.toString()]?.wallets || [],
       },
       content: msg.content,
       attachments: msg.attachments || [],

@@ -12,6 +12,7 @@ export interface UserProfile {
   email: string;
   avatar?: string;
   bio?: string;
+  primary_wallet?: string;
   created_at?: Date;
 }
 

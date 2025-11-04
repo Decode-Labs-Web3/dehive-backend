@@ -763,6 +763,7 @@ export class DirectMessagingService {
             display_name:
               userProfile.display_name || `User_${String(item.senderId)}`,
             avatar_ipfs_hash: userProfile.avatar_ipfs_hash || null,
+            wallets: userProfile.wallets || [],
           },
           content: item.content,
           attachments: item.attachments || [],
@@ -927,6 +928,7 @@ export class DirectMessagingService {
             display_name:
               userProfile.display_name || `User_${String(item.senderId)}`,
             avatar_ipfs_hash: userProfile.avatar_ipfs_hash || null,
+            wallets: userProfile.wallets || [],
           },
           content: item.content,
           attachments: item.attachments || [],
@@ -972,6 +974,7 @@ export class DirectMessagingService {
           display_name:
             anchorProfile.display_name || `User_${String(anchorTyped._id)}`,
           avatar_ipfs_hash: anchorProfile.avatar_ipfs_hash || null,
+          wallets: anchorProfile.wallets || [],
         },
         content: anchorTyped.content || null,
         attachments: anchorTyped.attachments || [],
@@ -1327,6 +1330,7 @@ export class DirectMessagingService {
         displayname: user.display_name || user.username || `User_${userId}`,
         username: user.username || `User_${userId}`,
         avatar_ipfs_hash: user.avatar_ipfs_hash || undefined,
+        wallets: user.wallets || [],
         status,
         isCall,
         lastMessageAt,
@@ -1382,6 +1386,7 @@ export class DirectMessagingService {
         username: profile.username || `User_${userDehiveId}`,
         display_name: profile.display_name || `User_${userDehiveId}`,
         avatar_ipfs_hash: profile.avatar_ipfs_hash || undefined,
+        wallets: profile.wallets || [],
         bio: profile.bio || null,
         is_verified:
           (profile as { is_verified?: boolean }).is_verified || false,
@@ -1420,6 +1425,7 @@ export class DirectMessagingService {
         username: `User_${userDehiveId}`,
         display_name: `User_${userDehiveId}`,
         avatar_ipfs_hash: undefined,
+        wallets: [],
       };
     } catch (error) {
       this.logger.error(
@@ -1431,6 +1437,7 @@ export class DirectMessagingService {
         username: `User_${userDehiveId}`,
         display_name: `User_${userDehiveId}`,
         avatar_ipfs_hash: undefined,
+        wallets: [],
       };
     }
   }
@@ -1641,6 +1648,7 @@ export class DirectMessagingService {
       displayname: otherUserProfile.display_name || `User_${otherUserId}`,
       username: otherUserProfile.username || `User_${otherUserId}`,
       avatar_ipfs_hash: otherUserProfile.avatar_ipfs_hash || undefined,
+      wallets: otherUserProfile.wallets || [],
       status: userStatus,
     };
 

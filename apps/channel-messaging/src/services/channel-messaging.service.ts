@@ -681,6 +681,7 @@ export class MessagingService {
           display_name: profile?.display_name || `User_${userId}`,
           avatar_ipfs_hash:
             profile?.avatar_ipfs_hash || profile?.avatar || null,
+          wallets: profile?.wallets || [],
         },
         content: msg.content,
         attachments: msg.attachments || [],
@@ -950,6 +951,7 @@ export class MessagingService {
           display_name: (profile && profile.display_name) || `User_${userId}`,
           avatar_ipfs_hash:
             (profile && (profile.avatar_ipfs_hash || profile.avatar)) || null,
+          wallets: (profile && profile.wallets) || [],
         },
         content: it["content"],
         attachments: (it["attachments"] as unknown[]) || [],
@@ -985,6 +987,7 @@ export class MessagingService {
             (anchorProfile &&
               (anchorProfile.avatar_ipfs_hash || anchorProfile.avatar)) ||
             null,
+          wallets: (anchorProfile && anchorProfile.wallets) || [],
         },
         content: anchor.content || null,
         attachments: anchor.attachments || [],
