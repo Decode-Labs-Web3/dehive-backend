@@ -95,9 +95,9 @@ export class ChannelCallGateway
 
       return {
         _id: userDehiveId,
-        username: profile.username,
-        display_name: profile.display_name,
-        avatar_ipfs_hash: profile.avatar_ipfs_hash,
+        username: profile.username || `User_${userDehiveId}`,
+        display_name: profile.display_name || `User_${userDehiveId}`,
+        avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
         isCamera: participant?.isCamera || false,
         isMic: participant?.isMic || false,
         isHeadphone: participant?.isHeadphone || false,

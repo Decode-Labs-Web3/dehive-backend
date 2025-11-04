@@ -12,7 +12,8 @@
     "gateway/**/*",
     "enum/**/*",
     "common/**/*",
-    "interfaces/**/*"
+    "interfaces/**/*",
+    "clients/**/*"
   ],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }

@@ -9,7 +9,7 @@ import { Model, Types } from "mongoose";
 import { ConfigService } from "@nestjs/config";
 import * as fs from "fs";
 import * as path from "path";
-import { AuthServiceClient } from "../../clients/auth-service.client";
+import { AuthServiceClient } from "../auth-service.client";
 import { DecodeApiClient } from "../../clients/decode-api.client";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";

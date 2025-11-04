@@ -233,10 +233,10 @@ export class ChannelCallService {
         .map((profile, index) => {
           const participant = participants[index];
           return {
-            _id: profile._id,
-            username: profile.username,
-            display_name: profile.display_name,
-            avatar_ipfs_hash: profile.avatar_ipfs_hash,
+            _id: profile._id || "",
+            username: profile.username || `User_${profile._id}`,
+            display_name: profile.display_name || `User_${profile._id}`,
+            avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
             isCamera: participant.isCamera || false,
             isMic: participant.isMic || false,
             isHeadphone: participant.isHeadphone || false,
@@ -265,10 +265,10 @@ export class ChannelCallService {
       }
 
       return {
-        _id: profile._id,
-        username: profile.username,
-        display_name: profile.display_name,
-        avatar_ipfs_hash: profile.avatar_ipfs_hash,
+        _id: profile._id || "",
+        username: profile.username || `User_${userId}`,
+        display_name: profile.display_name || `User_${userId}`,
+        avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
       };
     } catch (error) {
       this.logger.error("Error getting user profile:", error);
@@ -389,10 +389,10 @@ export class ChannelCallService {
         return {
           participants: validProfiles.map(
             (profile): Participant => ({
-              _id: profile._id,
-              username: profile.username,
-              display_name: profile.display_name,
-              avatar_ipfs_hash: profile.avatar_ipfs_hash,
+              _id: profile._id || "",
+              username: profile.username || `User_${profile._id}`,
+              display_name: profile.display_name || `User_${profile._id}`,
+              avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
             }),
           ),
         };
@@ -489,10 +489,10 @@ export class ChannelCallService {
               .map((profile, index) => {
                 const participant = participants[index];
                 return {
-                  _id: profile._id,
-                  username: profile.username,
-                  display_name: profile.display_name,
-                  avatar_ipfs_hash: profile.avatar_ipfs_hash,
+                  _id: profile._id || "",
+                  username: profile.username || `User_${profile._id}`,
+                  display_name: profile.display_name || `User_${profile._id}`,
+                  avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
                   isCamera: participant.isCamera || false,
                   isMic: participant.isMic || false,
                   isHeadphone: participant.isHeadphone || false,
