@@ -12,6 +12,7 @@ import {
   UserStatusModel,
 } from "../schemas/user-status.schema";
 import { DecodeApiClient } from "../clients/decode-api.client";
+import { UserStatusCacheService } from "./user-status-cache.service";
 
 @Module({
   imports: [
@@ -48,6 +49,12 @@ import { DecodeApiClient } from "../clients/decode-api.client";
     }),
   ],
   controllers: [UserStatusController],
-  providers: [UserStatusService, UserStatusGateway, AuthGuard, DecodeApiClient],
+  providers: [
+    UserStatusService,
+    UserStatusGateway,
+    AuthGuard,
+    DecodeApiClient,
+    UserStatusCacheService,
+  ],
 })
 export class UserStatusModule {}

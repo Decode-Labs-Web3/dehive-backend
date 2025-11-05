@@ -45,3 +45,13 @@ export class DirectMessage {
 
 export type DirectMessageDocument = DirectMessage & Document;
 export const DirectMessageSchema = SchemaFactory.createForClass(DirectMessage);
+
+// ⭐ Compound Indexes để tăng tốc query
+// Index chính: Sort theo conversation + thời gian + ID (dùng cho pagination)
+DirectMessageSchema.index({ conversationId: 1, createdAt: -1, _id: -1 });
+
+// Index phụ: Filter theo conversation + sender (dùng khi cần)
+DirectMessageSchema.index({ conversationId: 1, senderId: 1 });
+
+// Index time-based: Sort theo thời gian (dùng cho recent messages)
+DirectMessageSchema.index({ createdAt: -1 });

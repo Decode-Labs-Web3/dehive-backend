@@ -310,6 +310,27 @@ export class UserStatusGateway
       this.logger.log(`User ${userDehiveId} identified and set online.`);
 
       if (sessionId && fingerprintHash) {
+        // 🚀 PRE-WARM CACHE: Fetch page 0 in background for instant first load
+        this.userStatusService
+          .getFollowingUsersStatus(
+            userDehiveId,
+            sessionId,
+            fingerprintHash,
+            0,
+            20,
+          )
+          .then(() => {
+            this.logger.log(
+              `🔥 Pre-warmed user status cache for user ${userDehiveId} page 0`,
+            );
+          })
+          .catch((err) => {
+            this.logger.error(
+              `Failed to pre-warm user status cache for user ${userDehiveId}:`,
+              err,
+            );
+          });
+
         try {
           const followingData = await this.decodeApiClient.getUserFollowing(
             userDehiveId,

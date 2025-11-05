@@ -1133,4 +1133,58 @@ export class MessagingService {
       throw error;
     }
   }
+
+  /**
+   * ⭐ Pre-warm cache for a channel (first page)
+   * Call this when user joins a server or opens a channel
+   */
+  async prewarmChannelCache(
+    channelId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<void> {
+    try {
+      this.logger.log(`🔥 Pre-warming cache for channel ${channelId}`);
+
+      // Fetch and cache page 0 in background (không chặn request)
+      // Chỉ lưu vào cache, không trả về data
+      await this.fetchAndCacheMessages(
+        channelId,
+        0,
+        10,
+        sessionId,
+        fingerprintHash,
+      );
+
+      this.logger.log(`✅ Pre-warmed cache for channel ${channelId}`);
+    } catch (error) {
+      this.logger.warn(`Failed to pre-warm cache: ${error.message}`);
+      // Không throw error để không ảnh hưởng main request
+    }
+  }
+
+  /**
+   * ⭐ Pre-warm cache for multiple channels at once
+   * Call this when user joins a server
+   */
+  async prewarmMultipleChannels(
+    channelIds: string[],
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<void> {
+    this.logger.log(`🔥 Pre-warming cache for ${channelIds.length} channels`);
+
+    // Pre-warm all channels in parallel (not waiting for each one)
+    const prewarmPromises = channelIds.map((channelId) =>
+      this.prewarmChannelCache(channelId, sessionId, fingerprintHash).catch(
+        (err) =>
+          this.logger.warn(`Failed to pre-warm ${channelId}: ${err.message}`),
+      ),
+    );
+
+    // Fire and forget - don't wait for completion
+    Promise.all(prewarmPromises).catch((err) =>
+      this.logger.error(`Error pre-warming channels: ${err.message}`),
+    );
+  }
 }

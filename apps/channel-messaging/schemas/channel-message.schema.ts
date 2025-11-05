@@ -42,3 +42,13 @@ export type ChannelMessageDocument = ChannelMessage & Document;
 
 export const ChannelMessageSchema =
   SchemaFactory.createForClass(ChannelMessage);
+
+// ⭐ Compound Indexes để tăng tốc query
+// Index chính: Sort theo channel + thời gian + ID (dùng cho pagination)
+ChannelMessageSchema.index({ channelId: 1, createdAt: -1, _id: -1 });
+
+// Index phụ: Filter theo channel + sender (dùng khi cần)
+ChannelMessageSchema.index({ channelId: 1, senderId: 1 });
+
+// Index time-based: Sort theo thời gian (dùng cho recent messages)
+ChannelMessageSchema.index({ createdAt: -1 });

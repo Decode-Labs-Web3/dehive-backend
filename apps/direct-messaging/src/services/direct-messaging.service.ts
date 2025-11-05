@@ -1355,6 +1355,23 @@ export class DirectMessagingService {
     const totalPages = Math.ceil(totalAllFollowing / limit);
     const isLastPage = page >= totalPages - 1;
 
+    // ⭐ PRE-WARM CACHE: Fetch messages cho các conversations có trong list
+    // Chỉ pre-warm cho page hiện tại (không pre-warm tất cả)
+    const conversationIdsToPrewarm = paginatedItems
+      .map((item) => item.conversationid)
+      .filter((id) => id && id !== ""); // Remove empty conversation IDs
+
+    if (conversationIdsToPrewarm.length > 0) {
+      // Pre-warm in background (fire and forget)
+      this.prewarmMultipleConversations(
+        conversationIdsToPrewarm,
+        sessionId,
+        fingerprintHash,
+      ).catch((err) =>
+        this.logger.error(`Failed to pre-warm conversations: ${err.message}`),
+      );
+    }
+
     return {
       success: true,
       statusCode: 200,
@@ -1701,5 +1718,63 @@ export class DirectMessagingService {
         avatar_ipfs_hash: undefined,
       };
     }
+  }
+
+  /**
+   * ⭐ Pre-warm cache for a conversation (first page)
+   * Call this when user opens conversation list
+   */
+  async prewarmConversationCache(
+    conversationId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<void> {
+    try {
+      this.logger.log(
+        `🔥 Pre-warming cache for conversation ${conversationId}`,
+      );
+
+      // Fetch and cache page 0 in background (không chặn request)
+      // Chỉ lưu vào cache, không trả về data
+      await this.fetchAndCacheMessages(
+        conversationId,
+        0,
+        10,
+        sessionId,
+        fingerprintHash,
+      );
+
+      this.logger.log(`✅ Pre-warmed cache for conversation ${conversationId}`);
+    } catch (error) {
+      this.logger.warn(`Failed to pre-warm cache: ${error.message}`);
+      // Không throw error để không ảnh hưởng main request
+    }
+  }
+
+  /**
+   * ⭐ Pre-warm cache for multiple conversations at once
+   * Call this when user loads conversation list
+   */
+  async prewarmMultipleConversations(
+    conversationIds: string[],
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<void> {
+    this.logger.log(
+      `🔥 Pre-warming cache for ${conversationIds.length} conversations`,
+    );
+
+    // Pre-warm all conversations in parallel (not waiting for each one)
+    const prewarmPromises = conversationIds.map((convId) =>
+      this.prewarmConversationCache(convId, sessionId, fingerprintHash).catch(
+        (err) =>
+          this.logger.warn(`Failed to pre-warm ${convId}: ${err.message}`),
+      ),
+    );
+
+    // Fire and forget - don't wait for completion
+    Promise.all(prewarmPromises).catch((err) =>
+      this.logger.error(`Error pre-warming conversations: ${err.message}`),
+    );
   }
 }

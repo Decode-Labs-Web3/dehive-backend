@@ -13,6 +13,7 @@ import {
 } from "../interfaces/user-status.interface";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
+import { UserStatusCacheService } from "./user-status-cache.service";
 
 @Injectable()
 export class UserStatusService {
@@ -24,6 +25,7 @@ export class UserStatusService {
     private readonly userStatusModel: Model<UserStatusDocument>,
     private readonly decodeApiClient: DecodeApiClient,
     @InjectRedis() private readonly redis: Redis,
+    private readonly cacheService: UserStatusCacheService,
   ) {}
 
   /**
@@ -124,6 +126,109 @@ export class UserStatusService {
     limit: number = 20,
   ): Promise<BulkStatusResponse> {
     try {
+      // Check cache first
+      const cached =
+        await this.cacheService.getCachedFollowingStatus<BulkStatusResponse>(
+          currentUserId,
+          page,
+        );
+
+      if (cached) {
+        if (!cached.isStale) {
+          // Fresh cache - return immediately
+          this.logger.log(
+            `✅ Cache HIT (fresh) for user ${currentUserId} page ${page}`,
+          );
+          return cached.data;
+        } else {
+          // Stale cache - return it but refresh in background
+          this.logger.log(
+            `⚠️ Cache HIT (stale) for user ${currentUserId} page ${page} - refreshing in background`,
+          );
+
+          // Refresh in background
+          this.fetchAndCacheFollowingStatus(
+            currentUserId,
+            sessionId,
+            fingerprintHash,
+            page,
+            limit,
+          ).catch((err) => {
+            this.logger.error(
+              `Background refresh failed for user ${currentUserId} page ${page}:`,
+              err,
+            );
+          });
+
+          return cached.data;
+        }
+      }
+
+      // Cache MISS - try to acquire lock
+      this.logger.log(
+        `❌ Cache MISS for user ${currentUserId} page ${page} - fetching from API`,
+      );
+
+      const lockAcquired = await this.cacheService.acquireLock(
+        currentUserId,
+        page,
+      );
+
+      if (!lockAcquired) {
+        // Another request is already fetching - wait for cache
+        this.logger.log(
+          `🔒 Lock held by another request for user ${currentUserId} page ${page} - waiting for cache`,
+        );
+        const waitResult =
+          await this.cacheService.waitForCache<BulkStatusResponse>(
+            currentUserId,
+            page,
+          );
+
+        if (waitResult) {
+          this.logger.log(
+            `✅ Cache available after waiting for user ${currentUserId} page ${page}`,
+          );
+          return waitResult.data;
+        }
+
+        // Timeout waiting - fetch anyway
+        this.logger.warn(
+          `⏱️ Timeout waiting for cache for user ${currentUserId} page ${page} - fetching anyway`,
+        );
+      }
+
+      // Fetch and cache
+      return await this.fetchAndCacheFollowingStatus(
+        currentUserId,
+        sessionId,
+        fingerprintHash,
+        page,
+        limit,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error getting following users status for ${currentUserId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch following status from API and cache it
+   * Private helper method
+   */
+  private async fetchAndCacheFollowingStatus(
+    currentUserId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+    page: number = 0,
+    limit: number = 20,
+  ): Promise<BulkStatusResponse> {
+    try {
+      const startTime = Date.now();
+
       // Get following list from direct-message service
       const followingData = await this.decodeApiClient.getUserFollowing(
         currentUserId,
@@ -132,7 +237,7 @@ export class UserStatusService {
       );
 
       if (followingData.length === 0) {
-        return {
+        const result = {
           users: [],
           metadata: {
             page,
@@ -141,6 +246,15 @@ export class UserStatusService {
             is_last_page: true,
           },
         };
+
+        // Cache empty result
+        await this.cacheService.setCachedFollowingStatus(
+          currentUserId,
+          page,
+          result,
+        );
+
+        return result;
       }
 
       const skip = page * limit;
@@ -164,18 +278,32 @@ export class UserStatusService {
         };
       });
 
-      return {
+      const finalResult = {
         users: usersWithConversation,
         metadata: {
           page,
           limit,
-          total: paginatedData.length, // Total in current page, not total of all
+          total: paginatedData.length,
           is_last_page,
         },
       };
+
+      // Cache the result
+      await this.cacheService.setCachedFollowingStatus(
+        currentUserId,
+        page,
+        finalResult,
+      );
+
+      const duration = Date.now() - startTime;
+      this.logger.log(
+        `📦 Fetched and cached following status for user ${currentUserId} page ${page} in ${duration}ms`,
+      );
+
+      return finalResult;
     } catch (error) {
       this.logger.error(
-        `Error getting following users status for ${currentUserId}:`,
+        `Error fetching and caching following status for ${currentUserId}:`,
         error,
       );
       throw error;
