@@ -1516,20 +1516,23 @@ export class DirectMessagingService {
         .sort({ createdAt: -1 })
         .lean();
 
-      // Calculate status (message sent within last 5 minutes = "online", otherwise "offline")
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       const lastMessageDate = lastMessage
         ? new Date((lastMessage as unknown as { createdAt: Date }).createdAt)
         : new Date();
-      const status: "online" | "offline" =
-        lastMessageDate > fiveMinutesAgo ? "online" : "offline";
 
-      // Create simplified event data
+      // Get actual user status from Redis (set by user-status service)
+      const receiverStatus = await this.getUserStatusFromRedis(receiverId);
+
+      this.logger.log(
+        `Receiver ${receiverId} actual status from Redis: ${receiverStatus}`,
+      );
+
+      // Create simplified event data with actual status
       const conversationUpdate: ConversationUpdateEvent = {
         type: "conversation_update",
         data: {
           conversationId: String(conversation._id),
-          status,
+          status: receiverStatus, // Use actual status from Redis
           isCall: false, // This is always false for direct messages
           lastMessageAt: lastMessageDate.toISOString(),
         },
