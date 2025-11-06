@@ -3,17 +3,12 @@ import { IsInt, IsMongoId, IsOptional, IsString, Min } from "class-validator";
 import { AttachmentType } from "../enum/enum";
 
 export class UploadInitDto {
-  @ApiPropertyOptional({ description: "Server ID for permission check" })
-  @IsOptional()
-  @IsMongoId()
-  serverId?: string;
-
-  @ApiPropertyOptional({
-    description: "Channel ID for permission check",
+  @ApiProperty({
+    description: "Server ID (required) - File will be uploaded to this server",
+    example: "507f1f77bcf86cd799439011",
   })
-  @IsOptional()
   @IsMongoId()
-  channelId?: string;
+  serverId: string;
 }
 
 export class UploadResponseDto {

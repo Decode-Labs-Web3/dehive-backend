@@ -85,6 +85,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     username: string;
     display_name: string;
     avatar_ipfs_hash: string | null;
+    wallets: Array<{
+      address: string;
+      is_primary?: boolean;
+      chain?: string;
+      label?: string;
+    }>;
   }> {
     // Use service method to get user profile (same as direct-messaging)
     // Service will check cache first, then fallback
@@ -96,6 +102,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       display_name: userProfile.display_name || `User_${userDehiveId}`,
       avatar_ipfs_hash:
         userProfile.avatar_ipfs_hash || userProfile.avatar || null,
+      wallets: userProfile.wallets || [],
     };
   }
 
@@ -126,6 +133,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         username: userProfile.username,
         display_name: userProfile.display_name,
         avatar_ipfs_hash: userProfile.avatar_ipfs_hash,
+        wallets: userProfile.wallets,
       },
       content: message.content,
       attachments: message.attachments || [],

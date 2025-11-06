@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 import { firstValueFrom } from "rxjs";
+import PQueue from "p-queue";
 import { UserProfile } from "../interfaces/user-profile.interface";
 import { Wallet } from "../interfaces/wallet.interface";
 
@@ -11,6 +12,22 @@ export class DecodeApiClient {
   private readonly decodeApiUrl: string;
   private readonly directMessageUrl: string;
   private readonly userDehiveServerUrl: string;
+
+  // Queue to control concurrent API requests
+  private readonly queue = new PQueue({
+    concurrency: 5, // Max 5 concurrent API calls
+    interval: 1000,
+    intervalCap: 15, // Max 15 calls per second
+  });
+
+  private profileCache = new Map<
+    string,
+    {
+      data: UserProfile;
+      timestamp: number;
+    }
+  >();
+  private readonly PROFILE_CACHE_TTL = 60000; // 60 seconds
 
   constructor(
     private readonly httpService: HttpService,
@@ -25,7 +42,6 @@ export class DecodeApiClient {
     }
     this.decodeApiUrl = `http://${host}:${port}`;
 
-    // Direct message service for following list
     const dmHost = this.configService.get<string>("CLOUD_HOST") || "localhost";
     const dmPort =
       this.configService.get<number>("DIRECT_MESSAGE_PORT") || 4004;
@@ -34,7 +50,6 @@ export class DecodeApiClient {
       `Direct-messaging service URL configured: ${this.directMessageUrl}`,
     );
 
-    // User-dehive-server service for server members
     const serverHost =
       this.configService.get<string>("CLOUD_HOST") || "localhost";
     const serverPort =
@@ -45,38 +60,85 @@ export class DecodeApiClient {
   async getUserProfilePublic(
     userDehiveId: string,
   ): Promise<UserProfile | null> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get<{ success: boolean; data: UserProfile }>(
-          `${this.decodeApiUrl}/users/profile/${userDehiveId}`,
-        ),
-      );
-
-      if (!response.data.success || !response.data.data) {
-        this.logger.warn(`Profile not found for ${userDehiveId}`);
-        return null;
-      }
-
-      const profile = response.data.data;
-
-      // Extract wallets array from Decode API response
-      const walletsArray: Wallet[] =
-        (profile as { wallets?: Wallet[] }).wallets || [];
-
-      return {
-        _id: profile._id,
-        username: profile.username,
-        display_name: profile.display_name,
-        avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
-        wallets: walletsArray,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error fetching public profile for ${userDehiveId}:`,
-        error instanceof Error ? error.message : error,
-      );
-      return null;
+    const cached = this.getCachedProfile(userDehiveId);
+    if (cached) {
+      this.logger.debug(`💨 Memory cache HIT for profile ${userDehiveId}`);
+      return cached;
     }
+
+    const result = await this.queue.add(() =>
+      this.fetchProfileWithRetry(userDehiveId),
+    );
+    return result ?? null;
+  }
+
+  private async fetchProfileWithRetry(
+    userDehiveId: string,
+    maxRetries = 3,
+  ): Promise<UserProfile | null> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get<{ success: boolean; data: UserProfile }>(
+            `${this.decodeApiUrl}/users/profile/${userDehiveId}`,
+            {
+              timeout: 15000, // 15s timeout
+            },
+          ),
+        );
+
+        if (!response.data.success || !response.data.data) {
+          this.logger.warn(`Profile not found for ${userDehiveId}`);
+          return null;
+        }
+
+        const profile = response.data.data;
+
+        // Extract wallets array from Decode API response
+        const walletsArray: Wallet[] =
+          (profile as { wallets?: Wallet[] }).wallets || [];
+
+        const userProfile: UserProfile = {
+          _id: profile._id,
+          username: profile.username,
+          display_name: profile.display_name,
+          avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
+          wallets: walletsArray,
+        };
+
+        // Cache to memory
+        this.setCachedProfile(userDehiveId, userProfile);
+
+        if (attempt > 1) {
+          this.logger.log(
+            `✅ Retry SUCCESS for ${userDehiveId} on attempt ${attempt}`,
+          );
+        }
+
+        return userProfile;
+      } catch (error) {
+        const isTimeout =
+          error.code === "ECONNABORTED" || error.message?.includes("timeout");
+
+        if (attempt < maxRetries) {
+          // Exponential backoff: 500ms, 1000ms, 2000ms
+          const delayMs = 500 * Math.pow(2, attempt - 1);
+
+          this.logger.warn(
+            `⚠️ Attempt ${attempt}/${maxRetries} failed for ${userDehiveId} (${isTimeout ? "timeout" : error.message}), retrying in ${delayMs}ms...`,
+          );
+
+          await this.delay(delayMs);
+        } else {
+          this.logger.error(
+            `❌ All ${maxRetries} attempts failed for ${userDehiveId}: ${error.message}`,
+          );
+        }
+      }
+    }
+
+    // Graceful degradation: return null after all retries failed
+    return null;
   }
 
   async getBulkUserProfiles(
@@ -84,16 +146,55 @@ export class DecodeApiClient {
   ): Promise<Map<string, UserProfile>> {
     const profileMap = new Map<string, UserProfile>();
 
-    await Promise.all(
-      userIds.map(async (userId) => {
-        const profile = await this.getUserProfilePublic(userId);
-        if (profile) {
-          profileMap.set(userId, profile);
-        }
-      }),
+    this.logger.log(
+      `🔄 Fetching ${userIds.length} profiles (queue size: ${this.queue.size}, pending: ${this.queue.pending})`,
+    );
+
+    const promises = userIds.map(async (userId) => {
+      const profile = await this.getUserProfilePublic(userId);
+      if (profile) {
+        profileMap.set(userId, profile);
+      }
+    });
+
+    await Promise.allSettled(promises);
+
+    this.logger.log(
+      `✅ Fetched ${profileMap.size}/${userIds.length} profiles successfully`,
     );
 
     return profileMap;
+  }
+
+  // Cache helper methods
+  private getCachedProfile(userDehiveId: string): UserProfile | null {
+    const cached = this.profileCache.get(userDehiveId);
+    if (!cached) return null;
+
+    const now = Date.now();
+    if (now - cached.timestamp > this.PROFILE_CACHE_TTL) {
+      this.profileCache.delete(userDehiveId);
+      return null;
+    }
+
+    return cached.data;
+  }
+
+  private setCachedProfile(userDehiveId: string, data: UserProfile): void {
+    this.profileCache.set(userDehiveId, {
+      data,
+      timestamp: Date.now(),
+    });
+
+    // Auto cleanup old cache entries if too many
+    if (this.profileCache.size > 1000) {
+      const oldestKey = this.profileCache.keys().next().value;
+      this.profileCache.delete(oldestKey);
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   async getUserFollowing(

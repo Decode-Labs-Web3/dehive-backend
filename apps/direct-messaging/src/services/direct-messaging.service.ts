@@ -1091,6 +1091,14 @@ export class DirectMessagingService {
     const query: Record<string, unknown> = {
       ownerId: new Types.ObjectId(selfId),
     };
+
+    if (dto.conversationId) {
+      if (!Types.ObjectId.isValid(dto.conversationId)) {
+        throw new BadRequestException("Invalid conversation ID");
+      }
+      query.conversationId = new Types.ObjectId(dto.conversationId);
+    }
+
     if (dto.type) {
       query.type = dto.type;
     }

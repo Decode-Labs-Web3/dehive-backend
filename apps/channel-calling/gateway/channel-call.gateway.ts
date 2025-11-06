@@ -76,6 +76,12 @@ export class ChannelCallGateway
     username: string;
     display_name: string;
     avatar_ipfs_hash: string;
+    wallets: Array<{
+      address: string;
+      is_primary?: boolean;
+      chain?: string;
+      label?: string;
+    }>;
     isCamera: boolean;
     isMic: boolean;
     isHeadphone: boolean;
@@ -98,6 +104,7 @@ export class ChannelCallGateway
         username: profile.username || `User_${userDehiveId}`,
         display_name: profile.display_name || `User_${userDehiveId}`,
         avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
+        wallets: profile.wallets || [],
         isCamera: participant?.isCamera || false,
         isMic: participant?.isMic || false,
         isHeadphone: participant?.isHeadphone || false,
@@ -372,6 +379,7 @@ export class ChannelCallGateway
               username: previousUserProfile.username,
               display_name: previousUserProfile.display_name,
               avatar_ipfs_hash: previousUserProfile.avatar_ipfs_hash,
+              wallets: previousUserProfile.wallets,
               isCamera: previousUserProfile.isCamera,
               isMic: previousUserProfile.isMic,
               isHeadphone: previousUserProfile.isHeadphone,

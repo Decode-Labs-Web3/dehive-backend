@@ -96,6 +96,7 @@ export class DmGateway
         display_name:
           userProfile.display_name || `User_${String(message.senderId)}`,
         avatar_ipfs_hash: userProfile.avatar_ipfs_hash || null,
+        wallets: userProfile.wallets || [],
       },
       content: message.content,
       attachments: message.attachments || [],

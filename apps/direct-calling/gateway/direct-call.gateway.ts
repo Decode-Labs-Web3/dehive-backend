@@ -85,6 +85,12 @@ export class DirectCallGateway
     username: string;
     display_name: string;
     avatar_ipfs_hash: string;
+    wallets: Array<{
+      address: string;
+      is_primary?: boolean;
+      chain?: string;
+      label?: string;
+    }>;
   } | null> {
     try {
       const profile =
@@ -96,6 +102,7 @@ export class DirectCallGateway
           username: profile.username || `User_${userDehiveId}`,
           display_name: profile.display_name || `User_${userDehiveId}`,
           avatar_ipfs_hash: profile.avatar_ipfs_hash || "",
+          wallets: profile.wallets || [],
         };
       }
 
@@ -369,6 +376,7 @@ export class DirectCallGateway
               username: callerProfile.username,
               display_name: callerProfile.display_name,
               avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+              wallets: callerProfile.wallets,
             },
           });
 
@@ -483,6 +491,7 @@ export class DirectCallGateway
                 username: calleeProfile.username,
                 display_name: calleeProfile.display_name,
                 avatar_ipfs_hash: calleeProfile.avatar_ipfs_hash,
+                wallets: calleeProfile.wallets,
               },
             });
 
@@ -494,6 +503,7 @@ export class DirectCallGateway
                 username: callerProfile.username,
                 display_name: callerProfile.display_name,
                 avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+                wallets: callerProfile.wallets,
               },
             });
           }
@@ -512,6 +522,7 @@ export class DirectCallGateway
           username: calleeProfile.username,
           display_name: calleeProfile.display_name,
           avatar_ipfs_hash: calleeProfile.avatar_ipfs_hash,
+          wallets: calleeProfile.wallets,
         },
       });
 
@@ -523,6 +534,7 @@ export class DirectCallGateway
           username: callerProfile.username,
           display_name: callerProfile.display_name,
           avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+          wallets: callerProfile.wallets,
         },
       });
     } catch (error) {
@@ -631,6 +643,7 @@ export class DirectCallGateway
           username: calleeProfile.username,
           display_name: calleeProfile.display_name,
           avatar_ipfs_hash: calleeProfile.avatar_ipfs_hash,
+          wallets: calleeProfile.wallets,
         },
       });
 
@@ -642,6 +655,7 @@ export class DirectCallGateway
           username: callerProfile.username,
           display_name: callerProfile.display_name,
           avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+          wallets: callerProfile.wallets,
         },
       });
     } catch (error) {
@@ -745,6 +759,7 @@ export class DirectCallGateway
           username: calleeProfile.username,
           display_name: calleeProfile.display_name,
           avatar_ipfs_hash: calleeProfile.avatar_ipfs_hash,
+          wallets: calleeProfile.wallets,
         },
       });
 
@@ -756,6 +771,7 @@ export class DirectCallGateway
           username: callerProfile.username,
           display_name: callerProfile.display_name,
           avatar_ipfs_hash: callerProfile.avatar_ipfs_hash,
+          wallets: callerProfile.wallets,
         },
       });
     } catch (error) {
@@ -895,6 +911,7 @@ export class DirectCallGateway
           username: currentUserProfile.username,
           display_name: currentUserProfile.display_name,
           avatar_ipfs_hash: currentUserProfile.avatar_ipfs_hash,
+          wallets: currentUserProfile.wallets,
         },
       });
 
@@ -907,6 +924,7 @@ export class DirectCallGateway
           username: otherUserProfile.username,
           display_name: otherUserProfile.display_name,
           avatar_ipfs_hash: otherUserProfile.avatar_ipfs_hash,
+          wallets: otherUserProfile.wallets,
         },
       });
     } catch (error) {

@@ -130,33 +130,25 @@ export class MessagingService {
     const size: number = uploaded.size ?? 0;
     this.validateUploadSize(mime, size);
 
+    // Validate serverId is required
     if (!body.serverId) {
       throw new BadRequestException("serverId is required");
     }
     if (!Types.ObjectId.isValid(body.serverId)) {
       throw new BadRequestException("Invalid serverId");
     }
-    if (!body.channelId) {
-      throw new BadRequestException("channelId is required");
-    }
-    if (!Types.ObjectId.isValid(body.channelId)) {
-      throw new BadRequestException("Invalid channelId");
-    }
+
     if (!userId || !Types.ObjectId.isValid(userId)) {
       throw new BadRequestException("Invalid or missing user_dehive_id");
     }
+
+    // Validate user is member of the server
     const isMember = await this.userDehiveServerModel.exists({
       user_dehive_id: userId,
       server_id: new Types.ObjectId(body.serverId),
     });
     if (!isMember) {
       throw new BadRequestException("User is not a member of this server");
-    }
-
-    // Validate channel exists and user has access
-    const channel = await this.channelModel.findById(body.channelId);
-    if (!channel) {
-      throw new NotFoundException("Channel not found");
     }
 
     const storage = (
@@ -290,8 +282,7 @@ export class MessagingService {
         userId && Types.ObjectId.isValid(userId)
           ? new Types.ObjectId(userId)
           : new Types.ObjectId(),
-      serverId: body.serverId ? new Types.ObjectId(body.serverId) : undefined,
-      channelId: new Types.ObjectId(body.channelId),
+      serverId: new Types.ObjectId(body.serverId),
       type,
       ipfsHash,
       name: originalName,
@@ -1054,6 +1045,7 @@ export class MessagingService {
       serverId: new Types.ObjectId(serverId),
     };
     query.ownerId = new Types.ObjectId(userId);
+
     if (type) {
       const allowed = new Set<AttachmentType>([
         AttachmentType.IMAGE,

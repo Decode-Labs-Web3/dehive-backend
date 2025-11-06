@@ -1,4 +1,3 @@
-// Server Tags Enum
 export enum ServerTag {
   GAMING = "Gaming",
   FRIENDS = "Friends",
@@ -8,20 +7,24 @@ export enum ServerTag {
   ARTIST_CREATORS = "Artist & Creators",
 }
 
-// Server Tags Array for validation
 export const SERVER_TAGS = Object.values(ServerTag);
 
-// Server Tags Type
 export type ServerTagType = `${ServerTag}`;
 
-// Channel Type Enum
 export enum ChannelType {
   TEXT = "TEXT",
   VOICE = "VOICE",
 }
 
-// Channel Type Array for validation
 export const CHANNEL_TYPES = Object.values(ChannelType);
 
-// Channel Type Type
 export type ChannelTypeType = `${ChannelType}`;
+
+export enum BlockchainNetwork {
+  ETH = "ETH",
+  BASE = "BASE",
+  BSC = "BSC",
+}
+
+export const BLOCKCHAIN_NETWORKS = Object.values(BlockchainNetwork);
+export type BlockchainNetworkType = `${BlockchainNetwork}`;

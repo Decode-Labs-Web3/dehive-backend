@@ -20,6 +20,7 @@ import { CreateChannelDto } from "../dto/create-channel.dto";
 import { UpdateCategoryDto } from "../dto/update-category.dto";
 import { UpdateChannelDto } from "../dto/update-channel.dto";
 import { MoveChannelDto } from "../dto/move-channel.dto";
+import { UpdateNftGatingDto } from "../dto/update-nft-gating.dto";
 import {
   ApiTags,
   ApiOperation,
@@ -210,6 +211,58 @@ export class ServerController {
   @ApiParam({ name: "id", description: "The ID of the server to delete" })
   removeServer(@Param("id") id: string, @CurrentUser("_id") actorId: string) {
     return this.serverService.removeServer(id, actorId);
+  }
+
+  @Patch(":id/nft-gating")
+  @ApiOperation({
+    summary: "Update NFT gating configuration",
+    description:
+      "Enable or disable NFT-gated server. When enabled, users must own the specified NFT to join the server.",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
+  @ApiParam({ name: "id", description: "The ID of the server" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        enabled: { type: "boolean", example: true },
+        network: {
+          type: "string",
+          enum: ["ETH", "BASE", "BSC"],
+          example: "ETH",
+        },
+        contract_address: {
+          type: "string",
+          example: "0x1234567890123456789012345678901234567890",
+        },
+        required_balance: { type: "number", example: 1 },
+      },
+      required: ["enabled"],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: "NFT gating configuration updated successfully.",
+  })
+  @ApiResponse({
+    status: 403,
+    description: "Only server owner can update NFT gating.",
+  })
+  updateNftGating(
+    @Param("id") id: string,
+    @Body() updateNftGatingDto: UpdateNftGatingDto,
+    @CurrentUser("_id") actorId: string,
+  ) {
+    return this.serverService.updateNftGating(id, actorId, updateNftGatingDto);
   }
 
   @Post(":serverId/categories")

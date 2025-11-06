@@ -30,6 +30,8 @@ import {
 } from "../../schemas/channel-message.schema";
 import { ServerRole } from "../../../user-dehive-server/enum/enum";
 import { IPFSService } from "./ipfs.service";
+import { UpdateNftGatingDto } from "../../dto/update-nft-gating.dto";
+import { NftVerificationService } from "../../services/nft-verification.service";
 
 @Injectable()
 export class ServerService {
@@ -48,6 +50,7 @@ export class ServerService {
     private readonly channelMessageModel: Model<ChannelMessageDocument>,
     private readonly httpService: HttpService,
     private readonly ipfsService: IPFSService,
+    private readonly nftVerificationService: NftVerificationService,
   ) {
     // Constructor body can be empty or used for initialization
   }
@@ -65,7 +68,6 @@ export class ServerService {
 
     const ownerDehiveId = ownerBaseId;
 
-    // Upload avatar to IPFS if provided
     let avatarHash: string | undefined;
     if (avatar) {
       console.log(
@@ -111,7 +113,6 @@ export class ServerService {
       console.log("🔍 [CREATE SERVER] newServerData:", newServerData);
       console.log("🔍 [CREATE SERVER] newServer after create:", newServer);
 
-      // Force update avatar_hash if it exists (workaround for MongoDB not saving the field)
       if (avatarHash) {
         const updatedServer = await this.serverModel
           .findByIdAndUpdate(
@@ -141,7 +142,6 @@ export class ServerService {
         role: ServerRole.OWNER,
       });
       await newMembership.save({ session });
-      // Update or create UserDehive profile
       await this.userDehiveModel.findByIdAndUpdate(
         ownerDehiveId,
         {
@@ -206,7 +206,6 @@ export class ServerService {
       );
     }
 
-    // Upload new avatar to IPFS if provided
     let avatarHash: string | undefined;
     if (avatar) {
       console.log(
@@ -239,7 +238,6 @@ export class ServerService {
 
     console.log(`🔍 [UPDATE SERVER] updateData:`, updateData);
 
-    // Use $set operator with strict: false to force MongoDB to accept avatar_hash field
     const updatedServer = await this.serverModel
       .findByIdAndUpdate(id, { $set: updateData }, { new: true, strict: false })
       .exec();
@@ -599,7 +597,7 @@ export class ServerService {
     const actorMembership = await this.userDehiveServerModel
       .findOne({
         server_id: currentCategory.server_id,
-        user_dehive_id: actorId, // ✅ FIX: Use string, not ObjectId
+        user_dehive_id: actorId,
       })
       .lean();
 
@@ -677,12 +675,10 @@ export class ServerService {
         "Category containing this channel not found.",
       );
 
-    // Get server info to check owner
     const server = await this.findServerById(category.server_id.toString());
     console.log("🎯 [DELETE CHANNEL] server:", server);
     console.log("🎯 [DELETE CHANNEL] server.owner_id:", server.owner_id);
 
-    // Check if actor is server owner
     const isOwner = server.owner_id.toString() === actorId;
     console.log("🎯 [DELETE CHANNEL] isOwner:", isOwner);
 
@@ -749,13 +745,11 @@ export class ServerService {
   ): Promise<Server> {
     const serverObjectId = new Types.ObjectId(serverId);
 
-    // Check if server exists
     const server = await this.serverModel.findById(serverObjectId);
     if (!server) {
       throw new NotFoundException("Server not found.");
     }
 
-    // Check if user is owner or moderator
     const userServerRole = await this.userDehiveServerModel.findOne({
       server_id: serverObjectId,
       user_dehive_id: actorId,
@@ -768,10 +762,67 @@ export class ServerService {
       );
     }
 
-    // Update server tags
     const updatedServer = await this.serverModel.findByIdAndUpdate(
       serverObjectId,
       { tags },
+      { new: true },
+    );
+
+    if (!updatedServer) {
+      throw new NotFoundException("Server not found after update.");
+    }
+
+    return updatedServer;
+  }
+
+  async updateNftGating(
+    serverId: string,
+    actorId: string,
+    updateNftGatingDto: UpdateNftGatingDto,
+  ): Promise<Server> {
+    const serverObjectId = new Types.ObjectId(serverId);
+
+    const server = await this.serverModel.findById(serverObjectId);
+    if (!server) {
+      throw new NotFoundException("Server not found.");
+    }
+
+    const userServerRole = await this.userDehiveServerModel.findOne({
+      server_id: serverObjectId,
+      user_dehive_id: actorId,
+      role: ServerRole.OWNER,
+    });
+
+    if (!userServerRole) {
+      throw new ForbiddenException(
+        "Only server owner can update NFT gating configuration.",
+      );
+    }
+
+    if (!updateNftGatingDto.enabled) {
+      const updatedServer = await this.serverModel.findByIdAndUpdate(
+        serverObjectId,
+        { $unset: { nft_gated: "" } },
+        { new: true },
+      );
+
+      if (!updatedServer) {
+        throw new NotFoundException("Server not found after update.");
+      }
+
+      return updatedServer;
+    }
+
+    const nftGatingConfig = {
+      enabled: true,
+      network: updateNftGatingDto.network,
+      contract_address: updateNftGatingDto.contract_address,
+      required_balance: updateNftGatingDto.required_balance,
+    };
+
+    const updatedServer = await this.serverModel.findByIdAndUpdate(
+      serverObjectId,
+      { nft_gated: nftGatingConfig },
       { new: true },
     );
 

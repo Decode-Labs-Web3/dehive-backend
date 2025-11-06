@@ -3,7 +3,8 @@ import { MongooseModule } from "@nestjs/mongoose";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { HttpModule } from "@nestjs/axios";
 import { RedisModule } from "@nestjs-modules/ioredis";
-import { UserStatusService } from "./user-status.service";
+import { ScheduleModule } from "@nestjs/schedule";
+import { UserStatusService } from "./services/user-status.service";
 import { UserStatusController } from "./user-status.controller";
 import { UserStatusGateway } from "../gateway/user-status.gateway";
 import { AuthGuard } from "../common/guards/auth.guard";
@@ -12,10 +13,11 @@ import {
   UserStatusModel,
 } from "../schemas/user-status.schema";
 import { DecodeApiClient } from "../clients/decode-api.client";
-import { UserStatusCacheService } from "./user-status-cache.service";
+import { UserStatusCacheService } from "./services/user-status-cache.service";
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ".env",

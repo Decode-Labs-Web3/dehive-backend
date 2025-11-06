@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from "@nestjs/mongoose";
 import { Document, Types } from "mongoose";
+import { NftGatingConfig } from "../../server/interfaces/nft-gating.interface";
 
 @Schema({ collection: "server", timestamps: true })
 export class Server {
@@ -20,6 +21,13 @@ export class Server {
 
   @Prop({ default: [] })
   tags: string[];
+
+  @Prop({
+    type: Object,
+    required: false,
+    default: null,
+  })
+  nft_gated?: NftGatingConfig;
 }
 
 export type ServerDocument = Server & Document;

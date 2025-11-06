@@ -9,7 +9,7 @@ import {
 } from "@nestjs/websockets";
 import { Server, Socket } from "socket.io";
 import { Logger } from "@nestjs/common";
-import { UserStatusService } from "../src/user-status.service";
+import { UserStatusService } from "../src/services/user-status.service";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import { Types } from "mongoose";
 import { InjectRedis } from "@nestjs-modules/ioredis";
@@ -32,6 +32,13 @@ export class UserStatusGateway
 
   private readonly logger = new Logger(UserStatusGateway.name);
   private meta: Map<Socket, SocketMeta>;
+
+  // Track identify requests in progress to prevent duplicates
+  private identifyInProgress = new Map<string, Promise<void>>();
+
+  // Track last identify time for fast-track
+  private lastIdentifyTime = new Map<string, number>();
+  private readonly DEBOUNCE_WINDOW_MS = 3000; // 3 seconds
 
   constructor(
     @InjectRedis() private readonly redis: Redis,
@@ -259,7 +266,7 @@ export class UserStatusGateway
     }
 
     this.logger.log(
-      `Identity attempt - userDehiveId: ${userDehiveId}, fingerprintHash: ${fingerprintHash ? "provided" : "missing"}`,
+      `Identity attempt - userDehiveId: ${userDehiveId}, socket: ${client.id}`,
     );
 
     if (!userDehiveId || !fingerprintHash) {
@@ -277,114 +284,206 @@ export class UserStatusGateway
     }
 
     try {
-      const meta = this.meta.get(client);
-      if (meta) {
-        meta.userDehiveId = userDehiveId;
-        meta.fingerprintHash = fingerprintHash;
-      } else {
-        this.meta.set(client, { userDehiveId, fingerprintHash });
-      }
-
-      await this.saveFingerprintToRedis(userDehiveId, fingerprintHash);
-
-      const sessionId = await this.findUserSessionFromRedis(userDehiveId);
-
-      if (!sessionId) {
-        this.logger.warn(
-          `No sessionId found for user ${userDehiveId}. Broadcast will be skipped.`,
-        );
-      } else {
+      // 1. CHECK: Có identify request nào đang chạy cho user này không?
+      if (this.identifyInProgress.has(userDehiveId)) {
         this.logger.log(
-          `Found credentials for user ${userDehiveId} - sessionId: ${sessionId.substring(0, 8)}..., fingerprintHash: provided`,
+          `♻️ REUSING in-progress identify for user ${userDehiveId} (socket: ${client.id})`,
         );
-      }
 
-      // Set user online automatically after identity
-      await this.userStatusService.setUserOnline(userDehiveId, client.id);
+        // Chờ request đang chạy finish
+        await this.identifyInProgress.get(userDehiveId);
 
-      this.send(client, "identityConfirmed", {
-        userDehiveId,
-        status: "online",
-      });
-
-      this.logger.log(`User ${userDehiveId} identified and set online.`);
-
-      if (sessionId && fingerprintHash) {
-        // 🚀 PRE-WARM CACHE: Fetch page 0 in background for instant first load
-        this.userStatusService
-          .getFollowingUsersStatus(
-            userDehiveId,
-            sessionId,
-            fingerprintHash,
-            0,
-            20,
-          )
-          .then(() => {
-            this.logger.log(
-              `🔥 Pre-warmed user status cache for user ${userDehiveId} page 0`,
-            );
-          })
-          .catch((err) => {
-            this.logger.error(
-              `Failed to pre-warm user status cache for user ${userDehiveId}:`,
-              err,
-            );
-          });
-
-        try {
-          const followingData = await this.decodeApiClient.getUserFollowing(
-            userDehiveId,
-            sessionId,
-            fingerprintHash,
-          );
-
-          if (followingData && followingData.length > 0) {
-            this.logger.log(
-              `Broadcasting online status to ${followingData.length} following users`,
-            );
-
-            // Log all connected users for debugging
-            const connectedUsers = Array.from(this.meta.values())
-              .map((meta) => meta.userDehiveId)
-              .filter((id) => id);
-            this.logger.log(
-              `Currently connected users: ${connectedUsers.length} - [${connectedUsers.join(", ")}]`,
-            );
-
-            // Broadcast to each following user
-            let broadcastCount = 0;
-            for (const followingItem of followingData) {
-              // Find all connected clients for this following user
-              for (const [socket, socketMeta] of this.meta.entries()) {
-                if (socketMeta.userDehiveId === followingItem.user_id) {
-                  this.send(socket, "userStatusChanged", {
-                    userId: userDehiveId,
-                    status: "online",
-                  });
-                  broadcastCount++;
-                  this.logger.log(
-                    `Sent online notification to user ${followingItem.user_id}`,
-                  );
-                }
-              }
-            }
-            this.logger.log(
-              `Broadcast completed: sent ${broadcastCount} notifications`,
-            );
-          }
-        } catch (error) {
-          this.logger.error(
-            `Error broadcasting online status for user ${userDehiveId}:`,
-            error,
-          );
+        // Set socket mới này online (request đã verify xong)
+        const meta = this.meta.get(client);
+        if (meta) {
+          meta.userDehiveId = userDehiveId;
+          meta.fingerprintHash = fingerprintHash;
+        } else {
+          this.meta.set(client, { userDehiveId, fingerprintHash });
         }
+
+        await this.userStatusService.setUserOnline(userDehiveId, client.id);
+
+        this.send(client, "identityConfirmed", {
+          userDehiveId,
+          status: "online",
+        });
+
+        this.logger.log(
+          `✅ User ${userDehiveId} (socket: ${client.id}) set online via REUSE`,
+        );
+        return;
       }
+
+      // 2. CHECK: User vừa identify gần đây không? (trong 3s)
+      const lastTime = this.lastIdentifyTime.get(userDehiveId);
+      const now = Date.now();
+
+      if (lastTime && now - lastTime < this.DEBOUNCE_WINDOW_MS) {
+        this.logger.log(
+          `⚡ FAST identify for user ${userDehiveId} (${now - lastTime}ms ago, socket: ${client.id}) - skip verify, set online directly`,
+        );
+
+        // Set metadata
+        const meta = this.meta.get(client);
+        if (meta) {
+          meta.userDehiveId = userDehiveId;
+          meta.fingerprintHash = fingerprintHash;
+        } else {
+          this.meta.set(client, { userDehiveId, fingerprintHash });
+        }
+
+        // Set online luôn, không verify lại
+        await this.userStatusService.setUserOnline(userDehiveId, client.id);
+
+        this.send(client, "identityConfirmed", {
+          userDehiveId,
+          status: "online",
+        });
+
+        this.logger.log(
+          `✅ User ${userDehiveId} (socket: ${client.id}) set online via FAST-TRACK`,
+        );
+        return;
+      }
+
+      // 3. NORMAL FLOW: Lần đầu hoặc đã lâu rồi → verify đầy đủ
+      const identifyPromise = this.performFullIdentify(
+        userDehiveId,
+        fingerprintHash,
+        client,
+      );
+
+      // Track promise để requests sau có thể reuse
+      this.identifyInProgress.set(userDehiveId, identifyPromise);
+
+      await identifyPromise;
+
+      // Update thời gian identify
+      this.lastIdentifyTime.set(userDehiveId, Date.now());
     } catch (error) {
       this.logger.error("Error in identity:", error);
       this.send(client, "error", {
         message: "Failed to identify user",
         details: error instanceof Error ? error.message : String(error),
       });
+    } finally {
+      // Cleanup: xóa khỏi "in-progress" sau khi xong
+      this.identifyInProgress.delete(userDehiveId);
+    }
+  }
+
+  /**
+   * Thực hiện identify logic đầy đủ
+   */
+  private async performFullIdentify(
+    userDehiveId: string,
+    fingerprintHash: string,
+    client: Socket,
+  ): Promise<void> {
+    this.logger.log(`🔐 Performing FULL identify for user ${userDehiveId}`);
+
+    const meta = this.meta.get(client);
+    if (meta) {
+      meta.userDehiveId = userDehiveId;
+      meta.fingerprintHash = fingerprintHash;
+    } else {
+      this.meta.set(client, { userDehiveId, fingerprintHash });
+    }
+
+    await this.saveFingerprintToRedis(userDehiveId, fingerprintHash);
+
+    const sessionId = await this.findUserSessionFromRedis(userDehiveId);
+
+    if (!sessionId) {
+      this.logger.warn(
+        `No sessionId found for user ${userDehiveId}. Broadcast will be skipped.`,
+      );
+    } else {
+      this.logger.log(
+        `Found credentials for user ${userDehiveId} - sessionId: ${sessionId.substring(0, 8)}..., fingerprintHash: provided`,
+      );
+    }
+
+    // Set user online automatically after identity
+    await this.userStatusService.setUserOnline(userDehiveId, client.id);
+
+    this.send(client, "identityConfirmed", {
+      userDehiveId,
+      status: "online",
+    });
+
+    this.logger.log(`User ${userDehiveId} identified and set online.`);
+
+    if (sessionId && fingerprintHash) {
+      // 🚀 PRE-WARM CACHE: Fetch page 0 in background for instant first load
+      this.userStatusService
+        .getFollowingUsersStatus(
+          userDehiveId,
+          sessionId,
+          fingerprintHash,
+          0,
+          20,
+        )
+        .then(() => {
+          this.logger.log(
+            `🔥 Pre-warmed user status cache for user ${userDehiveId} page 0`,
+          );
+        })
+        .catch((err) => {
+          this.logger.error(
+            `Failed to pre-warm user status cache for user ${userDehiveId}:`,
+            err,
+          );
+        });
+
+      try {
+        const followingData = await this.decodeApiClient.getUserFollowing(
+          userDehiveId,
+          sessionId,
+          fingerprintHash,
+        );
+
+        if (followingData && followingData.length > 0) {
+          this.logger.log(
+            `Broadcasting online status to ${followingData.length} following users`,
+          );
+
+          // Log all connected users for debugging
+          const connectedUsers = Array.from(this.meta.values())
+            .map((meta) => meta.userDehiveId)
+            .filter((id) => id);
+          this.logger.log(
+            `Currently connected users: ${connectedUsers.length} - [${connectedUsers.join(", ")}]`,
+          );
+
+          // Broadcast to each following user
+          let broadcastCount = 0;
+          for (const followingItem of followingData) {
+            // Find all connected clients for this following user
+            for (const [socket, socketMeta] of this.meta.entries()) {
+              if (socketMeta.userDehiveId === followingItem.user_id) {
+                this.send(socket, "userStatusChanged", {
+                  userId: userDehiveId,
+                  status: "online",
+                });
+                broadcastCount++;
+                this.logger.log(
+                  `Sent online notification to user ${followingItem.user_id}`,
+                );
+              }
+            }
+          }
+          this.logger.log(
+            `Broadcast completed: sent ${broadcastCount} notifications`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error broadcasting online status for user ${userDehiveId}:`,
+          error,
+        );
+      }
     }
   }
 }

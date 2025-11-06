@@ -39,6 +39,7 @@ import {
   BannedUser,
   BanListResponse,
 } from "../interfaces/banned-user.interface";
+import { NftVerificationService } from "../../server/services/nft-verification.service";
 
 @Injectable()
 export class UserDehiveServerService {
@@ -54,6 +55,7 @@ export class UserDehiveServerService {
     private inviteLinkModel: Model<InviteLinkDocument>,
     private readonly decodeApiClient: DecodeApiClient,
     @InjectRedis() private readonly redis: Redis,
+    private readonly nftVerificationService: NftVerificationService,
   ) {}
 
   private async findUserDehiveProfile(userId: string) {
@@ -63,6 +65,7 @@ export class UserDehiveServerService {
   async joinServer(
     dto: JoinServerDto,
     userId: string,
+    sessionId: string,
   ): Promise<{ server_id: string; server_name: string }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
@@ -98,6 +101,44 @@ export class UserDehiveServerService {
     }
     if (isBannedFromServer)
       throw new ForbiddenException("You are banned from this server.");
+
+    // ✅ NFT Gating Check
+    if (server.nft_gated?.enabled) {
+      // Lấy thông tin user profile để có wallet address
+      const userProfile = await this.decodeApiClient.getUserById(
+        userId,
+        sessionId,
+      );
+
+      // Check xem user có wallet không
+      if (!userProfile?.wallets || userProfile.wallets.length === 0) {
+        throw new ForbiddenException(
+          "You need to connect a wallet to join this NFT-gated server.",
+        );
+      }
+
+      // Lấy primary wallet hoặc wallet đầu tiên
+      const primaryWallet = userProfile.wallets.find(
+        (w: { is_primary?: boolean }) => w.is_primary,
+      );
+      const walletToCheck = primaryWallet || userProfile.wallets[0];
+
+      // Verify NFT ownership
+      const nftVerification = await this.nftVerificationService.verifyNftAccess(
+        (walletToCheck as { address: string }).address,
+        {
+          network: server.nft_gated.network,
+          contract_address: server.nft_gated.contract_address,
+          required_balance: server.nft_gated.required_balance,
+        },
+      );
+
+      // Nếu user không có đủ NFT, reject
+      if (!nftVerification.hasAccess) {
+        throw new ForbiddenException(nftVerification.message);
+      }
+    }
+
     const session = await this.serverModel.db.startSession();
     session.startTransaction();
     try {
@@ -228,6 +269,7 @@ export class UserDehiveServerService {
   async useInvite(
     code: string,
     actorBaseId: string,
+    sessionId: string,
   ): Promise<{ server_id: string; server_name: string }> {
     const invite = await this.inviteLinkModel.findOne({ code });
     if (!invite || invite.expiredAt < new Date())
@@ -238,6 +280,7 @@ export class UserDehiveServerService {
         server_id: invite.server_id.toString(),
       },
       actorBaseId,
+      sessionId,
     );
   }
 

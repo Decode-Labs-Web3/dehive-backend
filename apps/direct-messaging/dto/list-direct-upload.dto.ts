@@ -1,9 +1,25 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { IsEnum, IsNumber, IsOptional, Max, Min } from "class-validator";
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from "class-validator";
 import { Type } from "class-transformer";
 import { AttachmentType } from "../enum/enum";
 
 export class ListDirectUploadsDto {
+  @ApiPropertyOptional({
+    description: "Filter uploads by conversation ID",
+    type: String,
+    example: "507f1f77bcf86cd799439011",
+  })
+  @IsOptional()
+  @IsString()
+  conversationId?: string;
+
   @ApiPropertyOptional({
     description: "Filter uploads by a specific type.",
     enum: AttachmentType,

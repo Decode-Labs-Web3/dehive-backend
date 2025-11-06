@@ -22,6 +22,7 @@ import {
 import { UserDehiveServerModule } from "../../user-dehive-server/src/user-dehive-server.module";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { IPFSService } from "./services/ipfs.service";
+import { NftVerificationService } from "../services/nft-verification.service";
 
 @Module({
   imports: [
@@ -54,6 +55,6 @@ import { IPFSService } from "./services/ipfs.service";
     ]),
   ],
   controllers: [ServerController],
-  providers: [ServerService, AuthGuard, IPFSService],
+  providers: [ServerService, AuthGuard, IPFSService, NftVerificationService],
 })
 export class ServerModule {}

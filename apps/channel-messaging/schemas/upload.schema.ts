@@ -11,8 +11,13 @@ export class Upload {
   })
   ownerId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: "Server", required: false, index: true })
-  serverId?: Types.ObjectId;
+  @Prop({
+    type: Types.ObjectId,
+    ref: "Server",
+    required: true,
+    index: true,
+  })
+  serverId: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: "Channel", required: false, index: true })
   channelId?: Types.ObjectId;

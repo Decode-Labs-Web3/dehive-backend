@@ -77,8 +77,15 @@ export class UserDehiveServerController {
     status: 404,
     description: "Server or Dehive Profile not found.",
   })
-  joinServer(@Body() dto: JoinServerDto, @CurrentUser("_id") _id: string) {
-    return this.service.joinServer(dto, _id);
+  joinServer(
+    @Body() dto: JoinServerDto,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    return this.service.joinServer(
+      dto,
+      currentUser._id,
+      currentUser.session_id,
+    );
   }
 
   @Delete("server/:serverId/leave")
@@ -168,9 +175,13 @@ export class UserDehiveServerController {
   })
   useInvite(
     @Param("code") code: string,
-    @CurrentUser("_id") actorBaseId: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
   ) {
-    return this.service.useInvite(code, actorBaseId);
+    return this.service.useInvite(
+      code,
+      currentUser._id,
+      currentUser.session_id,
+    );
   }
 
   @Post("kick")

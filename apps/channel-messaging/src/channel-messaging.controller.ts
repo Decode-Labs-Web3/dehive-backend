@@ -135,14 +135,19 @@ export class MessagingController {
     schema: {
       type: "object",
       properties: {
-        file: { type: "string", format: "binary" },
-        serverId: { type: "string", description: "Server ID (MongoId)" },
-        channelId: {
+        file: {
           type: "string",
-          description: "Channel ID (MongoId)",
+          format: "binary",
+          description: "File to upload",
+        },
+        serverId: {
+          type: "string",
+          description:
+            "Server ID (MongoId) - REQUIRED. File will be uploaded to this server and can be used in any channel within the server",
+          example: "507f1f77bcf86cd799439011",
         },
       },
-      required: ["file", "serverId", "channelId"],
+      required: ["file", "serverId"],
     },
   })
   @ApiResponse({

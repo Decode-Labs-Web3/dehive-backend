@@ -10,7 +10,7 @@ import {
   ParseIntPipe,
 } from "@nestjs/common";
 import { Request } from "express";
-import { UserStatusService } from "./user-status.service";
+import { UserStatusService } from "./services/user-status.service";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { AuthenticatedUser } from "../interfaces/authenticated-user.interface";
 import { ApiResponse } from "../dto/response.dto";

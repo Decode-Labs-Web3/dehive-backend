@@ -4,13 +4,13 @@ import { Model, Types } from "mongoose";
 import {
   UserStatusSchema,
   UserStatusDocument,
-} from "../schemas/user-status.schema";
-import { UserStatus } from "../enum/enum";
-import { DecodeApiClient } from "../clients/decode-api.client";
+} from "../../schemas/user-status.schema";
+import { UserStatus } from "../../enum/enum";
+import { DecodeApiClient } from "../../clients/decode-api.client";
 import {
   BulkStatusResponse,
   OnlineUsersResponse,
-} from "../interfaces/user-status.interface";
+} from "../../interfaces/user-status.interface";
 import { InjectRedis } from "@nestjs-modules/ioredis";
 import { Redis } from "ioredis";
 import { UserStatusCacheService } from "./user-status-cache.service";
@@ -19,6 +19,19 @@ import { UserStatusCacheService } from "./user-status-cache.service";
 export class UserStatusService {
   private readonly logger = new Logger(UserStatusService.name);
   private gateway: { getConnectedUserIds: () => Set<string> } | null = null;
+
+  // Track prewarm requests in progress to prevent duplicates
+  private prewarmInProgress = new Map<string, Promise<BulkStatusResponse>>();
+
+  // In-memory cache for prewarm results (TTL: 30s)
+  private prewarmCache = new Map<
+    string,
+    {
+      data: BulkStatusResponse;
+      timestamp: number;
+    }
+  >();
+  private readonly PREWARM_CACHE_TTL = 30000; // 30 seconds
 
   constructor(
     @InjectModel(UserStatusSchema.name)
@@ -217,9 +230,74 @@ export class UserStatusService {
 
   /**
    * Fetch following status from API and cache it
-   * Private helper method
+   * Private helper method - with deduplication
    */
   private async fetchAndCacheFollowingStatus(
+    currentUserId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+    page: number = 0,
+    limit: number = 20,
+  ): Promise<BulkStatusResponse> {
+    const progressKey = `${currentUserId}:${page}`;
+
+    // 1. CHECK: In-memory cache (30s TTL)
+    const memCached = this.getFromMemoryCache(progressKey);
+    if (memCached) {
+      this.logger.log(`💨 Memory cache HIT for ${currentUserId} page ${page}`);
+      return memCached;
+    }
+
+    // 2. CHECK: Redis cache (handled by cacheService)
+    const redisCached =
+      await this.cacheService.getCachedFollowingStatus<BulkStatusResponse>(
+        currentUserId,
+        page,
+      );
+
+    if (redisCached && !redisCached.isStale) {
+      this.logger.log(`✅ Redis cache HIT for ${currentUserId} page ${page}`);
+      // Cache to memory too
+      this.setToMemoryCache(progressKey, redisCached.data);
+      return redisCached.data;
+    }
+
+    // 3. CHECK: Is there a fetch already in progress for this user+page?
+    if (this.prewarmInProgress.has(progressKey)) {
+      this.logger.log(
+        `♻️ REUSING in-progress fetch for ${currentUserId} page ${page}`,
+      );
+      const inProgress = this.prewarmInProgress.get(progressKey);
+      if (inProgress) {
+        return inProgress;
+      }
+    }
+
+    // 4. START NEW FETCH
+    this.logger.log(
+      `🚀 Starting NEW fetch for user ${currentUserId} page ${page}`,
+    );
+
+    const fetchPromise = this.doFetchAndCache(
+      currentUserId,
+      sessionId,
+      fingerprintHash,
+      page,
+      limit,
+    ).finally(() => {
+      // Cleanup after done
+      this.prewarmInProgress.delete(progressKey);
+    });
+
+    this.prewarmInProgress.set(progressKey, fetchPromise);
+
+    return fetchPromise;
+  }
+
+  /**
+   * Internal fetch and cache logic
+   */
+  private async doFetchAndCache(
     currentUserId: string,
     sessionId?: string,
     fingerprintHash?: string,
@@ -735,6 +813,33 @@ export class UserStatusService {
         error,
       );
       throw error;
+    }
+  }
+
+  // Memory cache helper methods
+  private getFromMemoryCache(key: string): BulkStatusResponse | null {
+    const cached = this.prewarmCache.get(key);
+    if (!cached) return null;
+
+    const now = Date.now();
+    if (now - cached.timestamp > this.PREWARM_CACHE_TTL) {
+      this.prewarmCache.delete(key);
+      return null;
+    }
+
+    return cached.data;
+  }
+
+  private setToMemoryCache(key: string, data: BulkStatusResponse): void {
+    this.prewarmCache.set(key, {
+      data,
+      timestamp: Date.now(),
+    });
+
+    // Auto cleanup old cache entries if too many
+    if (this.prewarmCache.size > 1000) {
+      const oldestKey = this.prewarmCache.keys().next().value;
+      this.prewarmCache.delete(oldestKey);
     }
   }
 }
