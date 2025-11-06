@@ -1,24 +1,20 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { HttpService } from "@nestjs/axios";
 import { ConfigService } from "@nestjs/config";
 import { firstValueFrom } from "rxjs";
-import PQueue from "p-queue";
 import { UserProfile } from "../interfaces/user-profile.interface";
 import { Wallet } from "../interfaces/wallet.interface";
 
 @Injectable()
-export class DecodeApiClient {
+export class DecodeApiClient implements OnModuleInit {
   private readonly logger = new Logger(DecodeApiClient.name);
   private readonly decodeApiUrl: string;
   private readonly directMessageUrl: string;
   private readonly userDehiveServerUrl: string;
 
-  // Queue to control concurrent API requests
-  private readonly queue = new PQueue({
-    concurrency: 5, // Max 5 concurrent API calls
-    interval: 1000,
-    intervalCap: 15, // Max 15 calls per second
-  });
+  // Queue to control concurrent API requests - will be initialized in onModuleInit
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private queue: any;
 
   private profileCache = new Map<
     string,
@@ -55,6 +51,25 @@ export class DecodeApiClient {
     const serverPort =
       this.configService.get<number>("USER_DEHIVE_SERVER_PORT") || 4001;
     this.userDehiveServerUrl = `http://${serverHost}:${serverPort}`;
+  }
+
+  /**
+   * Initialize PQueue with dynamic import to support ESM module on cloud
+   */
+  async onModuleInit() {
+    try {
+      const PQueueModule = await import("p-queue");
+      const PQueue = PQueueModule.default;
+      this.queue = new PQueue({
+        concurrency: 5, // Max 5 concurrent API calls
+        interval: 1000,
+        intervalCap: 15, // Max 15 calls per second
+      });
+      this.logger.log("✅ PQueue initialized successfully with dynamic import");
+    } catch (error) {
+      this.logger.error("❌ Failed to initialize PQueue:", error);
+      throw error;
+    }
   }
 
   async getUserProfilePublic(
