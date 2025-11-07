@@ -355,6 +355,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.logger.log(`[WebSocket] ✅ SERVER ID: ${serverId}`);
       this.logger.log(`[WebSocket] ✅ ROOM JOINED: server:${serverId}`);
 
+      // ⭐ PRE-WARM CACHE: Fetch first page of messages for all channels in this server
+      // This makes channel messages load instantly when user switches channels
+      this.prewarmServerChannels(serverId, meta.userDehiveId).catch((err) =>
+        this.logger.error(`Failed to prewarm server channels: ${err.message}`),
+      );
+
       this.send(client, "joinedServer", {
         serverId,
         message:
@@ -653,6 +659,68 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
     }
   }
+
+  /**
+   * ⭐ Pre-warm cache for all channels in a server
+   * Called when user joins a server to make channel switching instant
+   */
+  private async prewarmServerChannels(
+    serverId: string,
+    userDehiveId: string,
+  ): Promise<void> {
+    try {
+      this.logger.log(
+        `🔥 Pre-warming cache for server ${serverId} (user: ${userDehiveId})`,
+      );
+
+      // Get all categories in this server
+      const categories = await this.categoryModel
+        .find({ server_id: new Types.ObjectId(serverId) })
+        .lean();
+
+      if (categories.length === 0) {
+        this.logger.log(
+          `No categories found in server ${serverId}, skipping prewarm`,
+        );
+        return;
+      }
+
+      const categoryIds = categories.map((cat) => cat._id);
+
+      // Get all channels in these categories
+      const channels = await this.channelModel
+        .find({ category_id: { $in: categoryIds } })
+        .limit(20) // Limit to first 20 channels to avoid overload
+        .lean();
+
+      if (channels.length === 0) {
+        this.logger.log(
+          `No channels found in server ${serverId}, skipping prewarm`,
+        );
+        return;
+      }
+
+      const channelIds = channels.map((channel) => channel._id.toString());
+
+      this.logger.log(
+        `🔥 Pre-warming ${channelIds.length} channels in server ${serverId}`,
+      );
+
+      // Call service to prewarm all channels (fire and forget)
+      // Note: sessionId and fingerprintHash are optional for prewarm
+      await this.messagingService.prewarmMultipleChannels(channelIds);
+
+      this.logger.log(
+        `✅ Pre-warmed ${channelIds.length} channels for server ${serverId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to prewarm server ${serverId}: ${error.message}`,
+      );
+      // Don't throw - prewarm is optional optimization
+    }
+  }
+
   @SubscribeMessage("ping")
   handlePing(@ConnectedSocket() client: Socket) {
     this.send(client, "pong", {
