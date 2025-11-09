@@ -21,9 +21,9 @@ export const CHANNEL_TYPES = Object.values(ChannelType);
 export type ChannelTypeType = `${ChannelType}`;
 
 export enum BlockchainNetwork {
-  ETH = "ETH",
-  BASE = "BASE",
-  BSC = "BSC",
+  ETHEREUM = "ethereum",
+  BASE = "base",
+  BSC = "bsc",
 }
 
 export const BLOCKCHAIN_NETWORKS = Object.values(BlockchainNetwork);

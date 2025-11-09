@@ -1,8 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ethers } from "ethers";
-import { BlockchainNetwork } from "../enum/enum";
-import { NftVerificationResult } from "../interfaces/nft-gating.interface";
+import { BlockchainNetwork } from "../../enum/enum";
+import { NftVerificationResult } from "../../interfaces/nft-gating.interface";
 
 @Injectable()
 export class NftVerificationService {
@@ -26,7 +26,7 @@ export class NftVerificationService {
 
     if (ethRpcUrl) {
       this.providers.set(
-        BlockchainNetwork.ETH,
+        BlockchainNetwork.ETHEREUM,
         new ethers.JsonRpcProvider(ethRpcUrl),
       );
       this.logger.log("✅ Ethereum RPC provider initialized");

@@ -22,7 +22,8 @@ import {
 import { UserDehiveServerModule } from "../../user-dehive-server/src/user-dehive-server.module";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { IPFSService } from "./services/ipfs.service";
-import { NftVerificationService } from "../services/nft-verification.service";
+import { NftVerificationService } from "./services/nft-verification.service";
+import { NetworkMappingService } from "./services/network-mapping.service";
 
 @Module({
   imports: [
@@ -31,7 +32,7 @@ import { NftVerificationService } from "../services/nft-verification.service";
       envFilePath: `.env`,
     }),
     HttpModule.register({
-      timeout: 5000,
+      timeout: 10000,
       maxRedirects: 5,
     }),
     MongooseModule.forRootAsync({
@@ -55,6 +56,12 @@ import { NftVerificationService } from "../services/nft-verification.service";
     ]),
   ],
   controllers: [ServerController],
-  providers: [ServerService, AuthGuard, IPFSService, NftVerificationService],
+  providers: [
+    ServerService,
+    AuthGuard,
+    IPFSService,
+    NftVerificationService,
+    NetworkMappingService,
+  ],
 })
 export class ServerModule {}

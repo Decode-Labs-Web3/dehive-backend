@@ -5,6 +5,8 @@ export interface NftGatingConfig {
 
   network: BlockchainNetwork;
 
+  chain_id: string; // Chain ID for blockchain queries (e.g., "1", "56", "8453")
+
   contract_address: string;
 
   required_balance: number;

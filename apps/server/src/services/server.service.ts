@@ -31,7 +31,8 @@ import {
 import { ServerRole } from "../../../user-dehive-server/enum/enum";
 import { IPFSService } from "./ipfs.service";
 import { UpdateNftGatingDto } from "../../dto/update-nft-gating.dto";
-import { NftVerificationService } from "../../services/nft-verification.service";
+import { NftVerificationService } from "./nft-verification.service";
+import { NetworkMappingService } from "./network-mapping.service";
 
 @Injectable()
 export class ServerService {
@@ -51,6 +52,7 @@ export class ServerService {
     private readonly httpService: HttpService,
     private readonly ipfsService: IPFSService,
     private readonly nftVerificationService: NftVerificationService,
+    private readonly networkMapping: NetworkMappingService,
   ) {
     // Constructor body can be empty or used for initialization
   }
@@ -799,7 +801,12 @@ export class ServerService {
       );
     }
 
+    // ✅ DISABLE NFT GATING
     if (!updateNftGatingDto.enabled) {
+      console.log(
+        `🔓 [NFT GATING] Disabling NFT gating for server ${serverId}`,
+      );
+
       const updatedServer = await this.serverModel.findByIdAndUpdate(
         serverObjectId,
         { $unset: { nft_gated: "" } },
@@ -813,23 +820,58 @@ export class ServerService {
       return updatedServer;
     }
 
-    const nftGatingConfig = {
-      enabled: true,
-      network: updateNftGatingDto.network,
-      contract_address: updateNftGatingDto.contract_address,
-      required_balance: updateNftGatingDto.required_balance,
-    };
+    // ✅ ENABLE NFT GATING (No contract verification)
+    try {
+      // Get network info and convert network name to chain_id
+      const networkInfo = this.networkMapping.getNetworkInfo(
+        updateNftGatingDto.network,
+      );
 
-    const updatedServer = await this.serverModel.findByIdAndUpdate(
-      serverObjectId,
-      { nft_gated: nftGatingConfig },
-      { new: true },
-    );
+      console.log(`🔒 [NFT GATING] Enabling NFT gating for server ${serverId}`);
+      console.log(
+        `   Network: ${networkInfo.name} (${updateNftGatingDto.network})`,
+      );
+      console.log(`   Chain ID: ${networkInfo.chainId}`);
+      console.log(`   Contract: ${updateNftGatingDto.contract_address}`);
+      console.log(
+        `   Required Balance: ${updateNftGatingDto.required_balance}`,
+      );
 
-    if (!updatedServer) {
-      throw new NotFoundException("Server not found after update.");
+      // Save NFT gating config with BOTH network name and chain_id
+      const nftGatingConfig = {
+        enabled: true,
+        network: updateNftGatingDto.network,
+        chain_id: networkInfo.chainId,
+        contract_address: updateNftGatingDto.contract_address,
+        required_balance: updateNftGatingDto.required_balance,
+      };
+
+      const updatedServer = await this.serverModel.findByIdAndUpdate(
+        serverObjectId,
+        { nft_gated: nftGatingConfig },
+        { new: true },
+      );
+
+      if (!updatedServer) {
+        throw new NotFoundException("Server not found after update.");
+      }
+
+      console.log(
+        `✅ [NFT GATING] NFT gating enabled successfully for server ${serverId}`,
+      );
+
+      return updatedServer;
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      console.error(
+        `❌ [NFT GATING] Failed to enable NFT gating: ${error.message}`,
+      );
+      throw new BadRequestException(
+        `Failed to update NFT gating: ${error.message}`,
+      );
     }
-
-    return updatedServer;
   }
 }

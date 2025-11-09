@@ -15,7 +15,7 @@ export class UpdateNftGatingDto {
 
   @ValidateIf((o) => o.enabled === true)
   @IsEnum(BlockchainNetwork, {
-    message: "Network must be one of: ETH, BASE, BSC",
+    message: "Network must be one of: ethereum, base, bsc",
   })
   network: BlockchainNetwork;
 

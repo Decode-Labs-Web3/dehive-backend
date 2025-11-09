@@ -19,7 +19,7 @@ import {
   UserDehiveServerSchema,
 } from "../schemas/user-dehive-server.schema";
 import { AuthGuard } from "../common/guards/auth.guard";
-import { NftVerificationService } from "../../server/services/nft-verification.service";
+import { NftVerificationService } from "../../server/src/services/nft-verification.service";
 
 const MONGOOSE_MODELS = MongooseModule.forFeature([
   { name: "UserDehive", schema: UserDehiveSchema },

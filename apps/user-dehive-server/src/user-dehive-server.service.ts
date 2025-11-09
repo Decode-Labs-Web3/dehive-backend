@@ -39,7 +39,7 @@ import {
   BannedUser,
   BanListResponse,
 } from "../interfaces/banned-user.interface";
-import { NftVerificationService } from "../../server/services/nft-verification.service";
+import { NftVerificationService } from "../../server/src/services/nft-verification.service";
 
 @Injectable()
 export class UserDehiveServerService {
