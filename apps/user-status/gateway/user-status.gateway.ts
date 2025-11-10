@@ -484,6 +484,16 @@ export class UserStatusGateway
           error,
         );
       }
+
+      // Prewarm channel messages cache (fire and forget)
+      this.decodeApiClient
+        .prewarmUserChannels(userDehiveId, sessionId, fingerprintHash)
+        .catch((err) => {
+          this.logger.error(
+            `Failed to prewarm channel messages cache for user ${userDehiveId}:`,
+            err,
+          );
+        });
     }
   }
 }

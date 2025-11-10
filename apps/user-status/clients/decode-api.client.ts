@@ -11,6 +11,8 @@ export class DecodeApiClient {
   private readonly logger = new Logger(DecodeApiClient.name);
   private readonly decodeApiUrl: string;
   private readonly directMessageUrl: string;
+  private readonly channelMessageUrl: string;
+  private readonly serverUrl: string;
   private readonly userDehiveServerUrl: string;
 
   // Queue to control concurrent API requests
@@ -49,6 +51,19 @@ export class DecodeApiClient {
     this.logger.log(
       `Direct-messaging service URL configured: ${this.directMessageUrl}`,
     );
+
+    const cmHost = this.configService.get<string>("CLOUD_HOST") || "localhost";
+    const cmPort =
+      this.configService.get<number>("CHANNEL_MESSAGING_PORT") || 4003;
+    this.channelMessageUrl = `http://${cmHost}:${cmPort}`;
+    this.logger.log(
+      `Channel-messaging service URL configured: ${this.channelMessageUrl}`,
+    );
+
+    const srvHost = this.configService.get<string>("CLOUD_HOST") || "localhost";
+    const srvPort = this.configService.get<number>("SERVER_PORT") || 4002;
+    this.serverUrl = `http://${srvHost}:${srvPort}`;
+    this.logger.log(`Server service URL configured: ${this.serverUrl}`);
 
     const serverHost =
       this.configService.get<string>("CLOUD_HOST") || "localhost";
@@ -279,6 +294,127 @@ export class DecodeApiClient {
         );
       }
       return [];
+    }
+  }
+
+  /**
+   * Prewarm channel message cache by fetching messages from user's servers/channels
+   * Similar to how direct-messaging prewarmes 50 conversations × 10 messages
+   * This prewarmes up to 10 servers × 20 channels × 10 messages
+   */
+  async prewarmUserChannels(
+    userId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+  ): Promise<void> {
+    if (!sessionId || !fingerprintHash) {
+      this.logger.warn(
+        `No auth credentials provided for prewarmUserChannels(${userId}). Cannot prewarm without authentication.`,
+      );
+      return;
+    }
+
+    try {
+      const headers = {
+        "x-session-id": sessionId,
+        "x-fingerprint-hashed": fingerprintHash,
+      };
+
+      // Step 1: Get user's servers from server service
+      this.logger.log(`[Prewarm] Fetching servers for user ${userId}...`);
+      const serversResponse = await firstValueFrom(
+        this.httpService.get<{
+          success: boolean;
+          data: Array<{ _id: string; name: string }>;
+        }>(`${this.serverUrl}/api/servers`, {
+          headers,
+          timeout: 5000,
+        }),
+      );
+
+      if (!serversResponse.data?.success || !serversResponse.data?.data) {
+        this.logger.warn(
+          `[Prewarm] No servers found or failed to fetch for user ${userId}`,
+        );
+        return;
+      }
+
+      const servers = serversResponse.data.data.slice(0, 10); // Limit to 10 servers
+      this.logger.log(
+        `[Prewarm] Found ${serversResponse.data.data.length} servers, prewarming first ${servers.length} for user ${userId}`,
+      );
+
+      // Step 2: For each server, get channels and prewarm first page of messages
+      for (const server of servers) {
+        try {
+          // Get channels for this server
+          const channelsResponse = await firstValueFrom(
+            this.httpService.get<{
+              success: boolean;
+              data: Array<{ _id: string; name: string; type: string }>;
+            }>(`${this.serverUrl}/api/servers/${server._id}/channels`, {
+              headers,
+              timeout: 5000,
+            }),
+          );
+
+          if (!channelsResponse.data?.success || !channelsResponse.data?.data) {
+            this.logger.warn(
+              `[Prewarm] No channels found for server ${server._id}`,
+            );
+            continue;
+          }
+
+          const channels = channelsResponse.data.data.slice(0, 20); // Limit to 20 channels per server
+          this.logger.log(
+            `[Prewarm] Server ${server.name}: Found ${channelsResponse.data.data.length} channels, prewarming first ${channels.length}`,
+          );
+
+          // Step 3: For each channel, fetch first page of messages (triggers cache population)
+          for (const channel of channels) {
+            try {
+              await firstValueFrom(
+                this.httpService.get(
+                  `${this.channelMessageUrl}/api/messages/channel/${channel._id}`,
+                  {
+                    headers,
+                    params: {
+                      page: 0,
+                      limit: 10,
+                    },
+                    timeout: 5000,
+                  },
+                ),
+              );
+              this.logger.debug(
+                `[Prewarm] ✓ Prewarmed channel ${channel.name} (${channel._id})`,
+              );
+            } catch (channelError) {
+              this.logger.debug(
+                `[Prewarm] Failed to prewarm channel ${channel._id}:`,
+                channelError instanceof Error
+                  ? channelError.message
+                  : channelError,
+              );
+              // Continue with other channels even if one fails
+            }
+          }
+        } catch (serverError) {
+          this.logger.warn(
+            `[Prewarm] Failed to process server ${server._id}:`,
+            serverError instanceof Error ? serverError.message : serverError,
+          );
+          // Continue with other servers even if one fails
+        }
+      }
+
+      this.logger.log(`[Prewarm] Completed channel prewarm for user ${userId}`);
+    } catch (error) {
+      this.logger.error(
+        `[Prewarm] Error during channel prewarm for user ${userId}:`,
+        error instanceof Error ? error.message : error,
+      );
+      // Don't throw - prewarm is fire and forget
     }
   }
 
