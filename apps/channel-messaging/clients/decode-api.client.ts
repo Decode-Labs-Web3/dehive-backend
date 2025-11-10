@@ -33,7 +33,18 @@ export class DecodeApiClient {
     userDehiveId: string,
   ): Promise<Partial<UserProfile> | null> {
     try {
-      // Get access token from session
+      // Step 1: Check cache first
+      const cacheKey = `user_profile:${userDehiveId}`;
+      const cachedProfile = await this.redis.get(cacheKey);
+
+      if (cachedProfile) {
+        this.logger.debug(`✅ Cache HIT for user profile: ${userDehiveId}`);
+        return JSON.parse(cachedProfile);
+      }
+
+      this.logger.debug(`❌ Cache MISS for user profile: ${userDehiveId}`);
+
+      // Step 2: Get access token from session
       const accessToken = await this.getAccessTokenFromSession(sessionId);
       if (!accessToken) {
         this.logger.warn(`Access token not found for session: ${sessionId}`);
@@ -44,6 +55,7 @@ export class DecodeApiClient {
         `Calling Decode API: GET ${this.decodeApiUrl}/users/profile/${userDehiveId}`,
       );
 
+      // Step 3: Fetch from Decode API with timeout
       const response = await firstValueFrom(
         this.httpService.get<{ data: UserProfile }>(
           `${this.decodeApiUrl}/users/profile/${userDehiveId}`,
@@ -52,6 +64,7 @@ export class DecodeApiClient {
               Authorization: `Bearer ${accessToken}`,
               "x-fingerprint-hashed": fingerprintHash,
             },
+            timeout: 5000, // 5 second timeout
           },
         ),
       );
@@ -67,11 +80,19 @@ export class DecodeApiClient {
       const walletsArray: Wallet[] =
         (profileData as { wallets?: Wallet[] }).wallets || [];
 
-      return {
+      const profile = {
         ...profileData,
         wallets: walletsArray,
       };
+
+      // Step 4: Cache the result
+      await this.cacheUserProfile(userDehiveId, profile);
+
+      return profile;
     } catch (error) {
+      this.logger.error(
+        `Error fetching profile for ${userDehiveId}: ${error.message}`,
+      );
       this.logger.error(`Error Response Status: ${error.response?.status}`);
       this.logger.error(
         `Error Response Data: ${JSON.stringify(error.response?.data)}`,
@@ -95,41 +116,82 @@ export class DecodeApiClient {
     }
 
     try {
-      const accessToken = await this.getAccessTokenFromSession(sessionId);
-      if (!accessToken) {
-        this.logger.warn(`Access token not found for session: ${sessionId}`);
-        return profiles;
-      }
-
-      // Batch fetch profiles from Decode API
-      const profilePromises = userDehiveIds.map(async (userDehiveId) => {
-        try {
-          const profile = await this.getUserProfile(
-            sessionId,
-            fingerprintHash,
-            userDehiveId,
-          );
-          if (profile) {
-            profiles[userDehiveId] = profile;
-            // Cache the profile for WebSocket usage (1 hour TTL)
-            await this.cacheUserProfile(userDehiveId, profile);
-          }
-        } catch (error) {
-          this.logger.error(
-            `Failed to fetch profile for user ${userDehiveId}:`,
-            error,
-          );
-        }
-      });
-
-      await Promise.all(profilePromises);
+      // Step 1: Check cache for all users first
+      const uncachedUserIds: string[] = [];
 
       this.logger.log(
-        `Successfully fetched ${Object.keys(profiles).length} profiles out of ${userDehiveIds.length} requested`,
+        `🔍 Checking cache for ${userDehiveIds.length} user profiles...`,
+      );
+
+      for (const userDehiveId of userDehiveIds) {
+        const cacheKey = `user_profile:${userDehiveId}`;
+        const cachedProfile = await this.redis.get(cacheKey);
+
+        if (cachedProfile) {
+          try {
+            profiles[userDehiveId] = JSON.parse(cachedProfile);
+            this.logger.debug(`✅ Cache HIT for user: ${userDehiveId}`);
+          } catch {
+            this.logger.error(
+              `Failed to parse cached profile for ${userDehiveId}, will refetch`,
+            );
+            uncachedUserIds.push(userDehiveId);
+          }
+        } else {
+          this.logger.debug(`❌ Cache MISS for user: ${userDehiveId}`);
+          uncachedUserIds.push(userDehiveId);
+        }
+      }
+
+      this.logger.log(
+        `📊 Cache results: ${Object.keys(profiles).length} hits, ${uncachedUserIds.length} misses`,
+      );
+
+      // Step 2: Fetch only uncached profiles from Decode API
+      if (uncachedUserIds.length > 0) {
+        const accessToken = await this.getAccessTokenFromSession(sessionId);
+        if (!accessToken) {
+          this.logger.warn(
+            `Access token not found for session: ${sessionId}. Returning ${Object.keys(profiles).length} cached profiles only.`,
+          );
+          return profiles;
+        }
+
+        this.logger.log(
+          `📡 Fetching ${uncachedUserIds.length} profiles from Decode API...`,
+        );
+
+        // Batch fetch uncached profiles (with concurrency limit to avoid overwhelming API)
+        const BATCH_SIZE = 5; // Fetch max 5 profiles concurrently
+        for (let i = 0; i < uncachedUserIds.length; i += BATCH_SIZE) {
+          const batch = uncachedUserIds.slice(i, i + BATCH_SIZE);
+          const batchPromises = batch.map(async (userDehiveId) => {
+            try {
+              const profile = await this.getUserProfile(
+                sessionId,
+                fingerprintHash,
+                userDehiveId,
+              );
+              if (profile) {
+                profiles[userDehiveId] = profile;
+              }
+            } catch (error) {
+              this.logger.error(
+                `Failed to fetch profile for user ${userDehiveId}: ${error.message}`,
+              );
+            }
+          });
+
+          await Promise.all(batchPromises);
+        }
+      }
+
+      this.logger.log(
+        `✅ Successfully fetched ${Object.keys(profiles).length} profiles out of ${userDehiveIds.length} requested (${userDehiveIds.length - uncachedUserIds.length} from cache, ${uncachedUserIds.length} from API)`,
       );
       return profiles;
     } catch (error) {
-      this.logger.error("Error in batch profile fetch:", error);
+      this.logger.error(`Error in batch profile fetch: ${error.message}`);
       return profiles;
     }
   }
@@ -155,13 +217,27 @@ export class DecodeApiClient {
         wallets: profile.wallets || [],
       };
 
-      // Cache for 1 hour (3600 seconds)
-      await this.redis.setex(cacheKey, 3600, JSON.stringify(cacheData));
-      this.logger.log(`Cached user profile for ${userDehiveId}`);
+      // Cache for 2 hours (7200 seconds) - longer TTL for better stability
+      await this.redis.setex(cacheKey, 7200, JSON.stringify(cacheData));
+      this.logger.debug(`💾 Cached user profile for ${userDehiveId}`);
     } catch (error) {
       this.logger.error(
-        `Error caching user profile for ${userDehiveId}:`,
-        error,
+        `Error caching user profile for ${userDehiveId}: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Invalidate cached profile (for when user updates their profile)
+   */
+  async invalidateUserProfileCache(userDehiveId: string): Promise<void> {
+    try {
+      const cacheKey = `user_profile:${userDehiveId}`;
+      await this.redis.del(cacheKey);
+      this.logger.log(`🗑️  Invalidated profile cache for ${userDehiveId}`);
+    } catch (error) {
+      this.logger.error(
+        `Error invalidating profile cache for ${userDehiveId}: ${error.message}`,
       );
     }
   }

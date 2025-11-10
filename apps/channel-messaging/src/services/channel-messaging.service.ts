@@ -554,7 +554,28 @@ export class MessagingService {
       fingerprintHash,
     );
 
+    // Check if any message has fallback data (username starts with "User_")
+    const hasFallbackData = (
+      result.items as Array<{
+        sender?: { username?: string };
+      }>
+    ).some((item) => {
+      const username = item?.sender?.username || "";
+      return username.startsWith("User_");
+    });
+
+    if (hasFallbackData) {
+      this.logger.warn(
+        `⚠️  NOT caching channel ${channelId} page ${page} - contains fallback profile data. Will retry on next request.`,
+      );
+      // Don't cache if we have fallback data - let it retry next time
+      return result;
+    }
+
     // Cache result (fire and forget - don't wait)
+    this.logger.log(
+      `💾 Caching channel ${channelId} page ${page} - all profiles complete`,
+    );
     this.cacheService
       .setCachedMessages(channelId, page, {
         items: result.items,
@@ -642,6 +663,19 @@ export class MessagingService {
       requestedUserIds: userIds,
       receivedProfiles: Object.keys(profiles || {}),
     });
+
+    // Check if we got profiles for all users (no fallback data scenario)
+    const profilesFetchedCount = Object.keys(profiles || {}).length;
+    const profilesNeededCount = userIds.length;
+    if (profilesFetchedCount < profilesNeededCount) {
+      this.logger.warn(
+        `⚠️  Incomplete profiles: got ${profilesFetchedCount}/${profilesNeededCount}. Some profiles may use fallback data.`,
+      );
+    } else {
+      this.logger.log(
+        `✅ All profiles fetched successfully: ${profilesFetchedCount}/${profilesNeededCount}`,
+      );
+    }
 
     // Debug avatar data specifically
     Object.keys(profiles || {}).forEach((userId) => {
