@@ -352,6 +352,59 @@ export class ServerService {
     ]);
   }
 
+  async findAllChannelsInServer(serverId: string) {
+    const serverObjectId = new Types.ObjectId(serverId);
+
+    // Verify server exists
+    const server = await this.serverModel.findById(serverObjectId);
+    if (!server) {
+      throw new NotFoundException(`Server with ID ${serverId} not found.`);
+    }
+
+    // Get all categories in this server
+    const categories = await this.categoryModel
+      .find({ server_id: serverObjectId })
+      .select("_id")
+      .lean();
+
+    const categoryIds = categories.map((cat) => cat._id);
+
+    // Get all channels belonging to these categories with category info
+    return this.channelModel.aggregate([
+      {
+        $match: {
+          category_id: { $in: categoryIds },
+        },
+      },
+      {
+        $lookup: {
+          from: "category",
+          localField: "category_id",
+          foreignField: "_id",
+          as: "category",
+        },
+      },
+      {
+        $unwind: "$category",
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          type: 1,
+          topic: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          category_id: 1,
+          category_name: "$category.name",
+        },
+      },
+      {
+        $sort: { createdAt: 1 },
+      },
+    ]);
+  }
+
   async updateCategory(
     categoryId: string,
     actorId: string,

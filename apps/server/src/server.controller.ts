@@ -307,6 +307,23 @@ export class ServerController {
     return this.serverService.findAllCategoriesInServer(serverId);
   }
 
+  @Get(":serverId/channels")
+  @ApiOperation({ summary: "Get all channels in a server" })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiHeader({
+    name: "x-fingerprint-hashed",
+    description: "Hashed fingerprint of the user",
+    required: true,
+  })
+  @ApiParam({ name: "serverId", description: "The ID of the server" })
+  findAllChannelsInServer(@Param("serverId") serverId: string) {
+    return this.serverService.findAllChannelsInServer(serverId);
+  }
+
   @Patch("categories/:categoryId")
   @ApiOperation({ summary: "Update a category" })
   @ApiHeader({
