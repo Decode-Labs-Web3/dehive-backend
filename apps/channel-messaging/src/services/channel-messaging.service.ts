@@ -32,17 +32,19 @@ import * as ffprobePath from "ffprobe-static";
 import {
   UserDehiveServer,
   UserDehiveServerDocument,
-} from "../../../user-dehive-server/schemas/user-dehive-server.schema";
+} from "../../schemas/user-dehive-server.schema";
 import {
   UserDehive,
   UserDehiveDocument,
-} from "../../../user-dehive-server/schemas/user-dehive.schema";
+} from "../../schemas/user-dehive.schema";
 import {
   Channel,
   ChannelDocument,
 } from "../../../server/schemas/channel.schema";
 import { IPFSService } from "./ipfs.service";
 import { ChannelMessagingCacheService } from "./redis-cache.service";
+import { AuditLogService } from "./audit-log.service";
+import { AuditLogAction } from "../../enum/enum";
 
 @Injectable()
 export class MessagingService {
@@ -64,6 +66,7 @@ export class MessagingService {
     private readonly ipfsService: IPFSService,
     private readonly cacheService: ChannelMessagingCacheService,
     @InjectRedis() private readonly redis: Redis,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   private detectAttachmentType(mime: string): AttachmentType {
@@ -815,10 +818,33 @@ export class MessagingService {
     if (String(msg.senderId) !== requesterUserDehiveId) {
       throw new BadRequestException("You can only delete your own message");
     }
+
+    // Get channel and server for audit logging
+    const channel = await this.channelModel
+      .findById(msg.channelId)
+      .populate("category_id")
+      .lean();
+    if (!channel) throw new NotFoundException("Channel not found");
+
+    const serverId = (
+      channel as unknown as { category_id: { server_id: Types.ObjectId } }
+    ).category_id?.server_id;
+    if (!serverId)
+      throw new NotFoundException("Server not found for this channel");
+
     (msg as unknown as { isDeleted?: boolean }).isDeleted = true;
     msg.content = "[deleted]";
     (msg as unknown as { attachments?: unknown[] }).attachments = [];
     await msg.save();
+
+    // Log audit
+    await this.auditLogService.createLog(
+      serverId.toString(),
+      AuditLogAction.MESSAGE_DELETE,
+      requesterUserDehiveId,
+      messageId,
+      { channel_id: channel._id.toString(), channel_name: channel.name },
+    );
 
     // Invalidate all pages cache for this channel
     await this.cacheService

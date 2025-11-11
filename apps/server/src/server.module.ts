@@ -2,28 +2,30 @@ import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { MongooseModule } from "@nestjs/mongoose";
 import { HttpModule } from "@nestjs/axios";
+import { RedisModule } from "@nestjs-modules/ioredis";
 import { ServerController } from "./server.controller";
 import { ServerService } from "./services/server.service";
 import { Server, ServerSchema } from "../schemas/server.schema";
 import { Category, CategorySchema } from "../schemas/category.schema";
 import { Channel, ChannelSchema } from "../schemas/channel.schema";
-import {
-  UserDehive,
-  UserDehiveSchema,
-} from "../../user-dehive-server/schemas/user-dehive.schema";
+import { UserDehive, UserDehiveSchema } from "../schemas/user-dehive.schema";
 import {
   UserDehiveServer,
   UserDehiveServerSchema,
-} from "../../user-dehive-server/schemas/user-dehive-server.schema";
+} from "../schemas/user-dehive-server.schema";
 import {
   ChannelMessage,
   ChannelMessageSchema,
 } from "../schemas/channel-message.schema";
-import { UserDehiveServerModule } from "../../user-dehive-server/src/user-dehive-server.module";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { IPFSService } from "./services/ipfs.service";
 import { NftVerificationService } from "./services/nft-verification.service";
 import { NetworkMappingService } from "./services/network-mapping.service";
+import { AuditLogService } from "./services/audit-log.service";
+import {
+  ServerAuditLog,
+  ServerAuditLogSchema,
+} from "../schemas/server-audit-log.schema";
 
 @Module({
   imports: [
@@ -35,6 +37,14 @@ import { NetworkMappingService } from "./services/network-mapping.service";
       timeout: 10000,
       maxRedirects: 5,
     }),
+    RedisModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (config: ConfigService) => ({
+        type: "single",
+        url: config.get<string>("REDIS_URI"),
+      }),
+      inject: [ConfigService],
+    }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -44,8 +54,6 @@ import { NetworkMappingService } from "./services/network-mapping.service";
       }),
     }),
 
-    UserDehiveServerModule,
-
     MongooseModule.forFeature([
       { name: Server.name, schema: ServerSchema },
       { name: Category.name, schema: CategorySchema },
@@ -53,6 +61,7 @@ import { NetworkMappingService } from "./services/network-mapping.service";
       { name: UserDehive.name, schema: UserDehiveSchema },
       { name: UserDehiveServer.name, schema: UserDehiveServerSchema },
       { name: ChannelMessage.name, schema: ChannelMessageSchema },
+      { name: ServerAuditLog.name, schema: ServerAuditLogSchema },
     ]),
   ],
   controllers: [ServerController],
@@ -62,6 +71,7 @@ import { NetworkMappingService } from "./services/network-mapping.service";
     IPFSService,
     NftVerificationService,
     NetworkMappingService,
+    AuditLogService,
   ],
 })
 export class ServerModule {}

@@ -13,10 +13,7 @@ import { CreateMessageDto } from "../dto/create-message.dto";
 import { MessagingService } from "../src/services/channel-messaging.service";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
-import {
-  UserDehive,
-  UserDehiveDocument,
-} from "../../user-dehive-server/schemas/user-dehive.schema";
+import { UserDehive, UserDehiveDocument } from "../schemas/user-dehive.schema";
 import { Server, ServerDocument } from "../../server/schemas/server.schema";
 import {
   Category,
@@ -26,7 +23,7 @@ import { Channel, ChannelDocument } from "../../server/schemas/channel.schema";
 import {
   UserDehiveServer,
   UserDehiveServerDocument,
-} from "../../user-dehive-server/schemas/user-dehive-server.schema";
+} from "../schemas/user-dehive-server.schema";
 
 type SocketMeta = {
   userDehiveId?: string;

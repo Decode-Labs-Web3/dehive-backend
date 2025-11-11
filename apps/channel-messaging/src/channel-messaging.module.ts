@@ -15,19 +15,21 @@ import {
   ChannelMessageSchema,
 } from "../schemas/channel-message.schema";
 import { Upload, UploadSchema } from "../schemas/upload.schema";
-import {
-  UserDehive,
-  UserDehiveSchema,
-} from "../../user-dehive-server/schemas/user-dehive.schema";
+import { UserDehive, UserDehiveSchema } from "../schemas/user-dehive.schema";
 import { Server, ServerSchema } from "../../server/schemas/server.schema";
 import { Category, CategorySchema } from "../../server/schemas/category.schema";
 import { Channel, ChannelSchema } from "../../server/schemas/channel.schema";
 import {
   UserDehiveServer,
   UserDehiveServerSchema,
-} from "../../user-dehive-server/schemas/user-dehive-server.schema";
+} from "../schemas/user-dehive-server.schema";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { IPFSService } from "./services/ipfs.service";
+import { AuditLogService } from "./services/audit-log.service";
+import {
+  ServerAuditLog,
+  ServerAuditLogSchema,
+} from "../schemas/server-audit-log.schema";
 
 @Module({
   imports: [
@@ -65,6 +67,7 @@ import { IPFSService } from "./services/ipfs.service";
       { name: Category.name, schema: CategorySchema },
       { name: Channel.name, schema: ChannelSchema },
       { name: UserDehiveServer.name, schema: UserDehiveServerSchema },
+      { name: ServerAuditLog.name, schema: ServerAuditLogSchema },
     ]),
   ],
   controllers: [MessagingController],
@@ -77,6 +80,7 @@ import { IPFSService } from "./services/ipfs.service";
     AuthServiceClient,
     DecodeApiClient,
     IPFSService,
+    AuditLogService,
   ],
 })
 export class MessagingModule {}

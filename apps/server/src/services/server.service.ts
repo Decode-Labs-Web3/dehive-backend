@@ -11,11 +11,11 @@ import { Server, ServerDocument } from "../../schemas/server.schema";
 import {
   UserDehive,
   UserDehiveDocument,
-} from "../../../user-dehive-server/schemas/user-dehive.schema";
+} from "../../schemas/user-dehive.schema";
 import {
   UserDehiveServer,
   UserDehiveServerDocument,
-} from "../../../user-dehive-server/schemas/user-dehive-server.schema";
+} from "../../schemas/user-dehive-server.schema";
 import { Category, CategoryDocument } from "../../schemas/category.schema";
 import { Channel, ChannelDocument } from "../../schemas/channel.schema";
 import { CreateServerDto } from "../../dto/create-server.dto";
@@ -28,11 +28,13 @@ import {
   ChannelMessage,
   ChannelMessageDocument,
 } from "../../schemas/channel-message.schema";
-import { ServerRole } from "../../../user-dehive-server/enum/enum";
+import { ServerRole } from "../../enum/enum";
 import { IPFSService } from "./ipfs.service";
 import { UpdateNftGatingDto } from "../../dto/update-nft-gating.dto";
 import { NftVerificationService } from "./nft-verification.service";
 import { NetworkMappingService } from "./network-mapping.service";
+import { AuditLogService } from "./audit-log.service";
+import { AuditLogAction } from "../../enum/enum";
 
 @Injectable()
 export class ServerService {
@@ -53,6 +55,7 @@ export class ServerService {
     private readonly ipfsService: IPFSService,
     private readonly nftVerificationService: NftVerificationService,
     private readonly networkMapping: NetworkMappingService,
+    private readonly auditLogService: AuditLogService,
   ) {
     // Constructor body can be empty or used for initialization
   }
@@ -253,6 +256,16 @@ export class ServerService {
     if (!updatedServer) {
       throw new NotFoundException(`Server with ID "${id}" not found`);
     }
+
+    // Log audit
+    await this.auditLogService.createLog(
+      id,
+      AuditLogAction.SERVER_UPDATE,
+      actorId,
+      undefined,
+      updateData,
+    );
+
     return updatedServer;
   }
 
@@ -331,7 +344,18 @@ export class ServerService {
       ...createCategoryDto,
       server_id: server._id,
     });
-    return newCategory.save();
+    const savedCategory = await newCategory.save();
+
+    // Log audit
+    await this.auditLogService.createLog(
+      serverId,
+      AuditLogAction.CATEGORY_CREATE,
+      actorId,
+      String(savedCategory._id),
+      { name: savedCategory.name },
+    );
+
+    return savedCategory;
   }
 
   async findAllCategoriesInServer(serverId: string) {
@@ -424,8 +448,20 @@ export class ServerService {
       );
     }
 
+    const oldName = category.name;
     Object.assign(category, updateCategoryDto);
-    return category.save();
+    const updatedCategory = await category.save();
+
+    // Log audit
+    await this.auditLogService.createLog(
+      String(server._id),
+      AuditLogAction.CATEGORY_UPDATE,
+      actorId,
+      categoryId,
+      { old_name: oldName, new_name: updatedCategory.name },
+    );
+
+    return updatedCategory;
   }
 
   async removeCategory(
@@ -458,6 +494,16 @@ export class ServerService {
 
       await this.categoryModel.findByIdAndDelete(categoryObjectId, { session });
       await session.commitTransaction();
+
+      // Log audit
+      await this.auditLogService.createLog(
+        String(server._id),
+        AuditLogAction.CATEGORY_DELETE,
+        actorId,
+        categoryId,
+        { name: category.name },
+      );
+
       return { deleted: true };
     } catch (error) {
       await session.abortTransaction();
@@ -557,7 +603,18 @@ export class ServerService {
       ...createChannelDto,
       category_id: categoryObjectId,
     });
-    return newChannel.save();
+    const savedChannel = await newChannel.save();
+
+    // Log audit
+    await this.auditLogService.createLog(
+      serverId,
+      AuditLogAction.CHANNEL_CREATE,
+      actorId,
+      String(savedChannel._id),
+      { name: savedChannel.name, type: savedChannel.type },
+    );
+
+    return savedChannel;
   }
 
   async findChannelById(channelId: string): Promise<ChannelDocument> {
@@ -620,6 +677,15 @@ export class ServerService {
         `Failed to update channel with ID "${channelId}".`,
       );
     }
+
+    // Log audit
+    await this.auditLogService.createLog(
+      String(server._id),
+      AuditLogAction.CHANNEL_UPDATE,
+      actorId,
+      channelId,
+      updateData,
+    );
 
     return updatedChannel;
   }
@@ -780,6 +846,16 @@ export class ServerService {
 
       await this.channelModel.findByIdAndDelete(channelObjectId, { session });
       await session.commitTransaction();
+
+      // Log audit
+      await this.auditLogService.createLog(
+        String(server._id),
+        AuditLogAction.CHANNEL_DELETE,
+        actorId,
+        channelId,
+        { name: channel.name, type: channel.type },
+      );
+
       return { deleted: true };
     } catch (error) {
       await session.abortTransaction();
