@@ -5,6 +5,7 @@ import { HttpModule } from "@nestjs/axios";
 import { RedisModule } from "@nestjs-modules/ioredis";
 import { UserDehiveServerController } from "./user-dehive-server.controller";
 import { UserDehiveServerService } from "./user-dehive-server.service";
+import { AuditLogService } from "./audit-log.service";
 import { DecodeApiClient } from "../clients/decode-api.client";
 import { UserDehive, UserDehiveSchema } from "../schemas/user-dehive.schema";
 import { Server, ServerSchema } from "../schemas/server.schema";
@@ -27,6 +28,7 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
   { name: "Server", schema: ServerSchema },
   { name: "ServerBan", schema: ServerBanSchema },
   { name: "InviteLink", schema: InviteLinkSchema },
+  { name: "ServerAuditLog", schema: ServerAuditLogSchema },
 ]);
 
 @Module({
@@ -70,10 +72,11 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
   controllers: [UserDehiveServerController],
   providers: [
     UserDehiveServerService,
+    AuditLogService,
     DecodeApiClient,
     AuthGuard,
     NftVerificationService,
   ],
-  exports: [UserDehiveServerService, MONGOOSE_MODELS],
+  exports: [UserDehiveServerService, AuditLogService, MONGOOSE_MODELS],
 })
 export class UserDehiveServerModule {}

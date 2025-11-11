@@ -9,6 +9,7 @@ import {
   Delete,
   UseGuards,
   Headers,
+  Query,
 } from "@nestjs/common";
 import { UserDehiveServerService } from "./user-dehive-server.service";
 import { AssignRoleDto } from "../dto/assign-role.dto";
@@ -20,6 +21,7 @@ import { LeaveServerDto } from "../dto/leave-server.dto";
 import { UnbanDto } from "../dto/unban.dto";
 import { UpdateNotificationDto } from "../dto/update-notification.dto";
 import { GetServerMembersDto } from "../dto/get-server-members.dto";
+import { GetAuditLogsDto } from "../dto/get-audit-logs.dto";
 import { UpdateBioDto } from "../dto/update-bio.dto";
 import { UpdateAvatarDto } from "../dto/update-avatar.dto";
 import { UpdateDisplayNameDto } from "../dto/update-display-name.dto";
@@ -515,5 +517,62 @@ export class UserDehiveServerController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.getBanList(serverId, user._id, user.session_id);
+  }
+
+  @Get("servers/:serverId/audit-logs")
+  @ApiOperation({
+    summary: "Get server audit logs",
+    description:
+      "Retrieves audit logs for a server. Only admins and moderators can access this endpoint.",
+  })
+  @ApiHeader({
+    name: "x-session-id",
+    description: "Session ID of authenticated user",
+    required: true,
+  })
+  @ApiParam({
+    name: "serverId",
+    description: "The ID of the server to get audit logs for",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Audit logs retrieved successfully.",
+    schema: {
+      type: "object",
+      properties: {
+        statusCode: { type: "number", example: 200 },
+        success: { type: "boolean", example: true },
+        message: {
+          type: "string",
+          example: "Audit logs retrieved successfully",
+        },
+        data: {
+          type: "object",
+          properties: {
+            logs: { type: "array" },
+            total: { type: "number" },
+            page: { type: "number" },
+            limit: { type: "number" },
+            total_pages: { type: "number" },
+            is_last_page: { type: "boolean" },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: "Forbidden - Only admins and moderators can view audit logs.",
+  })
+  async getAuditLogs(
+    @Param("serverId") serverId: string,
+    @Query() query: GetAuditLogsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.getAuditLogs(serverId, user._id, {
+      action: query.action,
+      page: query.page,
+      limit: query.limit,
+    });
   }
 }

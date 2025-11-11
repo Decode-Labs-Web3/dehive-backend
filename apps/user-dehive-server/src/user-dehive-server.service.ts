@@ -18,6 +18,8 @@ import {
 import { Server, ServerDocument } from "../schemas/server.schema";
 import { ServerBan, ServerBanDocument } from "../schemas/server-ban.schema";
 import { InviteLink, InviteLinkDocument } from "../schemas/invite-link.schema";
+import { AuditLogAction } from "../enum/enum";
+import { AuditLogService } from "./audit-log.service";
 import { AssignRoleDto } from "../dto/assign-role.dto";
 import { TransferOwnershipDto } from "../dto/transfer-ownership.dto";
 import { JoinServerDto } from "../dto/join-server.dto";
@@ -53,6 +55,7 @@ export class UserDehiveServerService {
     private serverBanModel: Model<ServerBanDocument>,
     @InjectModel(InviteLink.name)
     private inviteLinkModel: Model<InviteLinkDocument>,
+    private readonly auditLogService: AuditLogService,
     private readonly decodeApiClient: DecodeApiClient,
     @InjectRedis() private readonly redis: Redis,
     private readonly nftVerificationService: NftVerificationService,
@@ -60,6 +63,69 @@ export class UserDehiveServerService {
 
   private async findUserDehiveProfile(userId: string) {
     return await this.userDehiveModel.findById(userId).lean();
+  }
+
+  // Get audit logs (ADMIN/MODERATOR ONLY)
+  async getAuditLogs(
+    serverId: string,
+    userId: string,
+    options: { action?: AuditLogAction; page?: number; limit?: number },
+  ) {
+    // Check if user is admin or moderator
+    const member = await this.userDehiveServerModel.findOne({
+      user_dehive_id: userId,
+      server_id: new Types.ObjectId(serverId),
+    });
+
+    if (
+      !member ||
+      (member.role !== ServerRole.OWNER && member.role !== ServerRole.MODERATOR)
+    ) {
+      throw new ForbiddenException(
+        "Only admins and moderators can view audit logs",
+      );
+    }
+
+    const query: Record<string, unknown> = {
+      server_id: new Types.ObjectId(serverId),
+    };
+    if (options.action) {
+      query.action = options.action;
+    }
+
+    const page = options.page || 0;
+    const limit = options.limit || 20;
+    const skip = page * limit;
+
+    const serverAuditLogModel = this.auditLogService.getModel();
+
+    const logs = await serverAuditLogModel
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip)
+      .populate("actor_id", "username display_name avatar")
+      .populate("target_id", "username display_name avatar")
+      .lean()
+      .exec();
+
+    const total = await serverAuditLogModel.countDocuments(query);
+    const totalPages = Math.ceil(total / limit);
+    const isLastPage = page >= totalPages - 1;
+
+    return {
+      statusCode: 200,
+      success: true,
+      message: "Audit logs retrieved successfully",
+      data: {
+        logs,
+        total,
+        page,
+        limit,
+        total_pages: totalPages,
+        is_last_page: isLastPage,
+      },
+    };
   }
 
   async joinServer(
@@ -161,6 +227,13 @@ export class UserDehiveServerService {
 
       await this.invalidateMemberListCache(dto.server_id);
 
+      // Create audit log
+      await this.auditLogService.createLog(
+        dto.server_id,
+        AuditLogAction.MEMBER_JOIN,
+        userDehiveId,
+      );
+
       // ✅ Return server info for consistent response structure
       return {
         server_id: dto.server_id,
@@ -222,6 +295,13 @@ export class UserDehiveServerService {
       // Invalidate member list cache
       await this.invalidateMemberListCache(dto.server_id);
 
+      // Create audit log
+      await this.auditLogService.createLog(
+        dto.server_id,
+        AuditLogAction.MEMBER_LEAVE,
+        userDehiveId,
+      );
+
       return {};
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
@@ -263,7 +343,18 @@ export class UserDehiveServerService {
       creator_id: actorDehiveId,
       expiredAt,
     });
-    return newInvite.save();
+    const savedInvite = await newInvite.save();
+
+    // Create audit log
+    await this.auditLogService.createLog(
+      dto.server_id,
+      AuditLogAction.INVITE_CREATE,
+      actorBaseId,
+      undefined,
+      { code, expiredAt },
+    );
+
+    return savedInvite;
   }
 
   async useInvite(
@@ -448,6 +539,20 @@ export class UserDehiveServerService {
       // Invalidate member list cache
       await this.invalidateMemberListCache(dto.server_id);
 
+      // Create audit log
+      const auditAction =
+        action === "kick"
+          ? AuditLogAction.MEMBER_KICK
+          : AuditLogAction.MEMBER_BAN;
+      await this.auditLogService.createLog(
+        dto.server_id,
+        auditAction,
+        actorBaseId,
+        dto.target_user_dehive_id,
+        undefined,
+        dto.reason,
+      );
+
       return { message: `User successfully ${action}ed.` };
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
@@ -514,6 +619,14 @@ export class UserDehiveServerService {
       user_dehive_id: targetDehiveId,
     });
 
+    // Create audit log
+    await this.auditLogService.createLog(
+      dto.server_id,
+      AuditLogAction.MEMBER_UNBAN,
+      actorBaseId,
+      dto.target_user_dehive_id,
+    );
+
     return { message: "User successfully unbanned." };
   }
 
@@ -566,8 +679,20 @@ export class UserDehiveServerService {
         "Ownership can only be transferred, not assigned.",
       );
 
+    const oldRole = targetMembership.role;
     targetMembership.role = dto.role;
-    return targetMembership.save();
+    const savedMembership = await targetMembership.save();
+
+    // Create audit log
+    await this.auditLogService.createLog(
+      dto.server_id,
+      AuditLogAction.ROLE_UPDATE,
+      actorBaseId,
+      dto.target_user_dehive_id,
+      { old_role: oldRole, new_role: dto.role },
+    );
+
+    return savedMembership;
   }
 
   async transferOwnership(
@@ -649,6 +774,15 @@ export class UserDehiveServerService {
       await session.commitTransaction();
 
       await this.invalidateMemberListCache(dto.server_id);
+
+      // Create audit log
+      await this.auditLogService.createLog(
+        dto.server_id,
+        AuditLogAction.SERVER_UPDATE,
+        currentOwnerId,
+        dto.user_dehive_id,
+        { action: "ownership_transfer" },
+      );
 
       return { message: "Ownership transferred successfully." };
     } catch {
