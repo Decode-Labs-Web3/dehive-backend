@@ -56,7 +56,6 @@
       "compilerOptions": {
         "tsConfigPath": "apps/server/tsconfig.app.json"
       }
-    }
     },
     "test-auth": {
       "type": "application",
@@ -105,4 +104,5 @@
         "tsConfigPath": "apps/user-status/tsconfig.app.json"
       }
     }
+  }
 }
