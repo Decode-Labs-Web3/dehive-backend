@@ -56,15 +56,7 @@
       "compilerOptions": {
         "tsConfigPath": "apps/server/tsconfig.app.json"
       }
-    },
-    "shared": {
-      "type": "library",
-      "root": "libs/shared",
-      "entryFile": "index",
-      "sourceRoot": "libs/shared/src",
-      "compilerOptions": {
-        "tsConfigPath": "libs/shared/tsconfig.lib.json"
-      }
+    }
     },
     "test-auth": {
       "type": "application",
@@ -84,16 +76,6 @@
         "tsConfigPath": "apps/user-dehive-server/tsconfig.app.json"
       }
     },
-    "api-gateway": {
-      "type": "application",
-      "root": "apps/api-gateway",
-      "entryFile": "main",
-      "sourceRoot": "apps/api-gateway/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/api-gateway/tsconfig.app.json"
-      }
-    },
-
     "direct-calling": {
       "type": "application",
       "root": "apps/direct-calling",
@@ -123,5 +105,4 @@
         "tsConfigPath": "apps/user-status/tsconfig.app.json"
       }
     }
-  }
 }
