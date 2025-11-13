@@ -7,7 +7,13 @@ async function bootstrap() {
   const port = 4008;
 
   app.enableCors({
-    origin: "*",
+    origin: [
+      "http://localhost:3000",
+      "https://decodenetwork.app",
+      "https://www.decodenetwork.app",
+      "https://api.decodenetwork.app",
+      "https://ws-status.api.decodenetwork.app",
+    ],
     credentials: true,
   });
 

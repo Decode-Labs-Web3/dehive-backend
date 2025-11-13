@@ -12,7 +12,16 @@ async function bootstrap() {
   const app = await NestFactory.create(DirectCallModule);
   const configService = app.get(ConfigService);
 
-  app.enableCors({ origin: "*" });
+  app.enableCors({
+    origin: [
+      "http://localhost:3000",
+      "https://decodenetwork.app",
+      "https://www.decodenetwork.app",
+      "https://api.decodenetwork.app",
+      "https://ws-dc.api.decodenetwork.app",
+    ],
+    credentials: true,
+  });
   app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new MethodNotAllowedFilter());

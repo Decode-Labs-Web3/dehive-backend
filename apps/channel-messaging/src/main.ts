@@ -13,7 +13,16 @@ async function bootstrap() {
 
   app.useWebSocketAdapter(new IoAdapter(app));
 
-  app.enableCors({ origin: "*" });
+  app.enableCors({
+    origin: [
+      "http://localhost:3000",
+      "https://decodenetwork.app",
+      "https://www.decodenetwork.app",
+      "https://api.decodenetwork.app",
+      "https://ws-channel-msg.api.decodenetwork.app",
+    ],
+    credentials: true,
+  });
   app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   const logger = new Logger("ChannelMessagingMain");
