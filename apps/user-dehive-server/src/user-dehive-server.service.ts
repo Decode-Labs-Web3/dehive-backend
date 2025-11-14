@@ -69,6 +69,7 @@ export class UserDehiveServerService {
   async getAuditLogs(
     serverId: string,
     userId: string,
+    sessionId: string,
     options: { action?: AuditLogAction; page?: number; limit?: number },
   ) {
     // Check if user is admin or moderator
@@ -99,26 +100,197 @@ export class UserDehiveServerService {
 
     const serverAuditLogModel = this.auditLogService.getModel();
 
-    const logs = await serverAuditLogModel
+    const logs = (await serverAuditLogModel
       .find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(skip)
-      .populate("actor_id", "username display_name avatar")
-      .populate("target_id", "username display_name avatar")
       .lean()
-      .exec();
+      .exec()) as unknown as Array<{
+      _id: Types.ObjectId;
+      server_id: Types.ObjectId;
+      actor_id: Types.ObjectId;
+      target_id?: Types.ObjectId;
+      action: AuditLogAction;
+      changes?: Record<string, unknown>;
+      reason?: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
 
     const total = await serverAuditLogModel.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
     const isLastPage = page >= totalPages - 1;
+
+    // Fetch actor details from external API and format messages
+    const formattedLogs = await Promise.all(
+      logs.map(async (log) => {
+        const actorId = log.actor_id.toString();
+
+        // Fetch actor profile from external API
+        const actorProfile = await this.decodeApiClient.getUserById(
+          actorId,
+          sessionId,
+        );
+
+        const actorInfo = {
+          _id: actorId,
+          username: actorProfile?.username || "Unknown User",
+          display_name:
+            actorProfile?.display_name ||
+            actorProfile?.username ||
+            "Unknown User",
+          avatar: actorProfile?.avatar_ipfs_hash || null,
+        };
+
+        // Fetch target profile if target_id exists (for formatted message only)
+        let targetInfo;
+        if (log.target_id) {
+          const targetId = log.target_id.toString();
+          const targetProfile = await this.decodeApiClient.getUserById(
+            targetId,
+            sessionId,
+          );
+          targetInfo = {
+            username: targetProfile?.username || "Unknown User",
+            display_name:
+              targetProfile?.display_name ||
+              targetProfile?.username ||
+              "Unknown User",
+          };
+        }
+
+        // Format the message based on action type
+        const actorName = actorInfo.display_name || actorInfo.username;
+        const targetName =
+          targetInfo?.display_name || targetInfo?.username || "Unknown";
+        let message = "";
+
+        switch (log.action) {
+          case AuditLogAction.MEMBER_JOIN:
+            message = `${actorName} joined the server`;
+            break;
+          case AuditLogAction.MEMBER_LEAVE:
+            message = `${actorName} left the server`;
+            break;
+          case AuditLogAction.MEMBER_KICK:
+            message = log.reason
+              ? `${actorName} kicked ${targetName} from the server. Reason: ${log.reason}`
+              : `${actorName} kicked ${targetName} from the server`;
+            break;
+          case AuditLogAction.MEMBER_BAN:
+            message = log.reason
+              ? `${actorName} banned ${targetName} from the server. Reason: ${log.reason}`
+              : `${actorName} banned ${targetName} from the server`;
+            break;
+          case AuditLogAction.MEMBER_UNBAN:
+            message = `${actorName} unbanned ${targetName}`;
+            break;
+          case AuditLogAction.INVITE_CREATE:
+            if (log.changes?.code && log.changes?.expiredAt) {
+              message = `${actorName} created an invite code "${log.changes.code}" that expires at ${new Date(log.changes.expiredAt as string).toLocaleString()}`;
+            } else {
+              message = `${actorName} created an invite code`;
+            }
+            break;
+          case AuditLogAction.INVITE_DELETE:
+            message = log.changes?.code
+              ? `${actorName} deleted invite code "${log.changes.code}"`
+              : `${actorName} deleted an invite code`;
+            break;
+          case AuditLogAction.ROLE_UPDATE:
+            if (log.changes?.old_role && log.changes?.new_role) {
+              message = `${actorName} changed ${targetName}'s role from ${log.changes.old_role} to ${log.changes.new_role}`;
+            } else {
+              message = `${actorName} updated ${targetName}'s role`;
+            }
+            break;
+          case AuditLogAction.SERVER_UPDATE:
+            if (log.changes?.name && log.changes?.description) {
+              message = `${actorName} updated the server name to "${log.changes.name}" and description to "${log.changes.description}"`;
+            } else if (log.changes?.name) {
+              message = `${actorName} updated the server name to "${log.changes.name}"`;
+            } else if (log.changes?.description) {
+              message = `${actorName} updated the server description to "${log.changes.description}"`;
+            } else {
+              message = `${actorName} updated server settings`;
+            }
+            break;
+          case AuditLogAction.CATEGORY_CREATE:
+            message = log.changes?.name
+              ? `${actorName} created category "${log.changes.name}"`
+              : `${actorName} created a category`;
+            break;
+          case AuditLogAction.CATEGORY_UPDATE:
+            if (log.changes?.old_name && log.changes?.new_name) {
+              message = `${actorName} renamed category from "${log.changes.old_name}" to "${log.changes.new_name}"`;
+            } else if (log.changes?.new_name) {
+              message = `${actorName} updated category name to "${log.changes.new_name}"`;
+            } else {
+              message = `${actorName} updated a category`;
+            }
+            break;
+          case AuditLogAction.CATEGORY_DELETE:
+            message = log.changes?.name
+              ? `${actorName} deleted category "${log.changes.name}"`
+              : `${actorName} deleted a category`;
+            break;
+          case AuditLogAction.CHANNEL_CREATE:
+            if (log.changes?.name && log.changes?.type) {
+              message = `${actorName} created ${log.changes.type} channel "${log.changes.name}"`;
+            } else if (log.changes?.name) {
+              message = `${actorName} created channel "${log.changes.name}"`;
+            } else {
+              message = `${actorName} created a channel`;
+            }
+            break;
+          case AuditLogAction.CHANNEL_UPDATE:
+            message = log.changes?.name
+              ? `${actorName} updated channel name to "${log.changes.name}"`
+              : `${actorName} updated a channel`;
+            break;
+          case AuditLogAction.CHANNEL_DELETE:
+            if (log.changes?.name && log.changes?.type) {
+              message = `${actorName} deleted ${log.changes.type} channel "${log.changes.name}"`;
+            } else if (log.changes?.name) {
+              message = `${actorName} deleted channel "${log.changes.name}"`;
+            } else {
+              message = `${actorName} deleted a channel`;
+            }
+            break;
+          case AuditLogAction.MESSAGE_DELETE:
+            if (log.changes?.channel_name) {
+              message = `${actorName} deleted a message in channel "${log.changes.channel_name}"`;
+            } else if (log.changes?.channel_id) {
+              message = `${actorName} deleted a message in channel ${log.changes.channel_id}`;
+            } else {
+              message = `${actorName} deleted a message`;
+            }
+            break;
+          default:
+            message = `${actorName} performed action: ${log.action}`;
+        }
+
+        // Return log without target_id and with formatted message
+        return {
+          _id: log._id,
+          server_id: log.server_id,
+          actor: actorInfo,
+          action: log.action,
+          message, // Human-readable message
+          reason: log.reason,
+          createdAt: log.createdAt,
+          updatedAt: log.updatedAt,
+        };
+      }),
+    );
 
     return {
       statusCode: 200,
       success: true,
       message: "Audit logs retrieved successfully",
       data: {
-        logs,
+        logs: formattedLogs,
         total,
         page,
         limit,

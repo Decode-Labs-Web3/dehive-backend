@@ -332,7 +332,7 @@ export class ServerService {
     serverId: string,
     actorId: string,
     createCategoryDto: CreateCategoryDto,
-  ): Promise<Category> {
+  ): Promise<Category & { channels: unknown[] }> {
     const server = await this.findServerById(serverId);
     if (server.owner_id.toString() !== actorId) {
       throw new ForbiddenException(
@@ -355,7 +355,11 @@ export class ServerService {
       { name: savedCategory.name },
     );
 
-    return savedCategory;
+    // Return category with empty channels array
+    return {
+      ...savedCategory.toObject(),
+      channels: [],
+    };
   }
 
   async findAllCategoriesInServer(serverId: string) {
@@ -433,7 +437,7 @@ export class ServerService {
     categoryId: string,
     actorId: string,
     updateCategoryDto: UpdateCategoryDto,
-  ): Promise<Category> {
+  ): Promise<Category & { channels: unknown[] }> {
     const category = await this.categoryModel.findById(categoryId);
     if (!category) {
       throw new NotFoundException(
@@ -461,7 +465,16 @@ export class ServerService {
       { old_name: oldName, new_name: updatedCategory.name },
     );
 
-    return updatedCategory;
+    // Fetch channels in this category
+    const channels = await this.channelModel
+      .find({ category_id: new Types.ObjectId(categoryId) })
+      .lean();
+
+    // Return category with channels list
+    return {
+      ...updatedCategory.toObject(),
+      channels,
+    };
   }
 
   async removeCategory(

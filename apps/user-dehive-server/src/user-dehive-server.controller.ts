@@ -569,7 +569,7 @@ export class UserDehiveServerController {
     @Query() query: GetAuditLogsDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.service.getAuditLogs(serverId, user._id, {
+    return this.service.getAuditLogs(serverId, user._id, user.session_id, {
       action: query.action,
       page: query.page,
       limit: query.limit,
