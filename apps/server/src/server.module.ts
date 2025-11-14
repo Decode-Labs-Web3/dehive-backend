@@ -26,6 +26,7 @@ import {
   ServerAuditLog,
   ServerAuditLogSchema,
 } from "../schemas/server-audit-log.schema";
+import { ServerEventsGateway } from "../gateway/server-events.gateway";
 
 @Module({
   imports: [
@@ -72,6 +73,8 @@ import {
     NftVerificationService,
     NetworkMappingService,
     AuditLogService,
+    ServerEventsGateway,
   ],
+  exports: [ServerEventsGateway],
 })
 export class ServerModule {}

@@ -1,0 +1,513 @@
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  OnGatewayConnection,
+  OnGatewayDisconnect,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+} from "@nestjs/websockets";
+import { Server, Socket } from "socket.io";
+import { Logger, Injectable } from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, Types } from "mongoose";
+import { UserDehiveServerDocument } from "../schemas/user-dehive-server.schema";
+
+@Injectable()
+@WebSocketGateway({
+  cors: {
+    origin: [
+      "http://localhost:3000",
+      "https://decodenetwork.app",
+      "https://www.decodenetwork.app",
+      "https://api.decodenetwork.app",
+      "https://ws-server.api.decodenetwork.app",
+    ],
+    credentials: true,
+  },
+  namespace: "/server-events",
+})
+export class ServerEventsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
+  @WebSocketServer()
+  server: Server;
+
+  private readonly logger = new Logger(ServerEventsGateway.name);
+
+  constructor(
+    @InjectModel("UserDehiveServer")
+    private userDehiveServerModel: Model<UserDehiveServerDocument>,
+  ) {}
+
+  // Debug Insomnia flag per client
+  private debugInsomniaMap = new WeakMap<Socket, boolean>();
+
+  async handleConnection(client: Socket) {
+    // Detect debug mode from header or query param
+    const debugInsomnia =
+      client.handshake.headers["x-debug-insomnia"] === "true" ||
+      client.handshake.query["debug-insomnia"] === "true";
+    this.debugInsomniaMap.set(client, debugInsomnia);
+    if (debugInsomnia) {
+      this.logger.log(`[DEBUG] Insomnia client connected: ${client.id}`);
+      this.send(client, "debug", { message: "Insomnia debug mode enabled" });
+    }
+
+    this.logger.log(
+      `[WebSocket] Client connected: ${client.id}. Awaiting identity.`,
+    );
+  }
+
+  handleDisconnect(client: Socket) {
+    const userId = client.data.userId;
+    this.logger.log(
+      `[WebSocket] Client ${client.id} disconnected ${userId ? `(user: ${userId})` : ""}`,
+    );
+  }
+
+  @SubscribeMessage("identity")
+  async handleIdentity(
+    @MessageBody() data: string | { userId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    // Parse data - support both string and object format (same as other gateways)
+    let userId: string;
+
+    if (typeof data === "string") {
+      try {
+        const parsedData = JSON.parse(data) as { userId: string };
+        if (parsedData.userId) {
+          userId = parsedData.userId;
+        } else {
+          userId = data;
+        }
+      } catch {
+        userId = data;
+      }
+    } else if (typeof data === "object" && data?.userId) {
+      userId = data.userId;
+    } else {
+      return this.send(client, "error", {
+        message:
+          "Invalid identity format. Send userId as string or {userId: string}",
+        code: "INVALID_FORMAT",
+      });
+    }
+
+    if (!userId || !Types.ObjectId.isValid(userId)) {
+      return this.send(client, "error", {
+        message: "Invalid userId format.",
+        code: "INVALID_USER_ID",
+      });
+    }
+
+    this.logger.log(
+      `[WebSocket] Client ${client.id} is identifying as userId: ${userId}`,
+    );
+
+    // Validate user exists in DB (UserDehive)
+    try {
+      const exists = await this.userDehiveServerModel.db
+        .collection("user_dehive")
+        .findOne({ _id: new Types.ObjectId(userId) });
+      if (!exists) {
+        return this.send(client, "error", {
+          message: "User not found.",
+          code: "USER_NOT_FOUND",
+        });
+      }
+    } catch (err) {
+      this.logger.error(`[WebSocket] Error checking user existence: ${err}`);
+      return this.send(client, "error", {
+        message: "Database error while checking user existence.",
+        code: "DB_ERROR",
+      });
+    }
+
+    // Store user info in socket data
+    client.data.userId = userId;
+
+    // Join user-specific room (Level 1: Server updates)
+    await client.join(`user:${userId}`);
+    this.logger.log(
+      `[WebSocket] User ${userId} authenticated and joined personal room`,
+    );
+
+    // Emit success with user info (same pattern as other gateways)
+    this.send(client, "identityConfirmed", {
+      message: `You are now identified as ${userId}`,
+      userId: userId,
+    });
+  }
+
+  @SubscribeMessage("joinServer")
+  async handleJoinServer(
+    @MessageBody() data: string | { serverId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const userId = client.data.userId;
+
+    if (!userId) {
+      return this.send(client, "error", {
+        message: "Please identify first",
+        code: "AUTHENTICATION_REQUIRED",
+      });
+    }
+
+    // Parse data - support both string and object format
+    let serverId: string;
+
+    if (typeof data === "string") {
+      try {
+        const parsedData = JSON.parse(data) as { serverId: string };
+        serverId = parsedData.serverId;
+      } catch {
+        serverId = data;
+      }
+    } else if (typeof data === "object" && data?.serverId) {
+      serverId = data.serverId;
+    } else {
+      return this.send(client, "error", {
+        message: "serverId is required",
+        code: "INVALID_REQUEST",
+      });
+    }
+
+    if (!serverId || !Types.ObjectId.isValid(serverId)) {
+      return this.send(client, "error", {
+        message: "Invalid serverId format",
+        code: "INVALID_SERVER_ID",
+      });
+    }
+
+    this.logger.log(
+      `[WebSocket] User ${userId} attempting to join server: ${serverId}`,
+    );
+
+    try {
+      // Verify user is member of this server
+      const membership = await this.userDehiveServerModel.exists({
+        user_dehive_id: userId,
+        server_id: new Types.ObjectId(serverId),
+      });
+
+      if (!membership) {
+        return this.send(client, "error", {
+          message: "Not a member of this server",
+          code: "NOT_A_MEMBER",
+        });
+      }
+
+      // Join server room for Level 2 events (Category/Channel CRUD)
+      await client.join(`server:${serverId}`);
+
+      this.logger.log(
+        `[WebSocket] User ${userId} joined server room: ${serverId}`,
+      );
+
+      this.send(client, "serverJoined", {
+        message: "Joined server room successfully",
+        serverId: serverId,
+        status: "success",
+      });
+    } catch (error) {
+      this.logger.error(`[WebSocket] Error joining server: ${String(error)}`);
+      return this.send(client, "error", {
+        message: "Failed to join server room",
+        code: "JOIN_ERROR",
+      });
+    }
+  }
+
+  // ========== LEVEL 1: USER-LEVEL EVENTS ==========
+
+  /**
+   * Notify user that a server they're in was deleted
+   */
+  notifyServerDeleted(userId: string, serverId: string, serverName: string) {
+    this.broadcast(`user:${userId}`, "server:deleted", {
+      serverId,
+      serverName,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified user ${userId} about server deletion: ${serverId}`,
+    );
+  }
+
+  /**
+   * Notify user that a server they're in was updated
+   */
+  notifyServerUpdated(
+    userId: string,
+    serverId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      avatar?: string;
+      [key: string]: unknown;
+    },
+  ) {
+    this.broadcast(`user:${userId}`, "server:updated", {
+      serverId,
+      updates,
+      timestamp: new Date(),
+    });
+    this.logger.log(`Notified user ${userId} about server update: ${serverId}`);
+  }
+
+  /**
+   * Notify user they were kicked from server
+   */
+  notifyUserKicked(
+    userId: string,
+    serverId: string,
+    serverName: string,
+    reason?: string,
+  ) {
+    this.broadcast(`user:${userId}`, "server:kicked", {
+      serverId,
+      serverName,
+      reason,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified user ${userId} they were kicked from: ${serverId}`,
+    );
+  }
+
+  /**
+   * Notify user they were banned from server
+   */
+  notifyUserBanned(
+    userId: string,
+    serverId: string,
+    serverName: string,
+    reason?: string,
+  ) {
+    this.broadcast(`user:${userId}`, "server:banned", {
+      serverId,
+      serverName,
+      reason,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified user ${userId} they were banned from: ${serverId}`,
+    );
+  }
+
+  /**
+   * Notify all members when someone joins the server
+   */
+  notifyMemberJoined(
+    serverId: string,
+    memberInfo: {
+      userId: string;
+      username: string;
+      displayName: string;
+      avatar: string | null;
+    },
+  ) {
+    this.broadcast(`server:${serverId}`, "member:joined", {
+      serverId,
+      member: memberInfo,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about new member: ${memberInfo.userId}`,
+    );
+  }
+
+  /**
+   * Notify all members when someone leaves the server
+   */
+  notifyMemberLeft(
+    serverId: string,
+    memberInfo: {
+      userId: string;
+      username: string;
+      displayName: string;
+    },
+  ) {
+    this.broadcast(`server:${serverId}`, "member:left", {
+      serverId,
+      member: memberInfo,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about member leaving: ${memberInfo.userId}`,
+    );
+  }
+
+  // ========== LEVEL 2: SERVER-LEVEL EVENTS (Category/Channel) ==========
+
+  /**
+   * Notify all server members that a category was created
+   */
+  notifyCategoryCreated(
+    serverId: string,
+    category: {
+      _id: string;
+      name: string;
+      position?: number;
+    },
+  ) {
+    this.broadcast(`server:${serverId}`, "category:created", {
+      serverId,
+      category,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about new category: ${category.name}`,
+    );
+  }
+
+  /**
+   * Notify all server members that a category was updated
+   */
+  notifyCategoryUpdated(
+    serverId: string,
+    category: {
+      _id: string;
+      name?: string;
+      position?: number;
+      [key: string]: unknown;
+    },
+  ) {
+    this.broadcast(`server:${serverId}`, "category:updated", {
+      serverId,
+      category,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about category update: ${category._id}`,
+    );
+  }
+
+  /**
+   * Notify all server members that a category was deleted
+   */
+  notifyCategoryDeleted(
+    serverId: string,
+    categoryId: string,
+    categoryName: string,
+  ) {
+    this.broadcast(`server:${serverId}`, "category:deleted", {
+      serverId,
+      categoryId,
+      categoryName,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about category deletion: ${categoryName}`,
+    );
+  }
+
+  /**
+   * Notify all server members that a channel was created
+   */
+  notifyChannelCreated(
+    serverId: string,
+    channel: {
+      _id: string;
+      name: string;
+      type: string;
+      categoryId: string;
+      position?: number;
+    },
+  ) {
+    this.broadcast(`server:${serverId}`, "channel:created", {
+      serverId,
+      channel,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about new channel: ${channel.name}`,
+    );
+  }
+
+  /**
+   * Notify all server members that a channel was updated
+   */
+  notifyChannelUpdated(
+    serverId: string,
+    channel: {
+      _id: string;
+      name?: string;
+      type?: string;
+      topic?: string;
+      [key: string]: unknown;
+    },
+  ) {
+    this.broadcast(`server:${serverId}`, "channel:updated", {
+      serverId,
+      channel,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about channel update: ${channel._id}`,
+    );
+  }
+
+  /**
+   * Notify all server members that a channel was deleted
+   */
+  notifyChannelDeleted(
+    serverId: string,
+    channelId: string,
+    channelName: string,
+  ) {
+    this.broadcast(`server:${serverId}`, "channel:deleted", {
+      serverId,
+      channelId,
+      channelName,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about channel deletion: ${channelName}`,
+    );
+  }
+
+  /**
+   * Notify all server members that a channel was moved to different category
+   */
+  notifyChannelMoved(
+    serverId: string,
+    channel: {
+      _id: string;
+      name: string;
+      oldCategoryId: string;
+      newCategoryId: string;
+    },
+  ) {
+    this.broadcast(`server:${serverId}`, "channel:moved", {
+      serverId,
+      channel,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about channel move: ${channel.name}`,
+    );
+  }
+
+  // Helper: emit to one client (object for frontend, có thể mở debug Insomnia nếu cần)
+  private send(client: Socket, event: string, data: unknown) {
+    // Production: emit object (default for frontend)
+    client.emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string
+    // const serializedData = JSON.stringify(data, null, 2);
+    // client.emit(event, serializedData);
+  }
+
+  // Helper: emit to room (object for frontend, có thể mở debug Insomnia nếu cần)
+  private broadcast(room: string, event: string, data: unknown) {
+    // Production: emit object (default for frontend)
+    this.server.to(room).emit(event, data);
+
+    // Debug (Insomnia): emit pretty JSON string
+    // const serializedData = JSON.stringify(data, null, 2);
+    // this.server.to(room).emit(event, serializedData);
+  }
+}

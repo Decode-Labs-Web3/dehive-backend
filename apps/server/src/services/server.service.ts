@@ -35,6 +35,8 @@ import { NftVerificationService } from "./nft-verification.service";
 import { NetworkMappingService } from "./network-mapping.service";
 import { AuditLogService } from "./audit-log.service";
 import { AuditLogAction } from "../../enum/enum";
+import { ServerEventsGateway } from "../../gateway/server-events.gateway";
+import { forwardRef, Inject } from "@nestjs/common";
 
 @Injectable()
 export class ServerService {
@@ -56,6 +58,8 @@ export class ServerService {
     private readonly nftVerificationService: NftVerificationService,
     private readonly networkMapping: NetworkMappingService,
     private readonly auditLogService: AuditLogService,
+    @Inject(forwardRef(() => ServerEventsGateway))
+    private readonly serverEventsGateway: ServerEventsGateway,
   ) {
     // Constructor body can be empty or used for initialization
   }
@@ -266,6 +270,24 @@ export class ServerService {
       updateData,
     );
 
+    // Emit socket event to all server members
+    const memberships = await this.userDehiveServerModel
+      .find({ server_id: new Types.ObjectId(id) })
+      .select("user_dehive_id")
+      .lean();
+
+    for (const membership of memberships) {
+      this.serverEventsGateway.notifyServerUpdated(
+        membership.user_dehive_id.toString(),
+        id,
+        {
+          name: updatedServer.name,
+          description: updatedServer.description,
+          avatar: updatedServer.avatar_hash,
+        },
+      );
+    }
+
     return updatedServer;
   }
 
@@ -315,6 +337,16 @@ export class ServerService {
       }
 
       await session.commitTransaction();
+
+      // Emit socket event to all affected users
+      for (const memberId of memberIds) {
+        this.serverEventsGateway.notifyServerDeleted(
+          memberId.toString(),
+          id,
+          server.name,
+        );
+      }
+
       return { deleted: true };
     } catch (error) {
       await session.abortTransaction();
@@ -354,6 +386,12 @@ export class ServerService {
       String(savedCategory._id),
       { name: savedCategory.name },
     );
+
+    // Emit socket event to all server members
+    this.serverEventsGateway.notifyCategoryCreated(serverId, {
+      _id: String(savedCategory._id),
+      name: savedCategory.name,
+    });
 
     // Return category with empty channels array
     return {
@@ -470,6 +508,12 @@ export class ServerService {
       .find({ category_id: new Types.ObjectId(categoryId) })
       .lean();
 
+    // Emit socket event to all server members
+    this.serverEventsGateway.notifyCategoryUpdated(String(server._id), {
+      _id: String(updatedCategory._id),
+      name: updatedCategory.name,
+    });
+
     // Return category with channels list
     return {
       ...updatedCategory.toObject(),
@@ -515,6 +559,13 @@ export class ServerService {
         actorId,
         categoryId,
         { name: category.name },
+      );
+
+      // Emit socket event to all server members
+      this.serverEventsGateway.notifyCategoryDeleted(
+        String(server._id),
+        categoryId,
+        category.name,
       );
 
       return { deleted: true };
@@ -627,6 +678,14 @@ export class ServerService {
       { name: savedChannel.name, type: savedChannel.type },
     );
 
+    // Notify via socket
+    this.serverEventsGateway.notifyChannelCreated(serverId, {
+      _id: String(savedChannel._id),
+      name: savedChannel.name,
+      type: savedChannel.type,
+      categoryId: String(savedChannel.category_id),
+    });
+
     return savedChannel;
   }
 
@@ -699,6 +758,14 @@ export class ServerService {
       channelId,
       updateData,
     );
+
+    // Notify via socket
+    this.serverEventsGateway.notifyChannelUpdated(String(server._id), {
+      _id: channelId,
+      name: updatedChannel.name,
+      type: updatedChannel.type,
+      ...updateData,
+    });
 
     return updatedChannel;
   }
@@ -787,6 +854,26 @@ export class ServerService {
       );
     }
 
+    // Log audit
+    await this.auditLogService.createLog(
+      String(server._id),
+      AuditLogAction.CHANNEL_UPDATE,
+      actorId,
+      channelId,
+      {
+        category_id: moveChannelDto.category_id,
+        old_category_id: String(currentCategory._id),
+      },
+    );
+
+    // Notify via socket
+    this.serverEventsGateway.notifyChannelMoved(String(server._id), {
+      _id: channelId,
+      name: updatedChannel.name,
+      oldCategoryId: String(currentCategory._id),
+      newCategoryId: moveChannelDto.category_id,
+    });
+
     return updatedChannel;
   }
 
@@ -867,6 +954,13 @@ export class ServerService {
         actorId,
         channelId,
         { name: channel.name, type: channel.type },
+      );
+
+      // Notify via socket
+      this.serverEventsGateway.notifyChannelDeleted(
+        String(server._id),
+        channelId,
+        channel.name,
       );
 
       return { deleted: true };
