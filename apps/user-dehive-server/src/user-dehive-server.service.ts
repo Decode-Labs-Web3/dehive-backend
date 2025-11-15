@@ -304,7 +304,11 @@ export class UserDehiveServerService {
     dto: JoinServerDto,
     userId: string,
     sessionId: string,
-  ): Promise<{ server_id: string; server_name: string }> {
+  ): Promise<{
+    server_id: string;
+    server_name: string;
+    server?: Record<string, unknown>;
+  }> {
     const serverId = new Types.ObjectId(dto.server_id);
 
     const userDehiveId = userId;
@@ -331,10 +335,13 @@ export class UserDehiveServerService {
 
     if (!server) throw new NotFoundException(`Server not found.`);
     if (isAlreadyMember) {
-      // User is already a member, return server_id and server_name for frontend redirect
+      // User is already a member, return full server info for frontend
+      const serverDoc = await this.serverModel.findById(serverId);
+      const serverObj = serverDoc?.toObject ? serverDoc.toObject() : serverDoc;
       return {
         server_id: dto.server_id,
         server_name: server.name,
+        server: (serverObj ?? {}) as Record<string, unknown>,
       };
     }
     if (isBannedFromServer)
@@ -407,9 +414,12 @@ export class UserDehiveServerService {
       );
 
       // ✅ Return server info for consistent response structure
+      const serverDoc = await this.serverModel.findById(serverId);
+      const serverObj = serverDoc?.toObject ? serverDoc.toObject() : serverDoc;
       return {
         server_id: dto.server_id,
         server_name: server.name,
+        server: (serverObj ?? {}) as Record<string, unknown>,
       };
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
