@@ -15,16 +15,7 @@ import { UserDehiveServerDocument } from "../schemas/user-dehive-server.schema";
 
 @Injectable()
 @WebSocketGateway({
-  cors: {
-    origin: [
-      "http://localhost:3000",
-      "https://decodenetwork.app",
-      "https://www.decodenetwork.app",
-      "https://api.decodenetwork.app",
-      "https://ws-server.api.decodenetwork.app",
-    ],
-    credentials: true,
-  },
+  cors: { origin: "*" },
   namespace: "/server-events",
 })
 export class ServerEventsGateway
@@ -369,19 +360,16 @@ export class ServerEventsGateway
   notifyCategoryUpdated(
     serverId: string,
     category: {
-      _id: string;
-      name?: string;
-      position?: number;
-      [key: string]: unknown;
+      categoryId: string;
+      name: string;
     },
   ) {
     this.broadcast(`server:${serverId}`, "category:updated", {
-      serverId,
-      category,
-      timestamp: new Date(),
+      categoryId: category.categoryId,
+      name: category.name,
     });
     this.logger.log(
-      `Notified server ${serverId} about category update: ${category._id}`,
+      `Notified server ${serverId} about category update: ${category.categoryId}`,
     );
   }
 
@@ -394,10 +382,7 @@ export class ServerEventsGateway
     categoryName: string,
   ) {
     this.broadcast(`server:${serverId}`, "category:deleted", {
-      serverId,
       categoryId,
-      categoryName,
-      timestamp: new Date(),
     });
     this.logger.log(
       `Notified server ${serverId} about category deletion: ${categoryName}`,
@@ -413,14 +398,14 @@ export class ServerEventsGateway
       _id: string;
       name: string;
       type: string;
-      categoryId: string;
-      position?: number;
+      category_id: string;
+      createdAt: string;
+      updatedAt: string;
+      __v: number;
     },
   ) {
     this.broadcast(`server:${serverId}`, "channel:created", {
-      serverId,
-      channel,
-      timestamp: new Date(),
+      ...channel,
     });
     this.logger.log(
       `Notified server ${serverId} about new channel: ${channel.name}`,
@@ -428,25 +413,21 @@ export class ServerEventsGateway
   }
 
   /**
-   * Notify all server members that a channel was updated
+   * Notify all server members that a channel was updated (only name can be updated)
    */
   notifyChannelUpdated(
     serverId: string,
     channel: {
       _id: string;
-      name?: string;
-      type?: string;
-      topic?: string;
-      [key: string]: unknown;
+      name: string;
     },
   ) {
     this.broadcast(`server:${serverId}`, "channel:updated", {
-      serverId,
-      channel,
-      timestamp: new Date(),
+      _id: channel._id,
+      name: channel.name,
     });
     this.logger.log(
-      `Notified server ${serverId} about channel update: ${channel._id}`,
+      `Notified server ${serverId} about channel name update: ${channel._id}`,
     );
   }
 
@@ -459,10 +440,7 @@ export class ServerEventsGateway
     channelName: string,
   ) {
     this.broadcast(`server:${serverId}`, "channel:deleted", {
-      serverId,
       channelId,
-      channelName,
-      timestamp: new Date(),
     });
     this.logger.log(
       `Notified server ${serverId} about channel deletion: ${channelName}`,
