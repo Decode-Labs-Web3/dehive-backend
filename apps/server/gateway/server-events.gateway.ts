@@ -387,6 +387,18 @@ export class ServerEventsGateway
     );
   }
 
+  /** Notify all server members that server ownership was updated */
+  notifyServerUpdatedOwnership(serverId: string, ownerId: string) {
+    this.broadcast(`server:${serverId}`, "server:updated-ownership", {
+      server_id: serverId,
+      owner_id: ownerId,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified server ${serverId} about ownership update to owner: ${ownerId}`,
+    );
+  }
+
   // ========== LEVEL 2: SERVER-LEVEL EVENTS (Category/Channel) ==========
 
   /**
