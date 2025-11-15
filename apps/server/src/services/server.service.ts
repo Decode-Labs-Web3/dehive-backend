@@ -387,17 +387,35 @@ export class ServerService {
       { name: savedCategory.name },
     );
 
-    // Emit socket event to all server members
-    this.serverEventsGateway.notifyCategoryCreated(serverId, {
-      _id: String(savedCategory._id),
-      name: savedCategory.name,
-    });
-
-    // Return category with empty channels array
-    return {
-      ...savedCategory.toObject(),
+    // Prepare full category object for event and response
+    const found = await this.categoryModel.findById(savedCategory._id).lean();
+    const categoryObj = found ? found : savedCategory.toObject();
+    const catObj = categoryObj as unknown as Record<string, unknown>;
+    const createdAt = catObj.createdAt
+      ? String(catObj.createdAt as string | Date)
+      : undefined;
+    const updatedAt = catObj.updatedAt
+      ? String(catObj.updatedAt as string | Date)
+      : undefined;
+    const __v = catObj.__v ?? 0;
+    const categoryEvent = {
+      _id: String(categoryObj._id),
+      name: categoryObj.name,
+      server_id: String(categoryObj.server_id),
+      createdAt,
+      updatedAt,
+      __v,
       channels: [],
     };
+
+    // Emit socket event to all server members
+    this.serverEventsGateway.notifyCategoryCreated(serverId, categoryEvent);
+
+    // Return category with empty channels array (cast to expected type)
+    return {
+      ...categoryObj,
+      channels: [],
+    } as Category & { channels: unknown[] };
   }
 
   async findAllCategoriesInServer(serverId: string) {
