@@ -510,7 +510,7 @@ export class ServerService {
 
     // Emit socket event to all server members
     this.serverEventsGateway.notifyCategoryUpdated(String(server._id), {
-      _id: String(updatedCategory._id),
+      categoryId: String(updatedCategory._id),
       name: updatedCategory.name,
     });
 
@@ -679,11 +679,23 @@ export class ServerService {
     );
 
     // Notify via socket
+    const channelObj = savedChannel.toObject({
+      getters: true,
+      virtuals: false,
+    });
+    const channelObjTyped = channelObj as unknown as Record<string, unknown>;
     this.serverEventsGateway.notifyChannelCreated(serverId, {
-      _id: String(savedChannel._id),
-      name: savedChannel.name,
-      type: savedChannel.type,
-      categoryId: String(savedChannel.category_id),
+      _id: String(channelObjTyped._id),
+      name: channelObjTyped.name as string,
+      type: channelObjTyped.type as string,
+      category_id: String(channelObjTyped.category_id),
+      createdAt: channelObjTyped.createdAt
+        ? String(channelObjTyped.createdAt)
+        : "",
+      updatedAt: channelObjTyped.updatedAt
+        ? String(channelObjTyped.updatedAt)
+        : "",
+      __v: channelObjTyped.__v as number,
     });
 
     return savedChannel;
@@ -763,8 +775,6 @@ export class ServerService {
     this.serverEventsGateway.notifyChannelUpdated(String(server._id), {
       _id: channelId,
       name: updatedChannel.name,
-      type: updatedChannel.type,
-      ...updateData,
     });
 
     return updatedChannel;
