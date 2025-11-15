@@ -277,15 +277,43 @@ export class ServerService {
       .lean();
 
     for (const membership of memberships) {
-      this.serverEventsGateway.notifyServerUpdated(
-        membership.user_dehive_id.toString(),
-        id,
-        {
+      const userId = membership.user_dehive_id.toString();
+      // Info update
+      if (
+        updateServerDto.name !== undefined ||
+        updateServerDto.description !== undefined
+      ) {
+        this.serverEventsGateway.notifyServerInfoUpdated(userId, {
+          server_id: id,
           name: updatedServer.name,
           description: updatedServer.description,
-          avatar: updatedServer.avatar_hash,
-        },
-      );
+        });
+      }
+      // Avatar update
+      if (avatarHash) {
+        this.serverEventsGateway.notifyServerAvatarUpdated(userId, {
+          server_id: id,
+          avatar_hash: updatedServer.avatar_hash || "",
+        });
+      }
+      // Tags update
+      if (updateServerDto.tags !== undefined) {
+        this.serverEventsGateway.notifyServerTagsUpdated(userId, {
+          server_id: id,
+          tags: Array.isArray(updatedServer.tags) ? updatedServer.tags : [],
+        });
+      }
+      // NFT update (if present in updateData)
+      const updateDataObj = updateData as Record<string, unknown>;
+      if (updateDataObj.nft_gated !== undefined) {
+        this.serverEventsGateway.notifyServerNFTUpdated(userId, {
+          server_id: id,
+          server:
+            typeof updatedServer.toObject === "function"
+              ? updatedServer.toObject()
+              : updatedServer,
+        });
+      }
     }
 
     return updatedServer;
@@ -390,14 +418,15 @@ export class ServerService {
     // Prepare full category object for event and response
     const found = await this.categoryModel.findById(savedCategory._id).lean();
     const categoryObj = found ? found : savedCategory.toObject();
-    const catObj = categoryObj as unknown as Record<string, unknown>;
-    const createdAt = catObj.createdAt
-      ? String(catObj.createdAt as string | Date)
-      : undefined;
-    const updatedAt = catObj.updatedAt
-      ? String(catObj.updatedAt as string | Date)
-      : undefined;
-    const __v = catObj.__v ?? 0;
+    const catObj = categoryObj as Record<string, unknown>;
+    // Ensure createdAt and updatedAt are always string, __v is number
+    const createdAt: string = catObj.createdAt
+      ? String(catObj.createdAt)
+      : new Date().toISOString();
+    const updatedAt: string = catObj.updatedAt
+      ? String(catObj.updatedAt)
+      : new Date().toISOString();
+    const __v: number = typeof catObj.__v === "number" ? catObj.__v : 0;
     const categoryEvent = {
       _id: String(categoryObj._id),
       name: categoryObj.name,

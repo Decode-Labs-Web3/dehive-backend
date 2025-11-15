@@ -228,24 +228,80 @@ export class ServerEventsGateway
   }
 
   /**
-   * Notify user that a server they're in was updated
+   * Notify user that server info (name/description) was updated
    */
-  notifyServerUpdated(
+  notifyServerInfoUpdated(
     userId: string,
-    serverId: string,
-    updates: {
-      name?: string;
-      description?: string;
-      avatar?: string;
-      [key: string]: unknown;
+    payload: {
+      server_id: string;
+      name: string;
+      description: string;
     },
   ) {
-    this.broadcast(`user:${userId}`, "server:updated", {
-      serverId,
-      updates,
+    this.broadcast(`user:${userId}`, "server:info-updated", {
+      ...payload,
       timestamp: new Date(),
     });
-    this.logger.log(`Notified user ${userId} about server update: ${serverId}`);
+    this.logger.log(
+      `Notified user ${userId} about server info update: ${payload.server_id}`,
+    );
+  }
+
+  /**
+   * Notify user that server avatar was updated
+   */
+  notifyServerAvatarUpdated(
+    userId: string,
+    payload: {
+      server_id: string;
+      avatar_hash: string;
+    },
+  ) {
+    this.broadcast(`user:${userId}`, "server:avatar-updated", {
+      ...payload,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified user ${userId} about server avatar update: ${payload.server_id}`,
+    );
+  }
+
+  /**
+   * Notify user that server tags were updated
+   */
+  notifyServerTagsUpdated(
+    userId: string,
+    payload: {
+      server_id: string;
+      tags: string[];
+    },
+  ) {
+    this.broadcast(`user:${userId}`, "server:tags-updated", {
+      ...payload,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified user ${userId} about server tags update: ${payload.server_id}`,
+    );
+  }
+
+  /**
+   * Notify user that server NFT gating was updated
+   */
+  notifyServerNFTUpdated(
+    userId: string,
+    payload: {
+      server_id: string;
+      server: unknown;
+    },
+  ) {
+    this.broadcast(`user:${userId}`, "server:nft-updated", {
+      ...payload,
+      timestamp: new Date(),
+    });
+    this.logger.log(
+      `Notified user ${userId} about server NFT update: ${payload.server_id}`,
+    );
   }
 
   /**
@@ -341,14 +397,24 @@ export class ServerEventsGateway
     category: {
       _id: string;
       name: string;
-      position?: number;
+      server_id: string;
+      createdAt: string;
+      updatedAt: string;
+      __v: number;
+      channels?: unknown[];
     },
   ) {
-    this.broadcast(`server:${serverId}`, "category:created", {
-      serverId,
-      category,
-      timestamp: new Date(),
-    });
+    // Ensure channels is always present and is an array
+    const payload = {
+      _id: category._id,
+      name: category.name,
+      server_id: category.server_id,
+      createdAt: category.createdAt,
+      updatedAt: category.updatedAt,
+      __v: category.__v,
+      channels: Array.isArray(category.channels) ? category.channels : [],
+    };
+    this.broadcast(`server:${serverId}`, "category:created", payload);
     this.logger.log(
       `Notified server ${serverId} about new category: ${category.name}`,
     );
