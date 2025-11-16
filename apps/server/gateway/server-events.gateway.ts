@@ -310,14 +310,13 @@ export class ServerEventsGateway
   notifyUserKicked(
     userId: string,
     serverId: string,
-    serverName: string,
-    reason?: string,
+    _serverName: string,
+    _reason?: string,
   ) {
+    // Emit minimal payload to match UserKickedEvent: { serverId, userId }
     this.broadcast(`user:${userId}`, "server:kicked", {
       serverId,
-      serverName,
-      reason,
-      timestamp: new Date(),
+      userId,
     });
     this.logger.log(
       `Notified user ${userId} they were kicked from: ${serverId}`,
@@ -330,14 +329,13 @@ export class ServerEventsGateway
   notifyUserBanned(
     userId: string,
     serverId: string,
-    serverName: string,
-    reason?: string,
+    _serverName: string,
+    _reason?: string,
   ) {
+    // Emit minimal payload to match UserBannedEvent: { serverId, userId }
     this.broadcast(`user:${userId}`, "server:banned", {
       serverId,
-      serverName,
-      reason,
-      timestamp: new Date(),
+      userId,
     });
     this.logger.log(
       `Notified user ${userId} they were banned from: ${serverId}`,
