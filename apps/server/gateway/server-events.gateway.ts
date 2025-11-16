@@ -358,32 +358,69 @@ export class ServerEventsGateway
   /**
    * Notify all members when someone joins the server
    */
-  notifyMemberJoined(
+  async notifyMemberJoined(
     serverId: string,
     memberInfo: {
       userId: string;
-      username: string;
-      displayName: string;
-      avatar: string | null;
-      // Optional fields front-end may expect
-      status?: string;
-      conversationid?: string;
-      wallets?: unknown[];
-      isCall?: boolean;
-      last_seen?: string;
     },
   ) {
-    // Build payload compatible with front-end's MemberInfoJoined interface
+    const userId = memberInfo.userId;
+
+    // Fetch full user profile to always return real data (no optionals)
+    let userDoc: Record<string, unknown> | null = null;
+    try {
+      userDoc = await this.userDehiveServerModel.db
+        .collection("user_dehive")
+        .findOne({ _id: new Types.ObjectId(userId) });
+    } catch (err) {
+      this.logger.error(
+        `[WebSocket] Error fetching user profile for notifyMemberJoined: ${String(err)}`,
+      );
+    }
+
+    // Map DB fields to front-end MemberInfoJoined shape (guarantee values)
+    const username =
+      (userDoc && (userDoc["username"] as string)) || `User_${userId}`;
+
+    const displayname =
+      (userDoc &&
+        ((userDoc["display_name"] as string) ||
+          (userDoc["displayName"] as string))) ||
+      "";
+
+    const avatar_ipfs_hash =
+      (userDoc &&
+        ((userDoc["avatar_ipfs_hash"] as string) ||
+          (userDoc["avatar"] as string))) ||
+      "";
+
+    const status = (userDoc && (userDoc["status"] as string)) || "online";
+
+    const conversationid =
+      (userDoc && (userDoc["conversationid"] as string)) || "";
+
+    const wallets = (userDoc && (userDoc["wallets"] as unknown[])) || [];
+
+    const last_seen =
+      (userDoc &&
+        ((userDoc["last_seen"] as string) ||
+          (userDoc["last_login"]
+            ? new Date(
+                userDoc["last_login" as keyof typeof userDoc] as string,
+              ).toISOString()
+            : undefined))) ||
+      new Date().toISOString();
+
     const memberPayload = {
-      user_id: memberInfo.userId,
-      status: memberInfo.status ?? "online",
-      conversationid: memberInfo.conversationid ?? "",
-      displayname: memberInfo.displayName ?? "",
-      username: memberInfo.username ?? "",
-      avatar_ipfs_hash: memberInfo.avatar ?? "",
-      wallets: memberInfo.wallets ?? [],
-      isCall: memberInfo.isCall ?? false,
-      last_seen: memberInfo.last_seen ?? new Date().toISOString(),
+      user_id: userId,
+      status,
+      conversationid,
+      displayname,
+      username,
+      avatar_ipfs_hash,
+      wallets,
+      isCall: false,
+      last_seen,
     };
 
     this.broadcast(`server:${serverId}`, "member:joined", {
@@ -392,9 +429,7 @@ export class ServerEventsGateway
       timestamp: new Date(),
     });
 
-    this.logger.log(
-      `Notified server ${serverId} about new member: ${memberInfo.userId}`,
-    );
+    this.logger.log(`Notified server ${serverId} about new member: ${userId}`);
   }
 
   /**
