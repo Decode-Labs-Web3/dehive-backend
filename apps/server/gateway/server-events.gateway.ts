@@ -318,6 +318,13 @@ export class ServerEventsGateway
       serverId,
       userId,
     });
+    // Also notify all server members that this user has left so front-end can update member list
+    // Reuse existing member:left event (member object may contain only userId when full profile isn't available)
+    this.notifyMemberLeft(serverId, {
+      userId,
+      username: "",
+      displayName: "",
+    });
     this.logger.log(
       `Notified user ${userId} they were kicked from: ${serverId}`,
     );
@@ -337,6 +344,12 @@ export class ServerEventsGateway
       serverId,
       userId,
     });
+    // Also notify all server members that this user has left so front-end can update member list
+    this.notifyMemberLeft(serverId, {
+      userId,
+      username: "",
+      displayName: "",
+    });
     this.logger.log(
       `Notified user ${userId} they were banned from: ${serverId}`,
     );
@@ -352,13 +365,33 @@ export class ServerEventsGateway
       username: string;
       displayName: string;
       avatar: string | null;
+      // Optional fields front-end may expect
+      status?: string;
+      conversationid?: string;
+      wallets?: unknown[];
+      isCall?: boolean;
+      last_seen?: string;
     },
   ) {
+    // Build payload compatible with front-end's MemberInfoJoined interface
+    const memberPayload = {
+      user_id: memberInfo.userId,
+      status: memberInfo.status ?? "online",
+      conversationid: memberInfo.conversationid ?? "",
+      displayname: memberInfo.displayName ?? "",
+      username: memberInfo.username ?? "",
+      avatar_ipfs_hash: memberInfo.avatar ?? "",
+      wallets: memberInfo.wallets ?? [],
+      isCall: memberInfo.isCall ?? false,
+      last_seen: memberInfo.last_seen ?? new Date().toISOString(),
+    };
+
     this.broadcast(`server:${serverId}`, "member:joined", {
       serverId,
-      member: memberInfo,
+      member: memberPayload,
       timestamp: new Date(),
     });
+
     this.logger.log(
       `Notified server ${serverId} about new member: ${memberInfo.userId}`,
     );
@@ -375,11 +408,17 @@ export class ServerEventsGateway
       displayName: string;
     },
   ) {
+    // Emit a minimal payload for member left so front-end can remove by id
+    const memberPayload = {
+      userId: memberInfo.userId,
+    };
+
     this.broadcast(`server:${serverId}`, "member:left", {
       serverId,
-      member: memberInfo,
+      member: memberPayload,
       timestamp: new Date(),
     });
+
     this.logger.log(
       `Notified server ${serverId} about member leaving: ${memberInfo.userId}`,
     );
