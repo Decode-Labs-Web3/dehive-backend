@@ -373,6 +373,36 @@ export class UserStatusService {
         finalResult,
       );
 
+      // HOT-CACHE: write individual user status entries to Redis so other services
+      // can read per-user status quickly without DB hit. Use pipeline for efficiency.
+      try {
+        const pipeline = this.redis.multi();
+        for (const u of usersWithConversation) {
+          const statusKey = `user:status:${u.user_id}`;
+          const lastSeen =
+            u.last_seen instanceof Date
+              ? u.last_seen.toISOString()
+              : String(u.last_seen || new Date().toISOString());
+          const payload = JSON.stringify({
+            status: u.status,
+            last_seen: lastSeen,
+            // socket_id may not be present in this context
+            socket_id: (u as { socket_id?: string }).socket_id || null,
+          });
+          // Set with 1 hour TTL
+          pipeline.setex(statusKey, 3600, payload);
+        }
+        await pipeline.exec();
+        this.logger.log(
+          `🔥 Hot-cached ${usersWithConversation.length} user status entries for user ${currentUserId}`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Error hot-caching individual user statuses: ${String(err)}`,
+        );
+        // don't fail the main flow on hot-cache failure
+      }
+
       const duration = Date.now() - startTime;
       this.logger.log(
         `📦 Fetched and cached following status for user ${currentUserId} page ${page} in ${duration}ms`,
@@ -733,5 +763,82 @@ export class UserStatusService {
       const oldestKey = this.prewarmCache.keys().next().value;
       this.prewarmCache.delete(oldestKey);
     }
+  }
+
+  /**
+   * Pre-warm following cache (page 0) for a single user.
+   * This is fire-and-forget and will not block the caller. It reuses
+   * the existing fetchAndCacheFollowingStatus logic which also performs
+   * the hot-cache (per-user Redis keys) after fetching.
+   */
+  async prewarmFollowingCache(
+    currentUserId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+    limit: number = 20,
+  ): Promise<void> {
+    const page = 0;
+    const progressKey = `${currentUserId}:${page}`;
+
+    // If memory cache already has a recent result, skip prewarm
+    if (this.getFromMemoryCache(progressKey)) return;
+
+    // If a fetch is already in progress, do not start another
+    if (this.prewarmInProgress.has(progressKey)) return;
+
+    this.logger.log(`🔥 Pre-warming following cache for user ${currentUserId}`);
+
+    // Fire-and-forget call to fetch & cache (this will also hot-cache per-user keys)
+    this.fetchAndCacheFollowingStatus(
+      currentUserId,
+      sessionId,
+      fingerprintHash,
+      page,
+      limit,
+    )
+      .then(() => {
+        this.logger.log(
+          `✅ Pre-warmed following cache for user ${currentUserId}`,
+        );
+      })
+      .catch((err) => {
+        this.logger.warn(
+          `Pre-warm failed for user ${currentUserId}: ${String(err)}`,
+        );
+      });
+  }
+
+  /**
+   * Pre-warm following cache for multiple users in parallel.
+   * This is intended to be used when bootstrapping multiple sessions
+   * (for example, background workers or batch operations).
+   */
+  async prewarmMultipleFollowings(
+    userIds: string[],
+    sessionId?: string,
+    fingerprintHash?: string,
+    limit: number = 20,
+  ): Promise<void> {
+    if (!Array.isArray(userIds) || userIds.length === 0) return;
+
+    this.logger.log(
+      `🔥 Pre-warming following cache for ${userIds.length} users`,
+    );
+
+    const promises = userIds.map((uid) =>
+      this.prewarmFollowingCache(uid, sessionId, fingerprintHash, limit).catch(
+        (err) => {
+          this.logger.warn(`Pre-warm failed for ${uid}: ${String(err)}`);
+        },
+      ),
+    );
+
+    // Fire-and-forget: do not await all here, but ensure any unhandled
+    // rejections are logged by attaching catch above.
+    Promise.all(promises).catch((err) => {
+      this.logger.error(
+        `Error pre-warming multiple followings: ${String(err)}`,
+      );
+    });
   }
 }

@@ -18,7 +18,7 @@ export class DirectMessagingCacheService {
   private readonly logger = new Logger(DirectMessagingCacheService.name);
 
   // Cache configuration
-  private readonly MESSAGE_CACHE_TTL = 300; // 5 minutes (fresh data)
+  private readonly MESSAGE_CACHE_TTL = 3600; // 1 hour (fresh data)
   private readonly STALE_GRACE_PERIOD = 60; // 1 minute (serve stale data during this time)
   private readonly MAX_LOCK_WAIT_TIME = 5000; // 5 seconds max wait for lock
   private readonly LOCK_TTL = 10; // 10 seconds lock expiry
