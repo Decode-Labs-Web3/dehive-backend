@@ -444,8 +444,9 @@ export class ServerEventsGateway
     },
   ) {
     // Emit a minimal payload for member left so front-end can remove by id
+    // Use `user_id` to match the `member:joined` shape (consistent id field)
     const memberPayload = {
-      userId: memberInfo.userId,
+      user_id: memberInfo.userId,
     };
 
     this.broadcast(`server:${serverId}`, "member:left", {
@@ -461,11 +462,30 @@ export class ServerEventsGateway
 
   /** Notify all server members that server ownership was updated */
   notifyServerUpdatedOwnership(serverId: string, ownerId: string) {
+    // Emit server-level update so all members can react (level 2)
     this.broadcast(`server:${serverId}`, "server:updated-ownership", {
       server_id: serverId,
       owner_id: ownerId,
       timestamp: new Date(),
     });
+
+    // Also emit a user-level notification to the new owner (level 1)
+    // so the owner receives a direct notice that ownership transferred to them.
+    try {
+      this.broadcast(`user:${ownerId}`, "server:updated-ownership", {
+        server_id: serverId,
+        owner_id: ownerId,
+        timestamp: new Date(),
+      });
+    } catch (err) {
+      // don't let user notification failures break server-level notify
+      this.logger.error(
+        `[WebSocket] Failed to notify user ${ownerId} about ownership update: ${String(
+          err,
+        )}`,
+      );
+    }
+
     this.logger.log(
       `Notified server ${serverId} about ownership update to owner: ${ownerId}`,
     );
