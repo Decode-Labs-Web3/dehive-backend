@@ -373,10 +373,48 @@ export class UserStatusService {
         finalResult,
       );
 
-      // HOT-CACHE: write individual user status entries to Redis so other services
+      // HOT-CACHE: synchronize per-user status keys in Redis so other services
       // can read per-user status quickly without DB hit. Use pipeline for efficiency.
       try {
         const pipeline = this.redis.multi();
+
+        // If there was a previous cached page, remove status keys for users
+        // that are no longer present to avoid stale hot-cache entries.
+        try {
+          const prevCache = await this.cacheService
+            .getCachedFollowingStatus<BulkStatusResponse>(currentUserId, page)
+            .catch(() => null);
+
+          if (
+            prevCache &&
+            prevCache.data &&
+            Array.isArray(prevCache.data.users)
+          ) {
+            const prevIds = new Set(prevCache.data.users.map((u) => u.user_id));
+            const newIds = new Set(usersWithConversation.map((u) => u.user_id));
+
+            // Compute removed IDs = prevIds - newIds
+            const removed: string[] = [];
+            for (const id of prevIds) {
+              if (!newIds.has(id)) removed.push(id as string);
+            }
+
+            if (removed.length > 0) {
+              for (const rid of removed) {
+                pipeline.del(`user:status:${rid}`);
+              }
+            }
+          }
+        } catch (innerErr) {
+          // Non-fatal: log and continue to set current hot-cache
+          this.logger.warn(
+            `Warning while computing removed following IDs for hot-cache sync: ${String(
+              innerErr,
+            )}`,
+          );
+        }
+
+        // Now set/update status keys for current page users
         for (const u of usersWithConversation) {
           const statusKey = `user:status:${u.user_id}`;
           const lastSeen =
@@ -392,9 +430,10 @@ export class UserStatusService {
           // Set with 1 hour TTL
           pipeline.setex(statusKey, 3600, payload);
         }
+
         await pipeline.exec();
         this.logger.log(
-          `🔥 Hot-cached ${usersWithConversation.length} user status entries for user ${currentUserId}`,
+          `🔥 Synchronized hot-cache: wrote ${usersWithConversation.length} user status entries for user ${currentUserId}`,
         );
       } catch (err) {
         this.logger.error(
@@ -840,5 +879,42 @@ export class UserStatusService {
         `Error pre-warming multiple followings: ${String(err)}`,
       );
     });
+  }
+
+  /**
+   * Public helper to be called when the user's following list changes
+   * (follow or unfollow). This will invalidate any cached following pages
+   * and trigger a background prewarm so the new following list is cached
+   * and hot-cached immediately.
+   *
+   * Usage: call this from the service that performs follow/unfollow, or
+   * from an event listener that receives follow-change notifications.
+   */
+  async handleFollowingChanged(
+    currentUserId: string,
+    sessionId?: string,
+    fingerprintHash?: string,
+    limit: number = 20,
+  ): Promise<void> {
+    try {
+      // Invalidate all cached pages for this user's following list
+      await this.cacheService.invalidateUserCache(currentUserId);
+
+      // Trigger background prewarm (will also hot-cache per-user status keys)
+      this.prewarmFollowingCache(
+        currentUserId,
+        sessionId,
+        fingerprintHash,
+        limit,
+      );
+
+      this.logger.log(
+        `Handled following change for user ${currentUserId}: cache invalidated and prewarm started`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error handling following change for ${currentUserId}: ${String(error)}`,
+      );
+    }
   }
 }
