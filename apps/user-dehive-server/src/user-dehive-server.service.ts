@@ -3,7 +3,11 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
+  Logger,
 } from "@nestjs/common";
+import { ServerEventsGateway } from "../../server/gateway/server-events.gateway";
 import { InjectModel } from "@nestjs/mongoose";
 import { Model, Types } from "mongoose";
 import {
@@ -45,6 +49,7 @@ import { NftVerificationService } from "../../server/src/services/nft-verificati
 
 @Injectable()
 export class UserDehiveServerService {
+  private readonly logger = new Logger(UserDehiveServerService.name);
   constructor(
     @InjectModel(UserDehive.name)
     private userDehiveModel: Model<UserDehiveDocument>,
@@ -59,6 +64,8 @@ export class UserDehiveServerService {
     private readonly decodeApiClient: DecodeApiClient,
     @InjectRedis() private readonly redis: Redis,
     private readonly nftVerificationService: NftVerificationService,
+    @Inject(forwardRef(() => ServerEventsGateway))
+    private readonly serverEventsGateway: ServerEventsGateway,
   ) {}
 
   private async findUserDehiveProfile(userId: string) {
@@ -413,6 +420,16 @@ export class UserDehiveServerService {
         userDehiveId,
       );
 
+      // Emit socket event to server members that a new member joined
+      try {
+        this.serverEventsGateway.notifyMemberJoined(dto.server_id, {
+          userId: userDehiveId,
+        });
+      } catch (err) {
+        // don't block join on websocket errors
+        console.error(`[WebSocket] notifyMemberJoined failed: ${String(err)}`);
+      }
+
       // ✅ Return server info for consistent response structure
       const serverDoc = await this.serverModel.findById(serverId);
       const serverObj = serverDoc?.toObject ? serverDoc.toObject() : serverDoc;
@@ -483,6 +500,18 @@ export class UserDehiveServerService {
         AuditLogAction.MEMBER_LEAVE,
         userDehiveId,
       );
+
+      // Emit socket event to server members that this member left
+      try {
+        this.serverEventsGateway.notifyMemberLeft(dto.server_id, {
+          userId: userDehiveId,
+          username: "",
+          displayName: "",
+        });
+      } catch (err) {
+        // don't block leave on websocket errors
+        console.error(`[WebSocket] notifyMemberLeft failed: ${String(err)}`);
+      }
 
       return {};
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -735,6 +764,30 @@ export class UserDehiveServerService {
         dto.reason,
       );
 
+      // Emit socket events for kick/ban to ensure clients are notified
+      try {
+        const targetIdStr = dto.target_user_dehive_id;
+        if (action === "kick") {
+          this.serverEventsGateway.notifyUserKicked(
+            targetIdStr,
+            dto.server_id,
+            "",
+            dto.reason,
+          );
+        } else {
+          this.serverEventsGateway.notifyUserBanned(
+            targetIdStr,
+            dto.server_id,
+            "",
+            dto.reason,
+          );
+        }
+      } catch (err) {
+        this.logger.error(
+          `[WebSocket] notifyUserKicked/notifyUserBanned failed: ${String(err)}`,
+        );
+      }
+
       return { message: `User successfully ${action}ed.` };
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
@@ -965,6 +1018,18 @@ export class UserDehiveServerService {
         dto.user_dehive_id,
         { action: "ownership_transfer" },
       );
+
+      // Emit ownership transfer event (Level 2 + Level 1 handled in gateway)
+      try {
+        this.serverEventsGateway.notifyServerUpdatedOwnership(
+          dto.server_id,
+          newOwnerDehiveId.toString(),
+        );
+      } catch (err) {
+        this.logger.error(
+          `[WebSocket] notifyServerUpdatedOwnership failed: ${String(err)}`,
+        );
+      }
 
       return { message: "Ownership transferred successfully." };
     } catch {

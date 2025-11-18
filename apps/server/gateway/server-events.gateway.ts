@@ -55,6 +55,34 @@ export class ServerEventsGateway
     this.logger.log(
       `[WebSocket] Client ${client.id} disconnected ${userId ? `(user: ${userId})` : ""}`,
     );
+
+    // If this socket had any server rooms tracked, notify those servers that
+    // this member left (so front-end can update member lists). We store
+    // joined server ids in client.data.servers when joining via joinServer.
+    try {
+      const servers: string[] | undefined = client.data.servers;
+      if (Array.isArray(servers) && servers.length) {
+        for (const sid of servers) {
+          try {
+            this.notifyMemberLeft(sid, {
+              userId: userId || "",
+              username: "",
+              displayName: "",
+            });
+          } catch (err) {
+            // log and continue
+            this.logger.error(
+              `[WebSocket] Error notifying member left for server ${sid}: ${String(err)}`,
+            );
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.error(
+        `[WebSocket] Error handling disconnect notifications: ${String(err)}`,
+      );
+    }
+
   }
 
   @SubscribeMessage("identity")
@@ -190,12 +218,61 @@ export class ServerEventsGateway
         });
       }
 
+      // Before joining the new server room, leave any previous server rooms
+      // this socket was in and notify those servers that this member left.
+      try {
+        const currentRooms = Array.from(client.rooms || []);
+        const previousServerRooms = currentRooms.filter((r) =>
+          r && typeof r === "string" && r.startsWith("server:"),
+        );
+        for (const room of previousServerRooms) {
+          if (room === `server:${serverId}`) continue;
+          try {
+            // Leave previous server room
+            await client.leave(room);
+            // Extract server id and notify
+            const prevServerId = room.replace("server:", "");
+            this.notifyMemberLeft(prevServerId, {
+              userId,
+              username: "",
+              displayName: "",
+            });
+          } catch (err) {
+            this.logger.error(
+              `[WebSocket] Error leaving previous server room ${room}: ${String(err)}`,
+            );
+          }
+        }
+      } catch (err) {
+        this.logger.error(
+          `[WebSocket] Error while cleaning previous server rooms: ${String(err)}`,
+        );
+      }
+
       // Join server room for Level 2 events (Category/Channel CRUD)
       await client.join(`server:${serverId}`);
 
-      this.logger.log(
-        `[WebSocket] User ${userId} joined server room: ${serverId}`,
-      );
+      // Track joined servers on the socket so disconnect can notify
+      try {
+        const servers: string[] = Array.isArray(client.data.servers)
+          ? client.data.servers
+          : [];
+        if (!servers.includes(serverId)) servers.push(serverId);
+        client.data.servers = servers;
+      } catch {
+        // ignore
+      }
+
+      this.logger.log(`[WebSocket] User ${userId} joined server room: ${serverId}`);
+
+      // Notify server members that this user joined (Level 2)
+      try {
+        this.notifyMemberJoined(serverId, { userId });
+      } catch (err) {
+        this.logger.error(
+          `[WebSocket] Error notifying member joined for server ${serverId}: ${String(err)}`,
+        );
+      }
 
       this.send(client, "serverJoined", {
         message: "Joined server room successfully",
