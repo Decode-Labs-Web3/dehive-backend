@@ -423,11 +423,49 @@ export class ServerEventsGateway
       last_seen,
     };
 
+    // Primary: broadcast to server room (Level 2)
     this.broadcast(`server:${serverId}`, "member:joined", {
       serverId,
       member: memberPayload,
       timestamp: new Date(),
     });
+
+    // Extra safety: iterate connected sockets and directly emit to sockets
+    // that are members of the server room. This ensures delivery even if
+    // some edge-case prevents room broadcasts from reaching a client.
+    try {
+      const socketsMap = this.server.sockets.sockets as
+        | Map<string, Socket>
+        | Record<string, Socket>;
+
+      // Support both Map and plain object styles
+      const iter = (socketsMap as Map<string, Socket>).values
+        ? (socketsMap as Map<string, Socket>).values()
+        : Object.values(socketsMap as Record<string, Socket>);
+
+      for (const sock of iter) {
+        try {
+          if (
+            sock &&
+            sock.rooms &&
+            sock.rooms.has &&
+            sock.rooms.has(`server:${serverId}`)
+          ) {
+            sock.emit("member:joined", {
+              serverId,
+              member: memberPayload,
+              timestamp: new Date(),
+            });
+          }
+        } catch {
+          // ignore per-socket errors
+        }
+      }
+    } catch (err) {
+      this.logger.error(
+        `[WebSocket] Error while directly emitting member:joined to server members: ${String(err)}`,
+      );
+    }
 
     this.logger.log(`Notified server ${serverId} about new member: ${userId}`);
   }
@@ -455,6 +493,40 @@ export class ServerEventsGateway
       timestamp: new Date(),
     });
 
+    // Also emit directly to all sockets in the server room as a safety net
+    try {
+      const socketsMap = this.server.sockets.sockets as
+        | Map<string, Socket>
+        | Record<string, Socket>;
+
+      const iter = (socketsMap as Map<string, Socket>).values
+        ? (socketsMap as Map<string, Socket>).values()
+        : Object.values(socketsMap as Record<string, Socket>);
+
+      for (const sock of iter) {
+        try {
+          if (
+            sock &&
+            sock.rooms &&
+            sock.rooms.has &&
+            sock.rooms.has(`server:${serverId}`)
+          ) {
+            sock.emit("member:left", {
+              serverId,
+              member: memberPayload,
+              timestamp: new Date(),
+            });
+          }
+        } catch {
+          // ignore per-socket errors
+        }
+      }
+    } catch (err) {
+      this.logger.error(
+        `[WebSocket] Error while directly emitting member:left to server members: ${String(err)}`,
+      );
+    }
+
     this.logger.log(
       `Notified server ${serverId} about member leaving: ${memberInfo.userId}`,
     );
@@ -462,27 +534,42 @@ export class ServerEventsGateway
 
   /** Notify all server members that server ownership was updated */
   notifyServerUpdatedOwnership(serverId: string, ownerId: string) {
-    // Emit server-level update so all members can react (level 2)
+    // Emit server-level update so all members can react (Level 2)
     this.broadcast(`server:${serverId}`, "server:updated-ownership", {
       server_id: serverId,
       owner_id: ownerId,
       timestamp: new Date(),
     });
 
-    // Also emit a user-level notification to the new owner (level 1)
-    // so the owner receives a direct notice that ownership transferred to them.
+    // Level 1 requirement: emit this event to all identified users (those
+    // that completed identity). We'll iterate connected sockets and emit
+    // directly to sockets that have a userId in socket.data.
     try {
-      this.broadcast(`user:${ownerId}`, "server:updated-ownership", {
+      const payload = {
         server_id: serverId,
         owner_id: ownerId,
         timestamp: new Date(),
-      });
+      };
+
+      const socketsMap = this.server.sockets.sockets as
+        | Map<string, Socket>
+        | Record<string, Socket>;
+      const iter = (socketsMap as Map<string, Socket>).values
+        ? (socketsMap as Map<string, Socket>).values()
+        : Object.values(socketsMap as Record<string, Socket>);
+
+      for (const sock of iter) {
+        try {
+          if (sock && sock.data && sock.data.userId) {
+            sock.emit("server:updated-ownership", payload);
+          }
+        } catch {
+          // ignore per-socket emits
+        }
+      }
     } catch (err) {
-      // don't let user notification failures break server-level notify
       this.logger.error(
-        `[WebSocket] Failed to notify user ${ownerId} about ownership update: ${String(
-          err,
-        )}`,
+        `[WebSocket] Error while emitting server:updated-ownership to identified users: ${String(err)}`,
       );
     }
 
