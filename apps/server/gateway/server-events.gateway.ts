@@ -82,7 +82,6 @@ export class ServerEventsGateway
         `[WebSocket] Error handling disconnect notifications: ${String(err)}`,
       );
     }
-
   }
 
   @SubscribeMessage("identity")
@@ -222,9 +221,9 @@ export class ServerEventsGateway
       // this socket was in and notify those servers that this member left.
       try {
         const currentRooms = Array.from(client.rooms || []);
-        const previousServerRooms = currentRooms.filter((r) =>
-          r && typeof r === "string" && r.startsWith("server:"),
-        );
+        const previousServerRooms = currentRooms.filter((r) => {
+          return typeof r === "string" && r.startsWith("server:");
+        }) as string[];
         for (const room of previousServerRooms) {
           if (room === `server:${serverId}`) continue;
           try {
@@ -263,7 +262,9 @@ export class ServerEventsGateway
         // ignore
       }
 
-      this.logger.log(`[WebSocket] User ${userId} joined server room: ${serverId}`);
+      this.logger.log(
+        `[WebSocket] User ${userId} joined server room: ${serverId}`,
+      );
 
       // Notify server members that this user joined (Level 2)
       try {
