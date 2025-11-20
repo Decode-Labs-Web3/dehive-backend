@@ -37,6 +37,11 @@ import { AuditLogService } from "./audit-log.service";
 import { AuditLogAction } from "../../enum/enum";
 import { ServerEventsGateway } from "../../gateway/server-events.gateway";
 import { forwardRef, Inject } from "@nestjs/common";
+import {
+  IpfsMapping,
+  IpfsMappingDocument,
+} from "../../schemas/ipfs-mapping.schema";
+import { createHash } from "crypto";
 
 @Injectable()
 export class ServerService {
@@ -60,6 +65,8 @@ export class ServerService {
     private readonly auditLogService: AuditLogService,
     @Inject(forwardRef(() => ServerEventsGateway))
     private readonly serverEventsGateway: ServerEventsGateway,
+    @InjectModel(IpfsMapping.name)
+    private readonly ipfsMappingModel: Model<IpfsMappingDocument>,
   ) {
     // Constructor body can be empty or used for initialization
   }
@@ -86,19 +93,41 @@ export class ServerService {
         ? avatar.buffer
         : Buffer.from("");
 
-      const ipfsResult = await this.ipfsService.uploadFile(
-        buffer,
-        avatar.originalname,
-      );
-      if (ipfsResult) {
-        avatarHash = `ipfs://${ipfsResult.hash}`;
+      // compute content hash and try to reuse mapping
+      const hash = createHash("sha256").update(buffer).digest("hex");
+      const existing = await this.ipfsMappingModel.findOne({
+        contentHash: hash,
+      });
+      if (existing && existing.ipfsHash) {
+        avatarHash = `ipfs://${existing.ipfsHash}`;
         console.log(
-          `✅ [CREATE SERVER] Avatar uploaded to IPFS: ${avatarHash}`,
+          `✅ [CREATE SERVER] Reused existing IPFS avatar for hash ${hash}: ${avatarHash}`,
         );
       } else {
-        console.warn(
-          "⚠️ [CREATE SERVER] IPFS upload failed, server will be created without avatar",
+        const ipfsResult = await this.ipfsService.uploadFile(
+          buffer,
+          avatar.originalname,
         );
+        if (ipfsResult) {
+          avatarHash = `ipfs://${ipfsResult.hash}`;
+          try {
+            await this.ipfsMappingModel.create({
+              contentHash: hash,
+              ipfsHash: ipfsResult.hash,
+              gatewayUrl: ipfsResult.gatewayUrl,
+            });
+          } catch (e) {
+            /* ignore duplicate key races */
+            void e;
+          }
+          console.log(
+            `✅ [CREATE SERVER] Avatar uploaded to IPFS: ${avatarHash}`,
+          );
+        } else {
+          console.warn(
+            "⚠️ [CREATE SERVER] IPFS upload failed, server will be created without avatar",
+          );
+        }
       }
     }
 
@@ -224,19 +253,40 @@ export class ServerService {
         ? avatar.buffer
         : Buffer.from("");
 
-      const ipfsResult = await this.ipfsService.uploadFile(
-        buffer,
-        avatar.originalname,
-      );
-      if (ipfsResult) {
-        avatarHash = `ipfs://${ipfsResult.hash}`;
+      const hash = createHash("sha256").update(buffer).digest("hex");
+      const existing = await this.ipfsMappingModel.findOne({
+        contentHash: hash,
+      });
+      if (existing && existing.ipfsHash) {
+        avatarHash = `ipfs://${existing.ipfsHash}`;
         console.log(
-          `✅ [UPDATE SERVER] Avatar uploaded to IPFS: ${avatarHash}`,
+          `✅ [UPDATE SERVER] Reused existing IPFS avatar for hash ${hash}: ${avatarHash}`,
         );
       } else {
-        console.warn(
-          "⚠️ [UPDATE SERVER] IPFS upload failed, avatar will not be updated",
+        const ipfsResult = await this.ipfsService.uploadFile(
+          buffer,
+          avatar.originalname,
         );
+        if (ipfsResult) {
+          avatarHash = `ipfs://${ipfsResult.hash}`;
+          try {
+            await this.ipfsMappingModel.create({
+              contentHash: hash,
+              ipfsHash: ipfsResult.hash,
+              gatewayUrl: ipfsResult.gatewayUrl,
+            });
+          } catch (e) {
+            /* ignore duplicate key races */
+            void e;
+          }
+          console.log(
+            `✅ [UPDATE SERVER] Avatar uploaded to IPFS: ${avatarHash}`,
+          );
+        } else {
+          console.warn(
+            "⚠️ [UPDATE SERVER] IPFS upload failed, avatar will not be updated",
+          );
+        }
       }
     }
 

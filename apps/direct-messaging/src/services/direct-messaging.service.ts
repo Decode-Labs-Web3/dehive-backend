@@ -56,6 +56,7 @@ import {
 import { GetConversationUsersDto } from "../../dto/get-conversation-users.dto";
 import { IPFSService } from "./ipfs.service";
 import { DirectMessagingCacheService } from "./redis-cache.service";
+import { createHash } from "crypto";
 
 @Injectable()
 export class DirectMessagingService {
@@ -283,19 +284,83 @@ export class DirectMessagingService {
       const buffer: Buffer = Buffer.isBuffer(uploaded.buffer)
         ? uploaded.buffer
         : Buffer.from("");
+      // Compute sha256
+      const hash = createHash("sha256").update(buffer).digest("hex");
 
-      const ipfsResult = await this.ipfsService.uploadFile(buffer, safeName);
+      try {
+        const existing = await this.directuploadModel.findOne({
+          contentHash: hash,
+          ipfsHash: { $exists: true, $ne: null },
+        });
+        if (existing && existing.ipfsHash) {
+          ipfsHash = existing.ipfsHash;
+          this.logger.log(
+            `Found existing IPFS hash for contentHash ${hash}: ${ipfsHash}`,
+          );
+        } else {
+          const lockKey = `ipfs:lock:${hash}`;
+          const lockTtlMs = 10000;
+          let lockAcquired = false;
+          try {
+            for (let attempt = 0; attempt < 8; attempt++) {
+              const res = await this.redis.set(
+                lockKey,
+                "1",
+                "PX",
+                lockTtlMs,
+                "NX",
+              );
+              if (res) {
+                lockAcquired = true;
+                break;
+              }
+              await new Promise((r) => setTimeout(r, 150));
+            }
 
-      if (!ipfsResult) {
-        this.logger.warn("IPFS upload failed, falling back to local storage");
-        // Fallback to local storage
-        if (!fs.existsSync(uploadDir))
-          fs.mkdirSync(uploadDir, { recursive: true });
-        const dest = path.join(uploadDir, safeName);
-        fs.writeFileSync(dest, buffer);
-      } else {
-        ipfsHash = `ipfs://${ipfsResult.hash}`;
-        this.logger.log(`File uploaded to IPFS: ${ipfsHash}`);
+            const recheck = await this.directuploadModel.findOne({
+              contentHash: hash,
+              ipfsHash: { $exists: true, $ne: null },
+            });
+            if (recheck && recheck.ipfsHash) {
+              ipfsHash = recheck.ipfsHash;
+              this.logger.log(
+                `Found existing IPFS hash after lock for contentHash ${hash}: ${ipfsHash}`,
+              );
+            } else {
+              const ipfsResult = await this.ipfsService.uploadFile(
+                buffer,
+                safeName,
+              );
+              if (!ipfsResult) {
+                this.logger.warn(
+                  "IPFS upload failed, falling back to local storage",
+                );
+                if (!fs.existsSync(uploadDir))
+                  fs.mkdirSync(uploadDir, { recursive: true });
+                const dest = path.join(uploadDir, safeName);
+                fs.writeFileSync(dest, buffer);
+              } else {
+                ipfsHash = `ipfs://${ipfsResult.hash}`;
+                this.logger.log(`File uploaded to IPFS: ${ipfsHash}`);
+              }
+            }
+          } finally {
+            if (lockAcquired) {
+              try {
+                await this.redis.del(lockKey);
+              } catch (e) {
+                /* ignore delete errors */
+                void e;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Error during dedupe check: ${String(err)}. Falling back to upload.`,
+        );
+        const ipfsResult = await this.ipfsService.uploadFile(buffer, safeName);
+        if (ipfsResult) ipfsHash = `ipfs://${ipfsResult.hash}`;
       }
     } else {
       // Local storage
@@ -420,6 +485,12 @@ export class DirectMessagingService {
       conversationId: new Types.ObjectId(body.conversationId),
       type,
       ipfsHash,
+      contentHash:
+        uploaded.buffer && Buffer.isBuffer(uploaded.buffer)
+          ? createHash("sha256")
+              .update(uploaded.buffer as Buffer)
+              .digest("hex")
+          : undefined,
       name: originalName,
       size,
       mimeType: mime,

@@ -28,6 +28,9 @@ export class Upload {
   @Prop({ required: false })
   ipfsHash?: string;
 
+  @Prop({ required: false, index: true })
+  contentHash?: string; // sha256 hex of file content for dedupe across uploads
+
   @Prop({ required: true })
   name: string;
 
@@ -49,3 +52,5 @@ export class Upload {
 
 export type UploadDocument = Upload & Document;
 export const UploadSchema = SchemaFactory.createForClass(Upload);
+// index contentHash unique when present to avoid exact duplicates
+UploadSchema.index({ contentHash: 1 }, { unique: true, sparse: true });

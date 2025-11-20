@@ -25,6 +25,9 @@ export class DirectUpload {
   @Prop({ required: false })
   ipfsHash?: string;
 
+  @Prop({ required: false, index: true })
+  contentHash?: string; // sha256 hex of file content for dedupe across uploads
+
   @Prop({ required: true })
   name: string;
 
@@ -46,3 +49,5 @@ export class DirectUpload {
 
 export type DirectUploadDocument = DirectUpload & Document;
 export const DirectUploadSchema = SchemaFactory.createForClass(DirectUpload);
+// index contentHash unique when present to avoid exact duplicates
+DirectUploadSchema.index({ contentHash: 1 }, { unique: true, sparse: true });

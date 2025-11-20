@@ -6,6 +6,7 @@ import { RedisModule } from "@nestjs-modules/ioredis";
 import { ServerController } from "./server.controller";
 import { ServerService } from "./services/server.service";
 import { Server, ServerSchema } from "../schemas/server.schema";
+import { IpfsMapping, IpfsMappingSchema } from "../schemas/ipfs-mapping.schema";
 import { Category, CategorySchema } from "../schemas/category.schema";
 import { Channel, ChannelSchema } from "../schemas/channel.schema";
 import { UserDehive, UserDehiveSchema } from "../schemas/user-dehive.schema";
@@ -57,6 +58,7 @@ import { ServerEventsGateway } from "../gateway/server-events.gateway";
 
     MongooseModule.forFeature([
       { name: Server.name, schema: ServerSchema },
+      { name: IpfsMapping.name, schema: IpfsMappingSchema },
       { name: Category.name, schema: CategorySchema },
       { name: Channel.name, schema: ChannelSchema },
       { name: UserDehive.name, schema: UserDehiveSchema },

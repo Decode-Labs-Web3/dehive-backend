@@ -45,6 +45,7 @@ import { IPFSService } from "./ipfs.service";
 import { ChannelMessagingCacheService } from "./redis-cache.service";
 import { AuditLogService } from "./audit-log.service";
 import { AuditLogAction } from "../../enum/enum";
+import { createHash } from "crypto";
 
 @Injectable()
 export class MessagingService {
@@ -165,25 +166,101 @@ export class MessagingService {
     const uploadDir = path.resolve(process.cwd(), "uploads");
 
     if (storage === "ipfs") {
-      // Upload to IPFS
+      // Upload to IPFS with dedupe by content hash
       this.logger.log(`Uploading file to IPFS: ${originalName}`);
       const buffer: Buffer = Buffer.isBuffer(uploaded.buffer)
         ? uploaded.buffer
         : Buffer.from("");
 
-      const ipfsResult = await this.ipfsService.uploadFile(buffer, safeName);
+      // Compute sha256 content hash
+      const hash = createHash("sha256").update(buffer).digest("hex");
 
-      if (!ipfsResult) {
-        this.logger.warn("IPFS upload failed, falling back to local storage");
-        // Fallback to local storage
-        if (!fs.existsSync(uploadDir))
-          fs.mkdirSync(uploadDir, { recursive: true });
-        const dest = path.join(uploadDir, safeName);
-        fs.writeFileSync(dest, buffer);
-      } else {
-        ipfsHash = `ipfs://${ipfsResult.hash}`;
-        this.logger.log(`File uploaded to IPFS: ${ipfsHash}`);
+      // 1) Try to find existing upload with same contentHash and valid ipfsHash
+      try {
+        const existing = await this.uploadModel.findOne({
+          contentHash: hash,
+          ipfsHash: { $exists: true, $ne: null },
+        });
+        if (existing && existing.ipfsHash) {
+          ipfsHash = existing.ipfsHash;
+          this.logger.log(
+            `Found existing IPFS hash for contentHash ${hash}: ${ipfsHash}`,
+          );
+        } else {
+          // Acquire simple Redis lock to avoid concurrent uploads for same hash
+          const lockKey = `ipfs:lock:${hash}`;
+          const lockTtlMs = 10000; // 10s
+          let lockAcquired = false;
+          try {
+            for (let attempt = 0; attempt < 8; attempt++) {
+              const res = await this.redis.set(
+                lockKey,
+                "1",
+                "PX",
+                lockTtlMs,
+                "NX",
+              );
+              if (res) {
+                lockAcquired = true;
+                break;
+              }
+              // wait before retry
+              await new Promise((r) => setTimeout(r, 150));
+            }
+
+            // re-check after acquiring or timeout
+            const recheck = await this.uploadModel.findOne({
+              contentHash: hash,
+              ipfsHash: { $exists: true, $ne: null },
+            });
+            if (recheck && recheck.ipfsHash) {
+              ipfsHash = recheck.ipfsHash;
+              this.logger.log(
+                `Found existing IPFS hash after lock for contentHash ${hash}: ${ipfsHash}`,
+              );
+            } else {
+              // Do the actual upload
+              const ipfsResult = await this.ipfsService.uploadFile(
+                buffer,
+                safeName,
+              );
+              if (!ipfsResult) {
+                this.logger.warn(
+                  "IPFS upload failed, falling back to local storage",
+                );
+                if (!fs.existsSync(uploadDir))
+                  fs.mkdirSync(uploadDir, { recursive: true });
+                const dest = path.join(uploadDir, safeName);
+                fs.writeFileSync(dest, buffer);
+              } else {
+                ipfsHash = `ipfs://${ipfsResult.hash}`;
+                this.logger.log(`File uploaded to IPFS: ${ipfsHash}`);
+              }
+            }
+          } finally {
+            if (lockAcquired) {
+              try {
+                await this.redis.del(lockKey);
+              } catch (e) {
+                /* ignore delete errors */
+                void e;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Error during dedupe check: ${String(err)}. Falling back to upload.`,
+        );
+        const buffer2: Buffer = Buffer.isBuffer(uploaded.buffer)
+          ? uploaded.buffer
+          : Buffer.from("");
+        const ipfsResult = await this.ipfsService.uploadFile(buffer2, safeName);
+        if (ipfsResult) {
+          ipfsHash = `ipfs://${ipfsResult.hash}`;
+        }
       }
+      // we'll store contentHash on the created Upload doc below
     } else {
       // Local storage
       if (!fs.existsSync(uploadDir))
@@ -288,6 +365,13 @@ export class MessagingService {
       serverId: new Types.ObjectId(body.serverId),
       type,
       ipfsHash,
+      contentHash:
+        typeof (uploaded.buffer as Buffer) !== "undefined" &&
+        Buffer.isBuffer(uploaded.buffer)
+          ? createHash("sha256")
+              .update(uploaded.buffer as Buffer)
+              .digest("hex")
+          : undefined,
       name: originalName,
       size,
       mimeType: mime,
