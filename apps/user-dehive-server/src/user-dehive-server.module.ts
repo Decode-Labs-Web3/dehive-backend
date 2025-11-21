@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { MongooseModule } from "@nestjs/mongoose";
 import { HttpModule } from "@nestjs/axios";
@@ -21,6 +21,7 @@ import {
 } from "../schemas/user-dehive-server.schema";
 import { AuthGuard } from "../common/guards/auth.guard";
 import { NftVerificationService } from "../../server/src/services/nft-verification.service";
+import { ServerModule } from "../../server/src/server.module";
 
 const MONGOOSE_MODELS = MongooseModule.forFeature([
   { name: "UserDehive", schema: UserDehiveSchema },
@@ -68,6 +69,8 @@ const MONGOOSE_MODELS = MongooseModule.forFeature([
       { name: ServerBan.name, schema: ServerBanSchema },
       { name: UserDehiveServer.name, schema: UserDehiveServerSchema },
     ]),
+    // Import ServerModule to access and reuse ServerEventsGateway (exported by ServerModule)
+    forwardRef(() => ServerModule),
   ],
   controllers: [UserDehiveServerController],
   providers: [
