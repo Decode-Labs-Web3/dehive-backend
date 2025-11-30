@@ -16,7 +16,6 @@ import { UserDehiveServerDocument } from "../schemas/user-dehive-server.schema";
 @Injectable()
 @WebSocketGateway({
   cors: { origin: "*" },
-  namespace: "/server-events",
 })
 export class ServerEventsGateway
   implements OnGatewayConnection, OnGatewayDisconnect

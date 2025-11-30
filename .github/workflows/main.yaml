@@ -54,8 +54,18 @@ jobs:
 
             npm run build:all
 
+            # Clear PM2 cache and logs
             pm2 delete all || true
+            pm2 flush
+            pm2 kill
 
+            # Wait for processes to fully stop
+            sleep 5
+
+            # Start with fresh build
             pm2 start ecosystem.config.js
             pm2 save
+
+            # Show status and logs
             pm2 status
+            pm2 logs --lines 10 --nostream
