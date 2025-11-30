@@ -1,0 +1,12 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'24px'}}}%%
+graph LR
+    Auth["/api/auth"] --> Login[POST /session/create]
+    Auth --> Check[GET /session/check]
+    Auth --> Profile[GET /profile]
+    Auth --> Register[POST /create-dehive-account]
+
+    style Auth fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Login fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style Check fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style Profile fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style Register fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000

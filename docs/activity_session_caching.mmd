@@ -1,0 +1,37 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'30px'}}}%%
+flowchart LR
+    Start([Request arrives<br/>with x-session-id header]) --> CheckHeader{Header present?}
+    CheckHeader -->|No| Error1[/Return: 401 Unauthorized<br/>Session ID required/]
+    CheckHeader -->|Yes| CheckCache[Query Redis<br/>sessionkey]
+
+    CheckCache --> CacheHit{Session in cache?}
+    CacheHit -->|Yes| ParseCached[Parse cached session data]
+    CacheHit -->|No| CallAuthService[Call Auth Service API<br/>/session/check]
+
+    ParseCached --> ValidateExpiry{Session expired?}
+    CallAuthService --> AuthResponse{Auth Service<br/>response valid?}
+
+    AuthResponse -->|No| Error2[/Return: 401 Invalid session/]
+    AuthResponse -->|Yes| ExtractSession[Extract session data<br/>& user profile]
+
+    ExtractSession --> CacheTTL[Calculate TTL<br/>TTL = expiry - now]
+    CacheTTL --> StoreCache[Store session in Redis<br/>with calculated TTL]
+    StoreCache --> ValidateExpiry
+
+    ValidateExpiry -->|Yes| Error3[/Return: 401 Session expired/]
+    ValidateExpiry -->|No| AttachUser[Attach user to request context]
+    AttachUser --> ProceedController[Proceed to controller]
+    ProceedController --> End([End])
+
+    Error1 --> End
+    Error2 --> End
+    Error3 --> End
+
+    style Start fill:#4dabf7,stroke:#1971c2,stroke-width:3px,color:#000
+    style End fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Error1 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error2 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error3 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style CheckCache fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000
+    style StoreCache fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000
+    style CallAuthService fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000

@@ -1,0 +1,77 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#E3F2FD','primaryTextColor':'#000','primaryBorderColor':'#1976D2','lineColor':'#424242','secondaryColor':'#FFF3E0','tertiaryColor':'#F5F5F5'}}}%%
+C4Container
+    title Container Diagram for Dehive Network
+
+    Person(user, "User", "Web/mobile client")
+
+    %% External Systems (Top Right)
+    System_Ext(decode, "Decode API", "SSO & user profiles")
+    System_Ext(ipfs, "IPFS", "Decentralized storage")
+    System_Ext(blockchain, "Blockchain", "NFT verification")
+
+    %% Databases (Bottom)
+    ContainerDb(mongodb, "MongoDB", "NoSQL", "Primary data store")
+    ContainerDb(redis, "Redis", "In-memory", "Cache & sessions")
+
+    Container_Boundary(dehive, "Dehive Network Backend") {
+        %% Row 1: Core Services
+        Container(auth, "Auth Service", "NestJS", "SSO login & sessions")
+        Container(userStatus, "User Status Service", "NestJS", "Presence tracking")
+        Container(server, "Server Service", "NestJS", "Servers, channels, NFT gating")
+
+        %% Row 2: Messaging
+        Container(channelMsg, "Channel Messaging", "NestJS", "Channel messages")
+        Container(directMsg, "Direct Messaging", "NestJS", "Private conversations")
+
+        %% Row 3: Calling & User Mgmt
+        Container(channelCall, "Channel Calling", "NestJS", "Group voice/video")
+        Container(directCall, "Direct Calling", "NestJS", "1-1 calls")
+        Container(userDehive, "User Dehive Server", "NestJS", "Profile aggregation")
+    }
+
+    %% User interactions (Top down)
+    Rel(user, auth, "Login/SSO", "HTTPS")
+    Rel(user, server, "Manage servers", "HTTPS/WS")
+    Rel(user, channelMsg, "Send messages", "WS")
+    Rel(user, directMsg, "Chat", "WS")
+    Rel(user, userStatus, "Get status", "HTTPS")
+
+    %% Auth & User Status (Left side flow)
+    Rel(auth, decode, "Verify SSO/Fetch profiles", "HTTPS")
+    Rel(auth, redis, "Store sessions", "Redis")
+    Rel(auth, mongodb, "Create users", "Mongo")
+
+    Rel(userStatus, redis, "Presence TTL", "Redis")
+    Rel(userStatus, decode, "Fetch profiles", "HTTPS")
+    Rel(userStatus, mongodb, "Store status", "Mongo")
+
+    %% Server Service (Center flow)
+    Rel(server, mongodb, "CRUD", "Mongo")
+    Rel(server, ipfs, "Avatars", "HTTP")
+    Rel(server, blockchain, "Verify NFT", "RPC")
+
+    %% Messaging (Center/Right flow)
+    Rel(channelMsg, mongodb, "Store msgs", "Mongo")
+    Rel(channelMsg, redis, "Hot-cache", "Redis")
+    Rel(channelMsg, ipfs, "Media", "HTTP")
+
+    Rel(directMsg, mongodb, "Store DMs", "Mongo")
+    Rel(directMsg, redis, "Cache convos", "Redis")
+    Rel(directMsg, ipfs, "Attachments", "HTTP")
+
+    %% Calling & User Dehive (Bottom flow)
+    Rel(channelCall, mongodb, "Call logs", "Mongo")
+    Rel(directCall, mongodb, "Call records", "Mongo")
+
+    Rel(userDehive, mongodb, "Aggregate", "Mongo")
+    Rel(userDehive, redis, "Invalidate cache", "Redis")
+    Rel(userDehive, decode, "Fetch profiles", "HTTPS")
+    Rel(userDehive, server, "Query data", "Internal API")
+
+    %% Layout Optimization
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
+
+    %% Manual Style Updates to reduce crossing
+    UpdateRelStyle(user, auth, $offsetY="-40", $offsetX="-20")
+    UpdateRelStyle(auth, decode, $offsetY="-20", $offsetX="-40")
+    UpdateRelStyle(server, blockchain, $offsetY="-20", $offsetX="20")

@@ -1,0 +1,49 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'30px'}}}%%
+flowchart LR
+    Start([User requests to join server]) --> CheckExists{Server exists?}
+    CheckExists -->|No| Error1[/Return: Server not found/]
+    CheckExists -->|Yes| CheckBanned{User banned?}
+
+    CheckBanned -->|Yes| Error2[/Return: User is banned/]
+    CheckBanned -->|No| CheckMember{Already member?}
+
+    CheckMember -->|Yes| Success1[/Return: Already member/]
+    CheckMember -->|No| CheckGated{NFT-gated enabled?}
+
+    CheckGated -->|No| CreateMembership[Create membership record]
+    CheckGated -->|Yes| CheckWallet{User has wallet?}
+
+    CheckWallet -->|No| Error3[/Return: Wallet required/]
+    CheckWallet -->|Yes| VerifyNFT[Call NFT Verification Service]
+
+    VerifyNFT --> GetProvider{RPC Provider<br/>configured?}
+    GetProvider -->|No| Error4[/Return: Network not configured/]
+    GetProvider -->|Yes| CallBlockchain[Query Blockchain<br/>balanceOf contract]
+
+    CallBlockchain --> ParseBalance[Parse NFT balance]
+    ParseBalance --> CompareBalance{Balance >= required?}
+
+    CompareBalance -->|No| Error5[/Return: Insufficient NFTs/]
+    CompareBalance -->|Yes| CreateMembership
+
+    CreateMembership --> IncrementCount[Increment server member_count]
+    IncrementCount --> InvalidateCache[Invalidate Redis member cache]
+    InvalidateCache --> Success2[Return: Join server success]
+
+    Error1 --> End([End])
+    Error2 --> End
+    Error3 --> End
+    Error4 --> End
+    Error5 --> End
+    Success1 --> End
+    Success2 --> End
+
+    style Start fill:#4dabf7,stroke:#1971c2,stroke-width:3px,color:#000
+    style End fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Error1 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error2 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error3 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error4 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error5 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style VerifyNFT fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style CallBlockchain fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000

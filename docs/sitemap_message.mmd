@@ -1,0 +1,14 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'24px'}}}%%
+graph LR
+    Message["/api/message"] --> Send[POST /channel/:channelId<br/>Send message]
+    Message --> Get[GET /channel/:channelId<br/>Get messages]
+    Message --> Edit[PATCH /:id<br/>Edit message]
+    Message --> Del[DELETE /:id<br/>Delete message]
+    Message --> Search[GET /search<br/>Search messages]
+
+    style Message fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Send fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style Get fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style Edit fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style Del fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style Search fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000

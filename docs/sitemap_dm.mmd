@@ -1,0 +1,12 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'24px'}}}%%
+graph LR
+    DM["/api/direct-message"] --> Conv[GET /conversations<br/>List conversations]
+    DM --> Create[POST /conversations<br/>Create conversation]
+    DM --> SendMsg[POST /conversations/:id/messages<br/>Send DM]
+    DM --> GetMsg[GET /conversations/:id/messages<br/>Get DMs]
+
+    style DM fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Conv fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style Create fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style SendMsg fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000
+    style GetMsg fill:#e7f5ff,stroke:#1971c2,stroke-width:2px,color:#000

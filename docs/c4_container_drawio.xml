@@ -1,0 +1,144 @@
+<mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+
+    <!-- Boundary -->
+    <mxCell id="boundary" value="Dehive Network Backend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;dashed=1;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+      <mxGeometry x="80" y="240" width="840" height="560" as="geometry" />
+    </mxCell>
+
+    <!-- User -->
+    <mxCell id="user" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="480" y="40" width="30" height="60" as="geometry" />
+    </mxCell>
+
+    <!-- External Systems (Top) -->
+    <mxCell id="blockchain" value="Blockchain" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+      <mxGeometry x="120" y="40" width="120" height="60" as="geometry" />
+    </mxCell>
+    <mxCell id="decode" value="Decode API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+      <mxGeometry x="640" y="40" width="120" height="60" as="geometry" />
+    </mxCell>
+    <mxCell id="ipfs" value="IPFS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;" vertex="1" parent="1">
+      <mxGeometry x="780" y="40" width="120" height="60" as="geometry" />
+    </mxCell>
+
+    <!-- Databases (Bottom) - WIDE Separation -->
+    <mxCell id="mongodb" value="MongoDB" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+      <mxGeometry x="240" y="880" width="100" height="80" as="geometry" />
+    </mxCell>
+    <mxCell id="redis" value="Redis" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+      <mxGeometry x="660" y="880" width="100" height="80" as="geometry" />
+    </mxCell>
+
+    <!-- Services - Row 1 -->
+    <mxCell id="auth" value="Auth Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="120" y="300" width="140" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="server" value="Server Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="425" y="300" width="140" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="userStatus" value="User Status Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="740" y="300" width="140" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- Services - Row 2 -->
+    <mxCell id="channelMsg" value="Channel Messaging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="280" y="460" width="140" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="directMsg" value="Direct Messaging" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="580" y="460" width="140" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- Services - Row 3 -->
+    <mxCell id="channelCall" value="Channel Calling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="120" y="620" width="140" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="directCall" value="Direct Calling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="425" y="620" width="140" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="userDehive" value="User Dehive Server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+      <mxGeometry x="740" y="620" width="140" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- CONNECTIONS with Orthogonal Routing -->
+
+    <!-- User to Services -->
+    <mxCell id="u1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="user" target="auth">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="495" y="140"/><mxPoint x="190" y="140"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="u2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="user" target="server">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <!-- Auth Service -->
+    <mxCell id="a1" value="Verify SSO" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="auth" target="decode">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="190" y="180"/><mxPoint x="640" y="180"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="a2" value="Sessions" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="auth" target="redis">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="100" y="335"/><mxPoint x="100" y="920"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="a3" value="Create User" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="auth" target="mongodb">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="155" y="840"/><mxPoint x="200" y="840"/><mxPoint x="200" y="920"/></Array></mxGeometry>
+    </mxCell>
+
+    <!-- Server Service -->
+    <mxCell id="s1" value="Verify NFT" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;exitX=0.25;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="server" target="blockchain">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="460" y="200"/><mxPoint x="180" y="200"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="s2" value="Avatars" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;exitX=0.75;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="server" target="ipfs">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="530" y="200"/><mxPoint x="840" y="200"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="s3" value="CRUD" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="server" target="mongodb">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="495" y="400"/><mxPoint x="290" y="400"/></Array></mxGeometry>
+    </mxCell>
+
+    <!-- User Status -->
+    <mxCell id="us1" value="Fetch Profile" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.75;entryY=1;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="userStatus" target="decode">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="810" y="180"/><mxPoint x="730" y="180"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="us2" value="Presence" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="userStatus" target="redis">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="900" y="335"/><mxPoint x="900" y="920"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="us3" value="Store Status" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.25;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="userStatus" target="mongodb">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="720" y="335"/><mxPoint x="720" y="400"/><mxPoint x="265" y="400"/></Array></mxGeometry>
+    </mxCell>
+
+    <!-- Channel Messaging -->
+    <mxCell id="cm1" value="Store" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="channelMsg" target="mongodb">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="315" y="840"/><mxPoint x="290" y="840"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="cm2" value="Hot-cache" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0;entryY=0;entryDx=0;entryDy=27.5;entryPerimeter=0;exitX=0.75;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="channelMsg" target="redis">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="385" y="840"/><mxPoint x="640" y="840"/><mxPoint x="640" y="890"/></Array></mxGeometry>
+    </mxCell>
+
+    <!-- Direct Messaging -->
+    <mxCell id="dm1" value="Store DMs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.75;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="directMsg" target="mongodb">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="615" y="820"/><mxPoint x="315" y="820"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="dm2" value="Cache" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.75;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="directMsg" target="redis">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="685" y="820"/><mxPoint x="710" y="820"/></Array></mxGeometry>
+    </mxCell>
+
+    <!-- Calling Services -->
+    <mxCell id="cc1" value="Logs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0;entryY=0;entryDx=0;entryDy=52.5;entryPerimeter=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="channelCall" target="mongodb">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="190" y="933"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="dc1" value="Records" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=1;entryY=0;entryDx=0;entryDy=52.5;entryPerimeter=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="directCall" target="mongodb">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="495" y="933"/></Array></mxGeometry>
+    </mxCell>
+
+    <!-- User Dehive Server -->
+    <mxCell id="ud1" value="Internal API" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="userDehive" target="server">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="810" y="580"/><mxPoint x="580" y="580"/><mxPoint x="580" y="335"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="ud2" value="Invalidate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.75;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="userDehive" target="redis">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="775" y="800"/><mxPoint x="735" y="800"/></Array></mxGeometry>
+    </mxCell>
+    <mxCell id="ud3" value="Aggregate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.75;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="userDehive" target="mongodb">
+      <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="845" y="920"/></Array></mxGeometry>
+    </mxCell>
+
+  </root>
+</mxGraphModel>

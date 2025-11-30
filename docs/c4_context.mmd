@@ -1,0 +1,34 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor':'#E3F2FD','primaryTextColor':'#000','primaryBorderColor':'#1976D2','lineColor':'#424242','secondaryColor':'#FFF3E0','tertiaryColor':'#F5F5F5'}}}%%
+C4Context
+    title System Context Diagram for Dehive Network
+
+    %% TOP: Actors (User & Admin)
+    Person(user, "User", "Web/mobile client user")
+    Person(admin, "Server Admin", "Manages servers & NFT gating")
+
+    %% CENTER: Main System
+    System_Boundary(dehive, "Dehive Network") {
+        System(dehiveSystem, "Dehive Backend", "NestJS microservices: auth, messaging, calling, server management")
+    }
+
+    %% BOTTOM ROW 1: External Services
+    System_Ext(decode, "Decode API", "SSO authentication")
+    System_Ext(ipfs, "IPFS Network", "Decentralized media storage")
+    System_Ext(blockchain, "Blockchain", "NFT verification (ETH/Base/BSC)")
+
+    %% BOTTOM ROW 2: Databases
+    SystemDb_Ext(mongodb, "MongoDB", "Primary data store")
+    SystemDb_Ext(redis, "Redis", "Cache & sessions")
+
+    %% Relationships (shortened labels)
+    Rel(user, dehiveSystem, "Uses", "HTTPS/WS")
+    Rel(admin, dehiveSystem, "Manages", "HTTPS/WS")
+
+    Rel(dehiveSystem, decode, "Auth", "REST")
+    Rel(dehiveSystem, ipfs, "Store media", "HTTP")
+    Rel(dehiveSystem, blockchain, "Verify NFT", "RPC")
+    Rel(dehiveSystem, mongodb, "Read/write", "Mongo")
+    Rel(dehiveSystem, redis, "Cache", "Redis")
+
+    %% Layout optimization
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")

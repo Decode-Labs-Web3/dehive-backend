@@ -1,0 +1,71 @@
+flowchart LR
+    Start([User uploads file<br/>in Channel/DM]) --> SelectType{Upload to?}
+
+    SelectType -->|Channel Message| ValidateChannelMember{User is member?}
+    SelectType -->|Direct Message| ValidateDM{Valid conversation?}
+
+    ValidateChannelMember -->|No| Error1[/Return: Not a member/]
+    ValidateDM -->|No| Error2[/Return: Invalid conversation/]
+
+    ValidateChannelMember -->|Yes| ValidateFile
+    ValidateDM -->|Yes| ValidateFile{File valid?<br/>size, type}
+
+    ValidateFile -->|No| Error3[/Return: Invalid file/]
+    ValidateFile -->|Yes| ComputeHash[Compute SHA-256 hash<br/>of file content]
+
+    ComputeHash --> CheckStorage{Storage mode?}
+
+    CheckStorage -->|Local| SaveLocal[Save to local uploads/ folder]
+    CheckStorage -->|IPFS| QueryDB{Existing upload<br/>with same hash?}
+
+    QueryDB -->|Yes - Found| ReuseIPFS[Retrieve existing IPFS hash<br/>from MongoDB]
+    QueryDB -->|No - New file| AcquireLock[Try to acquire Redis lock<br/>for this hash]
+
+    AcquireLock --> LockSuccess{Lock acquired?}
+    LockSuccess -->|No| RetryWait[Wait 150ms<br/>max 8 retries]
+    RetryWait --> RecheckDB{Re-check DB<br/>after wait}
+
+    RecheckDB -->|Found| ReuseIPFS
+    RecheckDB -->|Still not found| UploadIPFS
+
+    LockSuccess -->|Yes| DoubleCheck{Double-check DB<br/>while holding lock}
+    DoubleCheck -->|Found| ReleaseLock1[Release Redis lock]
+    ReleaseLock1 --> ReuseIPFS
+
+    DoubleCheck -->|Not found| UploadIPFS[Upload file to IPFS node<br/>POST /api/v0/add]
+
+    UploadIPFS --> IPFSSuccess{Upload success?}
+    IPFSSuccess -->|No| LocalFallback[Save to local storage<br/>as fallback]
+    IPFSSuccess -->|Yes| StoreMapping[Store contentHash → ipfsHash<br/>mapping in MongoDB]
+
+    LocalFallback --> ReleaseLock2[Release Redis lock]
+    StoreMapping --> ReleaseLock2
+
+    SaveLocal --> CreateRecord[Create Upload document<br/>in MongoDB]
+    ReuseIPFS --> CreateRecord
+    ReleaseLock2 --> CreateRecord
+
+    CreateRecord --> ExtractMeta{File type?}
+    ExtractMeta -->|Image| GetImageMeta[Extract width, height<br/>using Sharp]
+    ExtractMeta -->|Video/Audio| GetVideoMeta[Extract duration, dimensions<br/>using FFprobe]
+    ExtractMeta -->|Other| ReturnResponse
+
+    GetImageMeta --> ReturnResponse[/Return: uploadId, ipfsHash, metadata/]
+    GetVideoMeta --> ReturnResponse
+
+    Error1 --> End([End])
+    Error2 --> End
+    Error3 --> End
+    ReturnResponse --> End
+
+    style Start fill:#4dabf7,stroke:#1971c2,stroke-width:3px,color:#000
+    style End fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Error1 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error2 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error3 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style ComputeHash fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style UploadIPFS fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style AcquireLock fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000
+    style ReleaseLock1 fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000
+    style ReleaseLock2 fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000
+    style ReuseIPFS fill:#94d82d,stroke:#5c940d,stroke-width:2px,color:#000

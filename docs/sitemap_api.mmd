@@ -1,0 +1,63 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'20px'}}}%%
+graph TD
+    Root[Dehive API Gateway<br/>https://api.dehive.network] --> Auth[/api/auth]
+    Root --> Server[/api/server]
+    Root --> Channel[/api/channel]
+    Root --> Message[/api/message]
+    Root --> DM[/api/direct-message]
+    Root --> Call[/api/call]
+    Root --> Status[/api/status]
+    Root --> Upload[/api/upload]
+
+    Auth --> AuthLogin[POST /session/create<br/>Login with SSO]
+    Auth --> AuthCheck[GET /session/check<br/>Validate session]
+    Auth --> AuthProfile[GET /profile<br/>Get user profile]
+    Auth --> AuthRegister[POST /create-dehive-account<br/>Register new user]
+
+    Server --> ServerCreate[POST /<br/>Create server]
+    Server --> ServerList[GET /<br/>List all servers]
+    Server --> ServerDetail[GET /:id<br/>Get server details]
+    Server --> ServerUpdate[PATCH /:id<br/>Update server]
+    Server --> ServerDelete[DELETE /:id<br/>Delete server]
+    Server --> ServerMembers[GET /:id/members<br/>List members]
+    Server --> ServerJoin[POST /:id/join<br/>Join server]
+    Server --> ServerLeave[POST /:id/leave<br/>Leave server]
+    Server --> ServerNFT[PATCH /:id/nft-gating<br/>Configure NFT gating]
+
+    Channel --> ChannelCreate[POST /<br/>Create channel]
+    Channel --> ChannelList[GET /server/:serverId<br/>List channels]
+    Channel --> ChannelUpdate[PATCH /:id<br/>Update channel]
+    Channel --> ChannelDelete[DELETE /:id<br/>Delete channel]
+
+    Message --> MessageSend[POST /channel/:channelId<br/>Send message]
+    Message --> MessageList[GET /channel/:channelId<br/>Get messages]
+    Message --> MessageEdit[PATCH /:id<br/>Edit message]
+    Message --> MessageDelete[DELETE /:id<br/>Delete message]
+    Message --> MessageSearch[GET /search<br/>Search messages]
+
+    DM --> DMConversation[GET /conversations<br/>List conversations]
+    DM --> DMCreate[POST /conversations<br/>Create conversation]
+    DM --> DMSend[POST /conversations/:id/messages<br/>Send DM]
+    DM --> DMList[GET /conversations/:id/messages<br/>Get DMs]
+
+    Call --> CallJoin[POST /channel/:channelId/join<br/>Join voice call]
+    Call --> CallLeave[POST /channel/:channelId/leave<br/>Leave call]
+    Call --> CallParticipants[GET /channel/:channelId/participants<br/>Get participants]
+
+    Status --> StatusGet[GET /user/:userId<br/>Get user status]
+    Status --> StatusUpdate[PATCH /<br/>Update own status]
+    Status --> StatusBulk[POST /bulk<br/>Get multiple statuses]
+
+    Upload --> UploadChannel[POST /channel<br/>Upload to channel]
+    Upload --> UploadDM[POST /direct<br/>Upload to DM]
+    Upload --> UploadGet[GET /:id<br/>Get upload metadata]
+
+    style Root fill:#4dabf7,stroke:#1971c2,stroke-width:3px,color:#000
+    style Auth fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#000
+    style Server fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#000
+    style Channel fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#000
+    style Message fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#000
+    style DM fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#000
+    style Call fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#000
+    style Status fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#000
+    style Upload fill:#51cf66,stroke:#2f9e44,stroke-width:2px,color:#000

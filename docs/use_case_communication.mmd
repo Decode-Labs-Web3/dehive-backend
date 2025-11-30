@@ -1,0 +1,58 @@
+flowchart LR
+    %% Styling
+    classDef actor fill:#f9f,stroke:#333,stroke-width:2px,color:#000;
+    classDef usecase fill:#fff,stroke:#333,stroke-width:2px,rx:10,ry:10,color:#000;
+    classDef system fill:#eee,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5,color:#000;
+
+    %% Actors
+    u{{Logged-in User}}:::actor
+    sys{{System}}:::system
+
+    %% Messaging package
+    subgraph Messaging ["Messaging (Channel & Direct)"]
+        direction TB
+        UC_MSG_5([Upload File/Image]):::usecase
+        UC_MSG_1([Send Message]):::usecase
+        UC_MSG_2([Edit Message]):::usecase
+        UC_MSG_3([Delete Message]):::usecase
+        UC_MSG_4([Reply to Message]):::usecase
+    end
+
+    %% Real-time Calling package
+    subgraph Calling ["Real-time Calling"]
+        direction TB
+        UC_CALL_1([Start Voice Call]):::usecase
+        UC_CALL_2([Start Video Call]):::usecase
+        UC_CALL_3([Join Call]):::usecase
+        UC_CALL_4([Screen Share]):::usecase
+        UC_CALL_5([Toggle Mic/Camera]):::usecase
+    end
+
+    %% Relationships - Messaging
+    u --> UC_MSG_1
+    u --> UC_MSG_5  %% User initiates Upload directly too
+    u --> UC_MSG_2
+    u --> UC_MSG_3
+    u --> UC_MSG_4
+
+    %% Extend: Upload -> Send (Optional: Upload can be part of sending a message)
+    UC_MSG_5 -. "«extend»" .-> UC_MSG_1
+
+    %% Relationships - Calling
+    u --> UC_CALL_1
+    u --> UC_CALL_2
+    u --> UC_CALL_3
+    u --> UC_CALL_4
+    u --> UC_CALL_5
+
+    %% System interactions (Backend processing)
+    %% Connecting ALL relevant actions to System for consistency
+    UC_MSG_1 -.-> sys
+    UC_MSG_2 -.-> sys
+    UC_MSG_3 -.-> sys
+    UC_MSG_4 -.-> sys
+    UC_MSG_5 -.-> sys
+
+    UC_CALL_1 -.-> sys
+    UC_CALL_2 -.-> sys
+    UC_CALL_3 -.-> sys

@@ -1,0 +1,42 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'30px'}}}%%
+flowchart LR
+    Start([User sends message]) --> ValidateChannel{Channel exists?}
+    ValidateChannel -->|No| Error1[/Return: Invalid channel/]
+    ValidateChannel -->|Yes| CheckAttachments{Has uploadIds?}
+
+    CheckAttachments -->|Yes| ValidateUploadIds{All uploadIds valid?}
+    ValidateUploadIds -->|No| Error2[/Return: Invalid uploadId/]
+    ValidateUploadIds -->|Yes| QueryUploads[Fetch Upload records<br/>from MongoDB]
+    QueryUploads --> CheckOwnership{User owns<br/>all uploads?}
+    CheckOwnership -->|No| Error3[/Return: Unauthorized uploads/]
+    CheckOwnership -->|Yes| MapAttachments[Map uploads to<br/>attachment objects]
+
+    CheckAttachments -->|No| CheckReply
+    MapAttachments --> CheckReply{Has replyTo?}
+
+    CheckReply -->|Yes| ValidateReply{ReplyTo message<br/>exists & same channel?}
+    ValidateReply -->|No| Error4[/Return: Invalid reply target/]
+    ValidateReply -->|Yes| CreateMsg[Create message in MongoDB]
+
+    CheckReply -->|No| CreateMsg
+
+    CreateMsg --> SaveDB[Save to MongoDB<br/>ChannelMessage collection]
+    SaveDB --> InvalidateCache[Invalidate Redis cache<br/>for page 0]
+    InvalidateCache --> PopulateReply[Populate replyTo field<br/>if exists]
+    PopulateReply --> BroadcastWS[Broadcast via Socket.io<br/>to channel subscribers]
+    BroadcastWS --> ReturnMsg[/Return: Message object/]
+
+    Error1 --> End([End])
+    Error2 --> End
+    Error3 --> End
+    Error4 --> End
+    ReturnMsg --> End
+
+    style Start fill:#4dabf7,stroke:#1971c2,stroke-width:3px,color:#000
+    style End fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Error1 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error2 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error3 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error4 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style BroadcastWS fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style InvalidateCache fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000

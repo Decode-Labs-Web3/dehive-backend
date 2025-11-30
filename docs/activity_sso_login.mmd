@@ -1,0 +1,28 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'30px'}}}%%
+flowchart LR
+    Start([User provides SSO token]) --> ValidateToken{Token format valid?}
+    ValidateToken -->|No| Error1[/Return: Invalid token format/]
+    ValidateToken -->|Yes| CallDecode[Call Decode API<br/>/session/check]
+
+    CallDecode --> DecodeResponse{Decode API<br/>returns session?}
+    DecodeResponse -->|No| Error2[/Return: Invalid or expired token/]
+    DecodeResponse -->|Yes| ExtractProfile[Extract user_id<br/>from session data]
+
+    ExtractProfile --> CheckDehive{UserDehive<br/>record exists?}
+    CheckDehive -->|Yes| CreateSession[Create session in Redis<br/>with TTL = session expiry]
+    CheckDehive -->|No| RegisterUser[Create UserDehive record<br/>in MongoDB]
+
+    RegisterUser --> CreateSession
+    CreateSession --> GenerateSessionId[Generate session_id<br/>Return to client]
+    GenerateSessionId --> ReturnSuccess[/Return: session_id & user profile/]
+
+    Error1 --> End([End])
+    Error2 --> End
+    ReturnSuccess --> End
+
+    style Start fill:#4dabf7,stroke:#1971c2,stroke-width:3px,color:#000
+    style End fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Error1 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error2 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style CallDecode fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style CreateSession fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000

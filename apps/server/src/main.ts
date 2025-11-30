@@ -4,9 +4,13 @@ import { ConfigService } from "@nestjs/config";
 import { ServerModule } from "./server.module";
 import { TransformInterceptor } from "../interfaces/transform.interface";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { IoAdapter } from "@nestjs/platform-socket.io";
 
 async function bootstrap() {
   const app = await NestFactory.create(ServerModule);
+
+  // Enable WebSocket with Socket.io adapter
+  app.useWebSocketAdapter(new IoAdapter(app));
 
   const configService = app.get(ConfigService);
 

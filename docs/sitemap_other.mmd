@@ -1,0 +1,17 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'24px'}}}%%
+graph LR
+    Upload["/api/upload"] --> Channel["POST /channel<br/>Upload to channel"]
+    Upload --> Direct[POST /direct<br/>Upload to DM]
+    Upload --> Meta[GET /:id<br/>Get metadata]
+
+    Call[/api/call] --> Join[POST /channel/:id/join<br/>Join call]
+    Call --> Leave[POST /channel/:id/leave<br/>Leave call]
+    Call --> Parts[GET /channel/:id/participants<br/>Get participants]
+
+    Status[/api/status] --> Get[GET /user/:userId<br/>Get status]
+    Status --> Update[PATCH /<br/>Update status]
+    Status --> Bulk[POST /bulk<br/>Bulk get statuses]
+
+    style Upload fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Call fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Status fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000

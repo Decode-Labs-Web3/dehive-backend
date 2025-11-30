@@ -1,0 +1,40 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'30px'}}}%%
+flowchart LR
+    Start([Actor requests kick/ban]) --> CheckActor{Actor has OWNER<br/>or MODERATOR role?}
+    CheckActor -->|No| Error1[/Return: Forbidden - insufficient permissions/]
+    CheckActor -->|Yes| CheckTarget{Target is<br/>OWNER?}
+
+    CheckTarget -->|Yes| Error2[/Return: Cannot kick/ban admins/]
+    CheckTarget -->|No| CheckMembership{Target is member<br/>of server?}
+
+    CheckMembership -->|No| Error3[/Return: User not in server/]
+    CheckMembership -->|Yes| StartTransaction[Start MongoDB transaction]
+
+    StartTransaction --> DeleteMembership[Delete UserDehiveServer<br/>membership record]
+    DeleteMembership --> CheckAction{Action type?}
+
+    CheckAction -->|Kick| DecrementCount1[Decrement server<br/>member_count]
+    CheckAction -->|Ban| UpdateUserBan[Add server_id to user's<br/>banned_by_servers array]
+
+    UpdateUserBan --> CreateBanRecord[Create ServerBan<br/>audit record]
+    CreateBanRecord --> DecrementCount2[Decrement server<br/>member_count]
+
+    DecrementCount1 --> CommitTx[Commit transaction]
+    DecrementCount2 --> CommitTx
+    CommitTx --> InvalidateCache[Invalidate Redis<br/>member list cache]
+    InvalidateCache --> NotifyGateway[Notify via Socket.io<br/>user removed from server]
+    NotifyGateway --> ReturnSuccess[/Return: Success message/]
+
+    Error1 --> End([End])
+    Error2 --> End
+    Error3 --> End
+    ReturnSuccess --> End
+
+    style Start fill:#4dabf7,stroke:#1971c2,stroke-width:3px,color:#000
+    style End fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Error1 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error2 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error3 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style StartTransaction fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style CommitTx fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style InvalidateCache fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000

@@ -1,0 +1,77 @@
+flowchart LR
+    %% Styling
+    classDef actor fill:#f9f,stroke:#333,stroke-width:2px,color:#000;
+    classDef usecase fill:#fff,stroke:#333,stroke-width:2px,rx:10,ry:10,color:#000;
+    classDef system fill:#eee,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5,color:#000;
+
+    %% Actors
+    g{{Guest}}:::actor
+    u{{Logged-in User}}:::actor
+    admin{{Server Owner/Admin}}:::actor
+    sys{{System}}:::system
+
+    %% Authentication package
+    subgraph Auth ["Authentication"]
+        direction TB
+        UC1([Register]):::usecase
+        UC2([Login]):::usecase
+        UC3([Logout]):::usecase
+        UC4([Refresh Token]):::usecase
+    end
+
+    %% User Profile package
+    subgraph Profile ["User Profile"]
+        direction TB
+        UC5([Update Status]):::usecase
+        UC6([Change Avatar]):::usecase
+        UC7([Manage Settings]):::usecase
+    end
+
+    %% Server Management package
+    subgraph Server ["Server Management"]
+        direction TB
+        UC8([Create Server]):::usecase
+        UC9([Join Server]):::usecase
+        UC10([Create Channel]):::usecase
+        UC11([Manage Roles]):::usecase
+        UC12([Kick/Ban Member]):::usecase
+        UC13([Configure NFT Token-Gate]):::usecase
+    end
+
+    %% Relationships - Guest
+    g --> UC1
+    g --> UC2
+
+    %% Relationships - User
+    u --> UC3
+    u --> UC4
+    u --> UC5
+    u --> UC6
+    u --> UC7
+    u --> UC8
+    u --> UC9
+
+    %% Relationships - Admin
+    admin --> UC10
+    admin --> UC11
+    admin --> UC12
+    admin --> UC13
+
+    %% Inheritance: Admin is a User
+    admin -.- |is a| u
+
+    %% System interactions
+    %% ALL actions eventually hit the backend system
+    UC1 -.-> sys
+    UC2 -.-> sys
+    UC3 -.-> sys
+    UC4 -.-> sys
+    UC5 -.-> sys
+    UC6 -.-> sys
+    UC7 -.-> sys
+    UC8 -.-> sys
+    UC9 -.-> sys
+    UC10 -.-> sys
+    UC11 -.-> sys
+    UC12 -.-> sys
+    UC13 -.-> sys

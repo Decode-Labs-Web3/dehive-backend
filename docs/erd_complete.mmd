@@ -1,0 +1,183 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'36px'}}}%%
+erDiagram
+    %% ============================================
+    %% CORE USER & SERVER ENTITIES
+    %% ============================================
+    USER_DEHIVE ||--o{ USER_DEHIVE_SERVER : ""
+    USER_DEHIVE ||--|| USER_STATUS : ""
+    USER_DEHIVE ||--o{ SERVER : ""
+
+    SERVER ||--o{ USER_DEHIVE_SERVER : ""
+    SERVER ||--o{ CATEGORY : ""
+    SERVER ||--o{ CHANNEL_UPLOAD : ""
+    SERVER ||--o{ SERVER_BAN : ""
+    SERVER ||--o{ INVITE_LINK : ""
+
+    %% ============================================
+    %% SERVER HIERARCHY
+    %% ============================================
+    CATEGORY ||--o{ CHANNEL : ""
+    CHANNEL ||--o{ CHANNEL_MESSAGE : ""
+    CHANNEL ||--o{ CHANNEL_UPLOAD : ""
+
+    %% ============================================
+    %% DIRECT MESSAGING
+    %% ============================================
+    USER_DEHIVE ||--o{ DIRECT_CONVERSATION : ""
+    DIRECT_CONVERSATION ||--o{ DIRECT_MESSAGE : ""
+    DIRECT_CONVERSATION ||--o{ DIRECT_UPLOAD : ""
+
+    %% ============================================
+    %% MESSAGES & UPLOADS
+    %% ============================================
+    USER_DEHIVE ||--o{ CHANNEL_MESSAGE : ""
+    USER_DEHIVE ||--o{ DIRECT_MESSAGE : ""
+    USER_DEHIVE ||--o{ CHANNEL_UPLOAD : ""
+    USER_DEHIVE ||--o{ DIRECT_UPLOAD : ""
+
+    CHANNEL_MESSAGE }o--|| CHANNEL_MESSAGE : ""
+    DIRECT_MESSAGE }o--|| DIRECT_MESSAGE : ""
+
+    %% ============================================
+    %% AUXILIARY
+    %% ============================================
+    USER_DEHIVE ||--o{ SERVER_BAN : ""
+    USER_DEHIVE ||--o{ INVITE_LINK : ""
+
+    %% ============================================
+    %% ENTITY DEFINITIONS
+    %% ============================================
+
+    USER_DEHIVE {
+        ObjectId _id PK
+        string status
+        int server_count
+        date last_login
+        string banner_color
+        boolean is_banned
+        array banned_by_servers
+    }
+
+    USER_STATUS {
+        ObjectId _id PK
+        ObjectId user_id FK
+        string status
+        date last_seen
+        string socket_id
+    }
+
+    SERVER {
+        ObjectId _id PK
+        string name
+        string description
+        string owner_id FK
+        string avatar_hash
+        int member_count
+        boolean is_private
+        array tags
+        object nft_gated
+    }
+
+    USER_DEHIVE_SERVER {
+        ObjectId _id PK
+        ObjectId user_dehive_id FK
+        ObjectId server_id FK
+        string role
+        boolean is_muted
+        boolean is_banned
+        date joined_at
+    }
+
+    CATEGORY {
+        ObjectId _id PK
+        string name
+        ObjectId server_id FK
+    }
+
+    CHANNEL {
+        ObjectId _id PK
+        string name
+        string type
+        ObjectId category_id FK
+        string topic
+    }
+
+    CHANNEL_MESSAGE {
+        ObjectId _id PK
+        string content
+        ObjectId senderId FK
+        ObjectId channelId FK
+        array attachments
+        boolean isEdited
+        date editedAt
+        boolean isDeleted
+        ObjectId replyTo FK
+    }
+
+    DIRECT_CONVERSATION {
+        ObjectId _id PK
+        ObjectId userA FK
+        ObjectId userB FK
+        boolean is_encrypted
+    }
+
+    DIRECT_MESSAGE {
+        ObjectId _id PK
+        ObjectId conversationId FK
+        ObjectId senderId FK
+        string content
+        array attachments
+        boolean isEdited
+        date editedAt
+        boolean isDeleted
+        ObjectId replyTo FK
+    }
+
+    CHANNEL_UPLOAD {
+        ObjectId _id PK
+        ObjectId ownerId FK
+        ObjectId serverId FK
+        ObjectId channelId FK
+        string type
+        string ipfsHash
+        string contentHash
+        string name
+        int size
+        string mimeType
+        int width
+        int height
+        int durationMs
+    }
+
+    DIRECT_UPLOAD {
+        ObjectId _id PK
+        ObjectId ownerId FK
+        ObjectId conversationId FK
+        string type
+        string ipfsHash
+        string contentHash
+        string name
+        int size
+        string mimeType
+        int width
+        int height
+        int durationMs
+    }
+
+    SERVER_BAN {
+        ObjectId _id PK
+        ObjectId server_id FK
+        ObjectId user_dehive_id FK
+        ObjectId banned_by FK
+        string reason
+        date expires_at
+    }
+
+    INVITE_LINK {
+        ObjectId _id PK
+        string code UK
+        ObjectId server_id FK
+        date expiredAt
+        ObjectId creator_id FK
+        boolean isUsed
+    }

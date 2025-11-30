@@ -1,0 +1,41 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'18px'}}}%%
+flowchart LR
+    Start([From Part A:<br/>IPFS mode with hash]) --> QueryDB{Existing upload<br/>with same hash?}
+
+    QueryDB -->|Yes| ReuseIPFS[Retrieve existing IPFS hash]
+    QueryDB -->|No| AcquireLock[Acquire Redis lock<br/>for this hash]
+
+    AcquireLock --> LockSuccess{Lock acquired?}
+    LockSuccess -->|No| RetryWait[Wait 150ms<br/>max 8 retries]
+    RetryWait --> RecheckDB{Re-check DB}
+
+    RecheckDB -->|Found| ReuseIPFS
+    RecheckDB -->|Not found| UploadIPFS
+
+    LockSuccess -->|Yes| DoubleCheck{Double-check DB<br/>while locked}
+    DoubleCheck -->|Found| ReleaseLock1[Release lock]
+    ReleaseLock1 --> ReuseIPFS
+
+    DoubleCheck -->|Not found| UploadIPFS[Upload to IPFS node]
+
+    UploadIPFS --> IPFSSuccess{Upload success?}
+    IPFSSuccess -->|No| LocalFallback[Save to local storage]
+    IPFSSuccess -->|Yes| StoreMapping[Store hash → IPFS mapping]
+
+    LocalFallback --> ReleaseLock2[Release lock]
+    StoreMapping --> ReleaseLock2
+
+    ReuseIPFS --> CreateRecord[Create Upload document]
+    ReleaseLock2 --> CreateRecord
+
+    CreateRecord --> ExtractMeta[Extract metadata<br/>width/height/duration]
+    ExtractMeta --> ReturnResponse[/Return: uploadId, ipfsHash/]
+    ReturnResponse --> End([End])
+
+    style Start fill:#94d82d,stroke:#5c940d,stroke-width:3px,color:#000
+    style End fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style ReuseIPFS fill:#94d82d,stroke:#5c940d,stroke-width:2px,color:#000
+    style UploadIPFS fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style AcquireLock fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000
+    style ReleaseLock1 fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000
+    style ReleaseLock2 fill:#ff922b,stroke:#d9480f,stroke-width:2px,color:#000

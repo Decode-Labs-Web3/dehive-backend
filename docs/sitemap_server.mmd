@@ -1,0 +1,25 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'20px'}}}%%
+graph TD
+    Server["/api/server"] --> CRUD[CRUD Operations]
+    Server --> Member[Member Management]
+    Server --> Config[Configuration]
+
+    CRUD --> Create[POST / - Create server]
+    CRUD --> List[GET / - List servers]
+    CRUD --> Get[GET /:id - Get details]
+    CRUD --> Update[PATCH /:id - Update]
+    CRUD --> Delete[DELETE /:id - Delete]
+
+    Member --> Join[POST /:id/join]
+    Member --> Leave[POST /:id/leave]
+    Member --> Members[GET /:id/members]
+    Member --> Kick[POST /:id/kick]
+    Member --> Ban[POST /:id/ban]
+
+    Config --> NFT[PATCH /:id/nft-gating]
+    Config --> Invite[POST /:id/invite]
+
+    style Server fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style CRUD fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style Member fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style Config fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000

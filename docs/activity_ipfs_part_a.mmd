@@ -1,0 +1,36 @@
+%%{init: {'theme':'default', 'themeVariables': {'fontSize':'18px'}}}%%
+flowchart LR
+    Start([User uploads file]) --> SelectType{Upload to?}
+
+    SelectType -->|Channel| ValidateChannelMember{User is member?}
+    SelectType -->|Direct Message| ValidateDM{Valid conversation?}
+
+    ValidateChannelMember -->|No| Error1[/Return: Not a member/]
+    ValidateDM -->|No| Error2[/Return: Invalid conversation/]
+
+    ValidateChannelMember -->|Yes| ValidateFile
+    ValidateDM -->|Yes| ValidateFile{File valid?<br/>size, type}
+
+    ValidateFile -->|No| Error3[/Return: Invalid file/]
+    ValidateFile -->|Yes| ComputeHash[Compute SHA-256 hash]
+
+    ComputeHash --> CheckStorage{Storage mode?}
+
+    CheckStorage -->|Local| SaveLocal[Save to local uploads/]
+    CheckStorage -->|IPFS| ToPartB[Continue to Part B:<br/>IPFS Deduplication]
+
+    SaveLocal --> CreateRecord[Create Upload document]
+    CreateRecord --> ReturnResponse[/Return: uploadId/]
+
+    Error1 --> End([End])
+    Error2 --> End
+    Error3 --> End
+    ReturnResponse --> End
+
+    style Start fill:#4dabf7,stroke:#1971c2,stroke-width:3px,color:#000
+    style End fill:#51cf66,stroke:#2f9e44,stroke-width:3px,color:#000
+    style Error1 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error2 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style Error3 fill:#ff6b6b,stroke:#c92a2a,stroke-width:2px,color:#fff
+    style ComputeHash fill:#ffd43b,stroke:#f59f00,stroke-width:2px,color:#000
+    style ToPartB fill:#94d82d,stroke:#5c940d,stroke-width:3px,color:#000
